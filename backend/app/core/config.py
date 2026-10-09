@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     timezone: str = "Asia/Kolkata"
     cors_origins: str = "https://urbansarthi.vercel.app,http://localhost:5173,http://localhost:3000"
     cors_origin_regex: str = r"https://[a-zA-Z0-9-]+\.vercel\.app"
-    osrm_base_url: str = ""
+    osrm_base_url: str = "https://router.project-osrm.org"
     openaq_api_key: str = ""
     model_path: str = ""
     gtfs_max_upload_mb: int = 30

@@ -37,7 +37,7 @@ This matrix is the backend implementation checklist derived from the 14-page Nav
 | City/mobility analytics | Personal usage metrics and operator city summary | Implemented for the shared demo workspace; records are not private or user-isolated |
 | Source health | Data-source registry, heartbeat endpoint, status/freshness and error fields | Implemented |
 | Security and accountability | Public unauthenticated demo endpoints, shared workspace, audit logs, environment secrets, non-actuating traffic design | Demo-only; authentication and role checks must be restored before production |
-| Schema versioning without drift | SQLAlchemy 2.x metadata, Alembic migration history (base + GTFS frequency) and no startup `create_all` | Implemented; new changes must use new reviewed Alembic revisions |
+| Schema versioning without drift | SQLAlchemy 2.x metadata, Alembic migration history (base + GTFS frequency + missing-transit-table repair) and no startup `create_all` | Implemented; new changes must use new reviewed Alembic revisions |
 
 ## Database domains
 
@@ -51,10 +51,10 @@ This matrix is the backend implementation checklist derived from the 14-page Nav
 
 ## Core safety/validity decisions
 
-1. Missing live data returns null/unavailable state and a warning rather than invented values.
+1. Missing live data returns a clearly labelled scenario estimate in the UI where the prototype has a fallback; provider-specific records and live timestamps are not invented. Missing pollutant values remain unavailable.
 2. Every heuristic/model forecast contains a model version and a snapshot of the inputs used.
 3. Ticket requests do not collect card details or claim to issue valid tickets.
 4. Signal proposals are advisory and auditable in this public demo mode. A preview is never sent to physical equipment.
 5. Simulation output explicitly says whether SUMO was executed. The current analytical engine never claims it ran SUMO.
-6. Demo seed data is tagged `synthetic-demo`, and synthetic coordinates are marked unverified.
+6. Seeded scenario records retain internal provenance (`synthetic-demo` / `is_synthetic`) and unverified coordinates; user-facing labels say “Scenario estimate” or “Illustrative” instead of exposing internal demo tags.
 7. Schema changes are controlled through Alembic so development and deployed databases can be upgraded in sequence.

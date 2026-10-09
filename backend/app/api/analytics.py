@@ -23,7 +23,7 @@ def my_mobility_analytics(db: Session = Depends(get_db)):
         "in_progress_trips": sum(trip.status == "in_progress" for trip in trips),
         "recorded_distance_km": round(distance / 1000, 2),
         "recorded_travel_hours": round(duration / 3600, 2), "ticket_requests": ticket_orders,
-        "emissions_note": "Shared demo workspace records; CO₂ estimates are illustrative and not audited savings.",
+        "emissions_note": "Shared workspace records; CO₂ estimates are illustrative and not audited savings.",
     }
 
 
@@ -37,5 +37,5 @@ def city_summary(db: Session = Depends(get_db), days: int = 7):
         "completed_trips": sum(trip.status == "completed" for trip in trips),
         "cancelled_trips": sum(trip.status == "cancelled" for trip in trips),
         "recorded_route_distance_km": round(sum(trip.distance_meters or 0 for trip in trips) / 1000, 2),
-        "note": "Shared demo workspace records; seeded trips are synthetic and do not represent city-wide demand.",
+        "note": "Scenario workspace records; generated trips are illustrative and do not represent city-wide demand.",
     }

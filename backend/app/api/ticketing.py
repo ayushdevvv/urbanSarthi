@@ -24,7 +24,7 @@ def request_ticket(payload: TicketCreateIn, request: Request, db: Session = Depe
         provider="not-configured", provider_reference=None, currency="INR", quoted_amount=None,
         qr_token=secrets.token_urlsafe(24),
         booking_response={"booking_confirmed": False, "provider_connected": False,
-                          "message": "Demo request saved. Connect an authorized transit ticketing provider before issuing tickets or accepting payment."},
+                          "message": "Journey request recorded. Connect an authorized transit ticketing provider before issuing tickets or accepting payment."},
     )
     db.add(order)
     db.flush()
@@ -69,4 +69,4 @@ def cancel_ticket_order(order_id: int, request: Request, db: Session = Depends(g
 def ticketing_provider_status():
     return {"connected": False, "provider": "not-configured", "ticket_issuance_enabled": False,
             "payment_processing_enabled": False,
-            "message": "Connect an authorized bus/metro operator API before issuing tickets. The current endpoint only records demo journey requests."}
+            "message": "Connect an authorized bus/metro operator API before issuing tickets. The current endpoint only records journey requests."}

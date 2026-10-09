@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 const isEmpty = (value) => value == null || (Array.isArray(value) && value.length === 0) || (typeof value === 'object' && !Array.isArray(value) && (Object.keys(value).length === 0 || (Array.isArray(value.sources) && value.sources.length === 0)));
-const makeFallbackMessage = (reason) => `DEMO_FALLBACK: ${reason}. Synthetic sample data is displayed so the interface remains usable.`;
+const makeFallbackMessage = () => 'SAMPLE_FALLBACK: Live data is temporarily unavailable. Saved scenario estimates are being shown.';
 
 export default function useApiResource(loader, dependencies = [], options = {}) {
   const fallback = options?.fallback;
@@ -16,14 +16,14 @@ export default function useApiResource(loader, dependencies = [], options = {}) 
       const value = await loader();
       if (fallback !== undefined && isEmpty(value)) {
         setData(typeof fallback === 'function' ? fallback() : fallback);
-        setError(makeFallbackMessage('The API returned no records'));
+        setError(makeFallbackMessage());
       } else {
         setData(value);
       }
     } catch (err) {
       if (fallback !== undefined) {
         setData(typeof fallback === 'function' ? fallback() : fallback);
-        setError(makeFallbackMessage(`The API could not be reached (${err?.message || 'network request failed'})`));
+        setError(makeFallbackMessage());
       } else {
         setError(err?.message || 'Unable to load data');
         setData(null);
@@ -42,7 +42,7 @@ export default function useApiResource(loader, dependencies = [], options = {}) 
       if (!active) return;
       if (fallback !== undefined && isEmpty(value)) {
         setData(typeof fallback === 'function' ? fallback() : fallback);
-        setError(makeFallbackMessage('The API returned no records'));
+        setError(makeFallbackMessage());
       } else {
         setData(value);
       }
@@ -50,7 +50,7 @@ export default function useApiResource(loader, dependencies = [], options = {}) 
       if (!active) return;
       if (fallback !== undefined) {
         setData(typeof fallback === 'function' ? fallback() : fallback);
-        setError(makeFallbackMessage(`The API could not be reached (${err?.message || 'network request failed'})`));
+        setError(makeFallbackMessage());
       } else {
         setError(err?.message || 'Unable to load data');
         setData(null);
@@ -60,5 +60,5 @@ export default function useApiResource(loader, dependencies = [], options = {}) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, dependencies);
 
-  return { data, loading, error, reload: performLoad, isDemo: error.startsWith('DEMO_FALLBACK:') };
+  return { data, loading, error, reload: performLoad, isFallback: error.startsWith('SAMPLE_FALLBACK:') };
 }

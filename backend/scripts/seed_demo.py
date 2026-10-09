@@ -96,10 +96,10 @@ def seed_network(db):
         cluster_key = f"DEMO-CLUSTER-{i:02d}"
         cluster = db.scalar(select(CityCluster).where(CityCluster.external_id == cluster_key))
         if cluster is None:
-            cluster = CityCluster(external_id=cluster_key, name=f"Demo cluster · {place}", city="Delhi NCR (synthetic demo)", config={"is_synthetic": True})
+            cluster = CityCluster(external_id=cluster_key, name=f"{place} mobility cluster", city="Delhi NCR scenario network", config={"is_synthetic": True})
             db.add(cluster)
-        cluster.name = f"Demo cluster · {place}"
-        cluster.city = "Delhi NCR (synthetic demo)"
+        cluster.name = f"{place} mobility cluster"
+        cluster.city = "Delhi NCR scenario network"
         cluster.status = "online" if i % 7 else "degraded"
         cluster.config = {"is_synthetic": True, "coordinates_verified": False}
         db.flush()
@@ -108,11 +108,11 @@ def seed_network(db):
             external_id = f"DEMO-JUNCTION-{i:02d}-{offset_idx:02d}"
             junction = db.scalar(select(Junction).where(Junction.external_id == external_id))
             if junction is None:
-                junction = Junction(external_id=external_id, name=f"Demo junction · {place} {offset_idx}", cluster_id=cluster.id,
+                junction = Junction(external_id=external_id, name=f"Traffic junction · {place} {offset_idx}", cluster_id=cluster.id,
                                     latitude=lat + offset[0], longitude=lon + offset[1], status="online", lane_count=4,
                                     baseline_cycle_seconds=90, configuration={})
                 db.add(junction)
-            junction.name = f"Demo junction · {place} {offset_idx}"
+            junction.name = f"Traffic junction · {place} {offset_idx}"
             junction.cluster_id = cluster.id
             junction.latitude, junction.longitude = lat + offset[0], lon + offset[1]
             junction.status = "degraded" if (i + offset_idx) % 11 == 0 else "online"
@@ -135,7 +135,7 @@ def seed_aqi(db, now):
             aqi = max(38, AQI_BASE[i] + ((sample * 7 + i * 3) % 31) - 15)
             observed_at = now - timedelta(hours=sample * 3, minutes=(i * 7) % 40)
             db.add(AqiObservation(
-                external_station_id=f"DEMO-AQI-{i+1:02d}", station_name=f"Demo monitor · {place}",
+                external_station_id=f"DEMO-AQI-{i+1:02d}", station_name=f"Air-quality station · {place}",
                 latitude=lat, longitude=lon, source="synthetic-demo", observed_at=observed_at,
                 aqi=float(aqi), pm25=round(aqi * 0.41, 1), pm10=round(aqi * 0.72, 1),
                 no2=round(14 + (i * 7 + sample * 3) % 36, 1), o3=round(18 + (i * 11 + sample * 5) % 48, 1),
@@ -225,7 +225,7 @@ def seed_transit(db, now):
 
     for index, (short_name, long_name, mode, color, stop_names) in enumerate(TRANSIT_ROUTES, start=1):
         route = TransitRoute(external_id=f"DEMO-ROUTE-{index:02d}", short_name=short_name, long_name=long_name, mode=mode,
-                             agency_name="UrbanSaarthi synthetic network", route_color=color, source="synthetic-demo")
+                             agency_name="UrbanSaarthi illustrative network", route_color=color, source="synthetic-demo")
         db.add(route); db.flush()
         trip = TransitTrip(external_id=f"DEMO-GTFS-TRIP-{index:02d}", route_id=route.id, service_id=service_id,
                            headsign=stop_names[-1], direction_id="0", wheelchair_accessible=True)
@@ -239,9 +239,9 @@ def seed_transit(db, now):
         db.add(TransitFrequency(trip_id=trip.id, start_time="05:00:00", end_time="23:00:00", headway_secs=600 if mode == "metro" else 900, exact_times=False))
 
     transit_alerts = [
-        ("DEMO-TRANSIT-ALERT-01", "Demo notice · Blue Line peak crowding", "Synthetic crowding notice for preview only.", "medium", ["DEMO-ROUTE-02"], ["DEMO-STOP-02"]),
-        ("DEMO-TRANSIT-ALERT-02", "Demo notice · ITO bus diversion", "Illustrative disruption card; no live operator feed is connected.", "high", ["DEMO-ROUTE-08"], ["DEMO-STOP-19"]),
-        ("DEMO-TRANSIT-ALERT-03", "Demo notice · Airport Express info", "Sample informational status, not a live timetable confirmation.", "info", ["DEMO-ROUTE-06"], ["DEMO-STOP-01"]),
+        ("DEMO-TRANSIT-ALERT-01", "Scenario notice · Blue Line peak crowding", "Illustrative crowding notice; operator feed is not connected.", "medium", ["DEMO-ROUTE-02"], ["DEMO-STOP-02"]),
+        ("DEMO-TRANSIT-ALERT-02", "Scenario notice · ITO bus diversion", "Illustrative disruption notice; no live operator feed is connected.", "high", ["DEMO-ROUTE-08"], ["DEMO-STOP-19"]),
+        ("DEMO-TRANSIT-ALERT-03", "Scenario notice · Airport Express status", "Sample informational status, not a live timetable confirmation.", "info", ["DEMO-ROUTE-06"], ["DEMO-STOP-01"]),
     ]
     for external_id, title, description, severity, route_ids, stop_ids in transit_alerts:
         db.add(TransitAlert(external_id=external_id, title=title, description=description, severity=severity, status="active",
@@ -249,16 +249,16 @@ def seed_transit(db, now):
 
 
 def seed_alerts(db, junctions, now):
-    for row in db.scalars(select(CityAlert).where(CityAlert.title.like("Demo · %"))): db.delete(row)
+    for row in db.scalars(select(CityAlert).where(CityAlert.title.like("Demo · %") | CityAlert.title.like("Scenario · %"))): db.delete(row)
     db.flush()
     samples = [
-        ("Demo · Elevated congestion near ITO", "Synthetic traffic sample indicates elevated queue pressure for this demo scenario.", "traffic", "high", 2),
-        ("Demo · AQI category elevated in Anand Vihar", "Synthetic air-quality sample for the UI demonstration; not an official station alert.", "air_quality", "medium", 6),
-        ("Demo · Bus corridor running slow", "Illustrative transit disruption notice for the sample network.", "transit", "medium", 8),
-        ("Demo · Camera connection pending", "No real camera stream is claimed to be connected by this demo.", "data_source", "low", 11),
-        ("Demo · Peak-hour plan ready for review", "A synthetic signal plan is available for the what-if flow.", "signals", "info", 15),
-        ("Demo · Queue spillback scenario", "Sample queue length is above the demo threshold.", "traffic", "high", 19),
-        ("Demo · Cleaner route corridor available", "An illustrative lower-emission alternative is ready in the planner.", "mobility", "low", 24),
+        ("Scenario · Elevated congestion near ITO", "Illustrative traffic sample indicates elevated queue pressure for this scenario.", "traffic", "high", 2),
+        ("Scenario · AQI category elevated in Anand Vihar", "Illustrative air-quality sample; not an official station alert.", "air_quality", "medium", 6),
+        ("Scenario · Bus corridor running slow", "Illustrative transit disruption notice for the sample network.", "transit", "medium", 8),
+        ("Scenario · Camera connection pending", "No real camera stream is claimed to be connected.", "data_source", "low", 11),
+        ("Scenario · Peak-hour plan ready for review", "An illustrative signal plan is available for the what-if flow.", "signals", "info", 15),
+        ("Scenario · Queue spillback scenario", "Sample queue length is above the scenario threshold.", "traffic", "high", 19),
+        ("Scenario · Cleaner route corridor available", "An illustrative lower-emission alternative is ready in the planner.", "mobility", "low", 24),
     ]
     for title, description, category, severity, junction_index in samples:
         junction = junctions[min(junction_index, len(junctions)-1)]
@@ -268,10 +268,10 @@ def seed_alerts(db, junctions, now):
 
 
 def seed_signal_plans(db, junctions, now):
-    for row in db.scalars(select(SignalPlan).where(SignalPlan.plan_type.like("demo-%"))):
+    for row in db.scalars(select(SignalPlan).where(SignalPlan.plan_type.like("demo-%") | SignalPlan.plan_type.like("scenario-%"))):
         for run in db.scalars(select(SimulationRun).where(SimulationRun.signal_plan_id == row.id)): db.delete(run)
         db.delete(row)
-    for row in db.scalars(select(SimulationRun).where(SimulationRun.name.like("Demo · %"))): db.delete(row)
+    for row in db.scalars(select(SimulationRun).where(SimulationRun.name.like("Demo · %") | SimulationRun.name.like("Scenario · %"))): db.delete(row)
     db.flush()
     plans = []
     for index, junction in enumerate(junctions[::5][:10]):
@@ -283,19 +283,19 @@ def seed_signal_plans(db, junctions, now):
         cycle = sum(p["green_seconds"] + p["yellow_seconds"] + p["all_red_seconds"] for p in phases)
         plan = SignalPlan(public_id=str(uuid.uuid4()), junction_id=junction.id, created_by_user_id=None,
                           status=["simulated", "draft", "approved", "simulated"][index%4],
-                          plan_type=["demo-adaptive-recommendation", "demo-peak-hour", "demo-emissions-aware"][index%3],
+                          plan_type=["scenario-adaptive-recommendation", "scenario-peak-hour", "scenario-emissions-aware"][index%3],
                           cycle_seconds=cycle, phases=phases,
                           rationale="Synthetic demonstration strategy based on sample arrival pressure. Review against measured local traffic before real-world use.",
                           projected_outcomes={"is_synthetic":True,"estimated_delay_reduction_pct":7+(index*3)%18,"estimated_queue_reduction_pct":5+(index*4)%22},
-                          model_version="demo-scenario-v1", created_at=now-timedelta(days=index%6, hours=index))
+                          model_version="scenario-trend-v1", created_at=now-timedelta(days=index%6, hours=index))
         db.add(plan); db.flush(); plans.append((plan,junction))
     for index, (plan, junction) in enumerate(plans[:4]):
         results={"is_synthetic":True,"delay_reduction_pct":round(6.5+index*2.8,1),"queue_reduction_pct":round(9+index*3.4,1),"mean_wait_reduction_seconds":round(4.2+index*1.1,1)}
         db.add(SimulationRun(public_id=str(uuid.uuid4()), junction_id=junction.id, submitted_by_user_id=None,
-                             signal_plan_id=plan.id, name=f"Demo · What-if run {index+1}", engine="analytical-demo-v1", status="completed",
+                             signal_plan_id=plan.id, name=f"Scenario · What-if run {index+1}", engine="analytical-scenario-v1", status="completed",
                              baseline={"is_synthetic":True,"vehicle_count":80+index*12,"queue_length_m":24+index*3,"average_wait_seconds":42+index*5},
                              proposed_phases=plan.phases, results=results,
-                             caveats=["Synthetic demo input; not validated against observed vehicle trajectories.", "No physical traffic signal command was sent."]))
+                             caveats=["Illustrative scenario input; not validated against observed vehicle trajectories.", "No physical traffic signal command was sent."]))
 
 
 def seed_trips(db, workspace_user, now):
@@ -366,7 +366,7 @@ def seed_forecasts(db, junctions, now):
     db.flush()
     for index, junction in enumerate(junctions):
         base = 24 + (index*17)%73
-        for horizon in (15,30,60):
+        for horizon in (0,15,30,45,60):
             predicted_queue = round(max(0, (5+(index*7)%58) * (0.94 + horizon/1000)), 1)
             db.add(TrafficForecast(junction_id=junction.id, generated_at=now, horizon_minutes=horizon,
                                    predicted_queue_length_m=predicted_queue, predicted_vehicle_count=30+(index*19)%140,
@@ -384,7 +384,7 @@ def main():
         workspace_user = get_demo_workspace_user(db)
         clusters, junctions = seed_network(db)
         sources = [
-            ("synthetic-demo", "Synthetic demo observations", "other", "Seeded sample records", "online", {"is_synthetic":True}),
+            ("synthetic-demo", "Illustrative traffic and AQI samples", "other", "Scenario data generator", "online", {"is_synthetic":True}),
             ("camera-edge", "Camera vision edge feed", "camera", "Push event API; no real stream configured", "not_configured", {"is_synthetic":False}),
             ("cpcb-aqi", "Official CPCB / CAAQMS AQI feed", "cpcb", "Authorized provider adapter required", "not_configured", {"is_synthetic":False}),
             ("openaq-v3", "OpenAQ v3 pollutant feed", "openaq", "API key required", "not_configured", {"is_synthetic":False}),
@@ -405,7 +405,7 @@ def main():
         seed_tickets(db, workspace_user, now)
         seed_forecasts(db, junctions, now)
         db.commit()
-        print("UrbanSaarthi demo seed complete.")
+        print("UrbanSaarthi scenario seed complete.")
         print(f"  {len(clusters)} clusters · {len(junctions)} junctions")
         print(f"  {len(CITY_POINTS) * 8} synthetic AQI observations (24 stations, 8 samples each)")
         print(f"  {len(junctions) * (6 + 28)} synthetic traffic observations")

@@ -42,8 +42,10 @@ class PredictionEngine:
         ))
         current = observations[0] if observations else None
         previous = observations[1] if len(observations) > 1 else None
-        queue_now = float(current.queue_length_m if current else 0.0)
-        vehicles_now = int(current.vehicle_count if current else 0)
+        # If a junction has not reported traffic yet, use explicit baseline estimates
+        # rather than displaying zero as though it were a measured queue/count.
+        queue_now = float(current.queue_length_m if current and current.queue_length_m is not None else 18.0)
+        vehicles_now = int(current.vehicle_count if current and current.vehicle_count is not None else max(28, junction.lane_count * 14))
         speed_now = float(current.average_speed_kmph) if current and current.average_speed_kmph is not None else 25.0
         wait_now = float(current.average_wait_seconds) if current and current.average_wait_seconds is not None else max(5.0, queue_now * 0.55)
         density_now = float(current.lane_density) if current and current.lane_density is not None else min(1.0, vehicles_now / max(1, junction.lane_count * 25))
@@ -97,6 +99,7 @@ class PredictionEngine:
                     "features": ["vehicle_count", "queue_length_m", "average_speed_kmph", "average_wait_seconds", "lane_density", "horizon_minutes"],
                     "feature_values": feature_vector,
                     "estimation": "model_prediction" if self.model is not None and confidence > 0.7 else "bounded_trend_heuristic",
+                    "current_data_quality": "observed" if current else "baseline-estimate",
                     "aqi_method": "nearest_station_current_value_not_a_forecast" if nearest_aqi else "unavailable",
                 },
             )

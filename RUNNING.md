@@ -30,7 +30,11 @@ npm install
 npm run dev
 ```
 
-The local default `VITE_API_URL` is `http://127.0.0.1:8000/api/v1`. The variable must include `/api/v1` in production as well. The Vite dev server shows the local URL in its terminal. The frontend displays clearly labelled synthetic fixtures if the API is empty or unreachable.
+The local default `VITE_API_URL` is `http://127.0.0.1:8000/api/v1`. The variable must include `/api/v1` in production as well. The Vite dev server shows the local URL in its terminal. The frontend displays scenario estimates if the API is empty or unreachable, while keeping them distinct from live observations.
+
+## Render database recovery
+
+For PostgreSQL deployments, startup runs `alembic upgrade head` and then seeds the shared workspace only when core tables are empty. The migration chain includes a forward-only repair for a missing `transit_routes` table. Make sure Render deploys this archive and has the correct `DATABASE_URL`; after redeploy, inspect logs for migration and seed completion. No SQL shell work or manual table creation should be required. Do not wipe the database to resolve a schema error.
 
 ## Vercel
 
@@ -38,4 +42,4 @@ Choose `frontend` as Vercel's Root Directory and set `VITE_API_URL` to the exact
 
 ## Backend/frontend data boundary
 
-The frontend consumes the supplied OpenAPI contract. Empty or unavailable responses are replaced with conspicuously labelled synthetic demo fixtures, never with claims that synthetic AQI, transit or traffic values are live. Physical signal-control connectivity is not implied.
+The frontend consumes the supplied OpenAPI contract. Empty or unavailable responses fall back to labelled scenario estimates, never claiming those AQI, transit or traffic values are live. Physical signal-control connectivity is not implied.

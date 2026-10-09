@@ -1,5 +1,5 @@
-// Synthetic UI fixtures for demos and API outage/empty-database fallbacks.
-// These values are deliberately labelled synthetic; they are not live city feeds.
+// Scenario fixtures for empty-data and API-outage fallbacks.
+// These values are synthetic estimates, never live city measurements.
 const minutesAgo = (minutes) => new Date(Date.now() - minutes * 60_000).toISOString();
 const daysAgo = (days, hours = 0) => new Date(Date.now() - (days * 24 + hours) * 3_600_000).toISOString();
 
@@ -18,11 +18,11 @@ export const DEMO_AQI_STATIONS = aqiLocations.map(([name, latitude, longitude, b
   const aqi = Math.max(42, baseAqi + ((index % 5) - 2) * 5);
   return {
     id: 7000 + index, external_station_id: `DEMO-AQI-${String(index + 1).padStart(2, '0')}`,
-    station_name: name, latitude, longitude, source: 'synthetic-demo', observed_at: minutesAgo((index * 7) % 95),
+    station_name: name, latitude, longitude, source: 'scenario-sample', observed_at: minutesAgo((index * 7) % 95),
     aqi, pm25: Math.round(aqi * 0.41 * 10) / 10, pm10: Math.round(aqi * 0.72 * 10) / 10,
     no2: Math.round((14 + (index * 7) % 36) * 10) / 10, o3: Math.round((18 + (index * 11) % 48) * 10) / 10,
     co: Math.round((0.3 + (index % 8) * 0.11) * 100) / 100, category: categoryFor(aqi),
-    raw_payload: { is_synthetic: true, note: 'UI fallback sample; not an official CPCB/CAAQMS observation.' },
+    raw_payload: { is_synthetic: true, note: 'Scenario sample; not an official CPCB/CAAQMS observation.' },
   };
 });
 
@@ -41,7 +41,7 @@ export const DEMO_TRANSIT_ROUTES = [
   ['Rapid 894','Lajpat Nagar ↔ Noida Sector 62','bus','#6B83C3'],
 ].map(([short_name,long_name,mode,route_color], index) => ({
   id: 8000 + index, external_id: `DEMO-ROUTE-${String(index+1).padStart(2,'0')}`,
-  short_name, long_name, mode, agency_name: 'UrbanSaarthi demo network', route_color: route_color.replace('#',''), source: 'synthetic-demo',
+  short_name, long_name, mode, agency_name: 'UrbanSaarthi scenario network', route_color: route_color.replace('#',''), source: 'scenario-sample',
 }));
 
 const stopRows = [
@@ -58,13 +58,13 @@ const stopRows = [
 ];
 export const DEMO_TRANSIT_STOPS = stopRows.map(([name,latitude,longitude], index) => ({
   id: 9000 + index, external_id: `DEMO-STOP-${String(index+1).padStart(2,'0')}`,
-  name, latitude, longitude, wheelchair_boarding: index % 3 !== 0, parent_station: null, source: 'synthetic-demo',
+  name, latitude, longitude, wheelchair_boarding: index % 3 !== 0, parent_station: null, source: 'scenario-sample',
 }));
 
 export const DEMO_TRANSIT_ALERTS = [
-  { id: 9501, external_id:'DEMO-ALERT-01', title:'Demo notice · Blue Line crowding', description:'Synthetic service notice for the demo. No live operator feed is connected.', severity:'medium', status:'active', route_external_ids:['DEMO-ROUTE-02'], stop_external_ids:['DEMO-STOP-02'], source:'synthetic-demo' },
-  { id: 9502, external_id:'DEMO-ALERT-02', title:'Demo notice · ITO bus diversion', description:'A sample disruption card to preview alert handling and visual hierarchy.', severity:'high', status:'active', route_external_ids:['DEMO-ROUTE-08'], stop_external_ids:['DEMO-STOP-19'], source:'synthetic-demo' },
-  { id: 9503, external_id:'DEMO-ALERT-03', title:'Demo notice · Airport Express normal', description:'Sample informational status; not a live timetable or operator confirmation.', severity:'info', status:'active', route_external_ids:['DEMO-ROUTE-06'], stop_external_ids:['DEMO-STOP-01'], source:'synthetic-demo' },
+  { id: 9501, external_id:'DEMO-ALERT-01', title:'Scenario notice · Blue Line crowding', description:'Illustrative service notice. No live operator feed is connected.', severity:'medium', status:'active', route_external_ids:['DEMO-ROUTE-02'], stop_external_ids:['DEMO-STOP-02'], source:'scenario-sample' },
+  { id: 9502, external_id:'DEMO-ALERT-02', title:'Scenario notice · ITO bus diversion', description:'Illustrative disruption notice; the operator feed is not connected.', severity:'high', status:'active', route_external_ids:['DEMO-ROUTE-08'], stop_external_ids:['DEMO-STOP-19'], source:'scenario-sample' },
+  { id: 9503, external_id:'DEMO-ALERT-03', title:'Scenario notice · Airport Express status', description:'Sample informational status; not a live timetable or operator confirmation.', severity:'info', status:'active', route_external_ids:['DEMO-ROUTE-06'], stop_external_ids:['DEMO-STOP-01'], source:'scenario-sample' },
 ];
 
 export const DEMO_TRIPS = [
@@ -76,12 +76,18 @@ export const DEMO_TRIPS = [
   { id:9806, public_id:'DEMO-TRIP-F53C', origin_label:'Dhaula Kuan', destination_label:'Vasant Kunj', origin_latitude:28.5918, origin_longitude:77.1613, destination_latitude:28.5200, destination_longitude:77.1580, preference:'fastest', status:'cancelled', distance_meters:9100, duration_seconds:1380, created_at:daysAgo(8,1), actual_metrics:{is_synthetic:true} },
   { id:9807, public_id:'DEMO-TRIP-G38A', origin_label:'ITO', destination_label:'Patel Chowk', origin_latitude:28.6289, origin_longitude:77.2405, destination_latitude:28.6233, destination_longitude:77.2137, preference:'balanced', status:'completed', distance_meters:3300, duration_seconds:780, created_at:daysAgo(12,4), completed_at:daysAgo(12,4), actual_metrics:{is_synthetic:true} },
 ];
+export const DEMO_TICKET_ORDERS = [
+  { id: 9901, public_id: 'US-REQ-101', mode: 'metro', origin_label: 'Rajiv Chowk', destination_label: 'Akshardham', departure_at: new Date(Date.now() + 3_600_000).toISOString(), passengers: 1, status: 'requested', provider: 'not-configured', created_at: minutesAgo(14), local_only: true },
+  { id: 9902, public_id: 'US-REQ-102', mode: 'bus', origin_label: 'ITO', destination_label: 'Hauz Khas', departure_at: new Date(Date.now() + 7_200_000).toISOString(), passengers: 2, status: 'requested', provider: 'not-configured', created_at: minutesAgo(48), local_only: true },
+  { id: 9903, public_id: 'US-REQ-103', mode: 'metro', origin_label: 'New Delhi Railway Station', destination_label: 'Central Secretariat', departure_at: new Date(Date.now() + 10_800_000).toISOString(), passengers: 1, status: 'cancelled', provider: 'not-configured', created_at: daysAgo(1), local_only: true },
+];
+
 export const DEMO_MOBILITY_SUMMARY = {
   total_trips: DEMO_TRIPS.length, completed_trips: DEMO_TRIPS.filter((x) => x.status === 'completed').length,
   in_progress_trips: DEMO_TRIPS.filter((x) => x.status === 'in_progress').length,
   recorded_distance_km: Number((DEMO_TRIPS.filter((x) => x.status === 'completed').reduce((a,x)=>a+(x.distance_meters||0),0)/1000).toFixed(2)),
   recorded_travel_hours: Number((DEMO_TRIPS.filter((x) => x.status === 'completed').reduce((a,x)=>a+(x.duration_seconds||0),0)/3600).toFixed(2)), ticket_requests: 3,
-  emissions_note:'Synthetic demo summary. Route CO₂ values are illustrative estimates, not audited emissions or verified savings.',
+  emissions_note:'Illustrative scenario summary. Route CO₂ values are estimates, not audited emissions or verified savings.',
 };
 export const createDemoCitySummary = (days = 7) => {
   const withinRange = DEMO_TRIPS.filter((trip) => Date.now() - new Date(trip.created_at).getTime() <= days * 86_400_000);
@@ -89,7 +95,7 @@ export const createDemoCitySummary = (days = 7) => {
     period_days: days, trip_requests: withinRange.length, completed_trips: withinRange.filter((trip)=>trip.status==='completed').length,
     cancelled_trips: withinRange.filter((trip)=>trip.status==='cancelled').length,
     recorded_route_distance_km: Number((withinRange.reduce((sum, trip)=>sum+(trip.distance_meters||0),0)/1000).toFixed(2)),
-    note:'Synthetic demo summary generated locally when the API has no saved trip records. These are not operational city statistics.',
+    note:'Illustrative summary shown when no saved trip records are available. These are not operational city statistics.',
   };
 };
 
@@ -98,7 +104,7 @@ export const DEMO_JUNCTIONS = Array.from({length:24}, (_, index) => {
   const congestion = 24 + (index * 17) % 73;
   return {
     id: 10000 + index, external_id:`DEMO-JUNCTION-${String(index+1).padStart(2,'0')}`,
-    name:`Demo junction · ${aqiLocations[index % aqiLocations.length][0]}`, latitude:base[0]+(((index%3)-1)*0.0015), longitude:base[1]+(((index%4)-1.5)*0.0013),
+    name:`Traffic junction · ${aqiLocations[index % aqiLocations.length][0]}`, latitude:base[0]+(((index%3)-1)*0.0015), longitude:base[1]+(((index%4)-1.5)*0.0013),
     status: index % 11 === 0 ? 'degraded' : 'online', lane_count:4, baseline_cycle_seconds:90, cluster_id:Math.floor(index/2)+1,
     vehicle_count:34+(index*19)%145, queue_length_m:Math.round((8+(index*7)%58)*10)/10, average_speed_kmph:Math.max(8,48-(index*3)%36), average_wait_seconds:18+(index*13)%95,
     lane_density:Math.round((0.22+((index*9)%68)/100)*100)/100, congestion_score:congestion, observed_at:minutesAgo((index*3)%25),
@@ -108,24 +114,24 @@ export const DEMO_JUNCTIONS = Array.from({length:24}, (_, index) => {
 
 export const DEMO_SIGNAL_PLANS = DEMO_JUNCTIONS.slice(0,8).map((junction,index)=>({
   id:11000+index, public_id:`DEMO-PLAN-${String(index+1).padStart(2,'0')}`, junction_id:junction.id,
-  plan_type:index%3===0?'demo-adaptive-recommendation':index%3===1?'demo-peak-hour':'demo-emissions-aware',
+  plan_type:index%3===0?'scenario-adaptive-recommendation':index%3===1?'scenario-peak-hour':'scenario-emissions-aware',
   status:['simulated','draft','approved','simulated'][index%4], cycle_seconds:86+(index*7)%38,
   phases:[
     {name:'North–South',movement:'north_south',green_seconds:26+(index%7),yellow_seconds:3,all_red_seconds:1,demand_weight:1.2},
     {name:'East–West',movement:'east_west',green_seconds:22+(index%5),yellow_seconds:3,all_red_seconds:1,demand_weight:1},
     {name:'Protected turns',movement:'turns',green_seconds:12+(index%4),yellow_seconds:3,all_red_seconds:1,demand_weight:0.6},
-  ], rationale:'Synthetic demonstration strategy based on sample arrival pressure. Review against measured local traffic before real-world use.',
-  projected_outcomes:{is_synthetic:true,estimated_delay_reduction_pct:7+(index*3)%18,estimated_queue_reduction_pct:5+(index*4)%22}, model_version:'demo-scenario-v1', created_at:daysAgo(index%6,index), updated_at:minutesAgo(index*9),
+  ], rationale:'Illustrative strategy based on sample arrival pressure. Review against measured local traffic before real-world use.',
+  projected_outcomes:{is_synthetic:true,estimated_delay_reduction_pct:7+(index*3)%18,estimated_queue_reduction_pct:5+(index*4)%22}, model_version:'scenario-trend-v1', created_at:daysAgo(index%6,index), updated_at:minutesAgo(index*9),
 }));
 
 export const DEMO_DATA_SOURCES = [
-  { id:12001, external_id:'synthetic-demo', name:'Synthetic demo observations', source_type:'other', provider:'Local demo fixture', status:'online', freshness_seconds:45, safe_config:{is_synthetic:true}, last_success_at:minutesAgo(2), last_error:null },
+  { id:12001, external_id:'scenario-sample', name:'Illustrative traffic and AQI samples', source_type:'other', provider:'Scenario data generator', status:'online', freshness_seconds:45, safe_config:{is_synthetic:true}, last_success_at:minutesAgo(2), last_error:null },
   { id:12002, external_id:'cpcb-aqi', name:'CPCB AQI station feed', source_type:'cpcb', provider:'External integration required', status:'not_configured', freshness_seconds:null, safe_config:{is_synthetic:false}, last_success_at:null, last_error:null },
-  { id:12003, external_id:'gtfs-static', name:'GTFS static transit feed', source_type:'gtfs', provider:'Synthetic GTFS sample', status:'online', freshness_seconds:120, safe_config:{is_synthetic:true}, last_success_at:minutesAgo(5), last_error:null },
-  { id:12004, external_id:'osrm-routing', name:'Road-network route provider', source_type:'osm', provider:'Heuristic fallback active', status:'degraded', freshness_seconds:null, safe_config:{is_synthetic:true}, last_success_at:null, last_error:'External OSRM endpoint not configured; fallback estimates are shown.' },
+  { id:12003, external_id:'gtfs-static', name:'GTFS static transit feed', source_type:'gtfs', provider:'Scenario timetable feed', status:'online', freshness_seconds:120, safe_config:{is_synthetic:true}, last_success_at:minutesAgo(5), last_error:null },
+  { id:12004, external_id:'osrm-routing', name:'Road-network route provider', source_type:'osm', provider:'Public OSRM endpoint', status:'degraded', freshness_seconds:null, safe_config:{is_synthetic:false}, last_success_at:null, last_error:'Public endpoint usage is limited and does not include live traffic; estimated routes remain available.' },
   { id:12005, external_id:'camera-edge', name:'Camera vision event ingest', source_type:'camera', provider:'Push endpoint', status:'not_configured', freshness_seconds:null, safe_config:{is_synthetic:false}, last_success_at:null, last_error:null },
   { id:12006, external_id:'atcs-signal', name:'Traffic signal controller', source_type:'atcs', provider:'Preview only', status:'not_configured', freshness_seconds:null, safe_config:{is_synthetic:false}, last_success_at:null, last_error:null },
-  { id:12007, external_id:'sumo-twin', name:'SUMO digital twin', source_type:'sumo', provider:'Analytical what-if engine', status:'degraded', freshness_seconds:null, safe_config:{is_synthetic:true}, last_success_at:null, last_error:'A SUMO runtime is not launched by the demo backend.' },
+  { id:12007, external_id:'sumo-twin', name:'SUMO digital twin', source_type:'sumo', provider:'Analytical what-if engine', status:'degraded', freshness_seconds:null, safe_config:{is_synthetic:true}, last_success_at:null, last_error:'A SUMO runtime is not currently connected.' },
 ];
 
 const recentCongestion = DEMO_JUNCTIONS.filter((j)=>j.congestion_score>=70).map((j,index)=>({
@@ -133,25 +139,25 @@ const recentCongestion = DEMO_JUNCTIONS.filter((j)=>j.congestion_score>=70).map(
 }));
 export const DEMO_COMMAND_OVERVIEW = {
   generated_at:minutesAgo(1),
-  traffic:{mean_congestion_score:Math.round(DEMO_JUNCTIONS.reduce((sum,j)=>sum+j.congestion_score,0)/DEMO_JUNCTIONS.length),forecasted_junction_count:18,junctions_high_congestion:recentCongestion.slice(0,8),data_quality:'Synthetic demo telemetry; not a live camera feed.'},
+  traffic:{mean_congestion_score:Math.round(DEMO_JUNCTIONS.reduce((sum,j)=>sum+j.congestion_score,0)/DEMO_JUNCTIONS.length),forecasted_junction_count:18,junctions_high_congestion:recentCongestion.slice(0,8),data_quality:'Illustrative traffic telemetry; not a live camera feed.'},
   network:{junctions_online:22,junctions_total:24,clusters_online:10,clusters_total:12,junctions_with_recent_traffic_data:24},
   air_quality:{mean_aqi:Math.round(DEMO_AQI_STATIONS.reduce((sum,s)=>sum+s.aqi,0)/DEMO_AQI_STATIONS.length),stations_with_recent_data:DEMO_AQI_STATIONS.length},
   alerts:{active_count:5,items:[
-    {id:13001,title:'Demo · Elevated congestion near ITO',category:'traffic',severity:'high',status:'active',created_at:minutesAgo(12)},
-    {id:13002,title:'Demo · AQI category elevated in Anand Vihar',category:'air_quality',severity:'medium',status:'active',created_at:minutesAgo(22)},
-    {id:13003,title:'Demo · Bus corridor running slow',category:'transit',severity:'medium',status:'active',created_at:minutesAgo(31)},
-    {id:13004,title:'Demo · Camera connection pending',category:'data_source',severity:'low',status:'active',created_at:minutesAgo(55)},
-    {id:13005,title:'Demo · Peak-hour plan ready for review',category:'signals',severity:'info',status:'active',created_at:minutesAgo(70)},
+    {id:13001,title:'Scenario · Elevated congestion near ITO',category:'traffic',severity:'high',status:'active',created_at:minutesAgo(12)},
+    {id:13002,title:'Scenario · Air-quality index elevated in Anand Vihar',category:'air_quality',severity:'medium',status:'active',created_at:minutesAgo(22)},
+    {id:13003,title:'Scenario · Bus corridor running slow',category:'transit',severity:'medium',status:'active',created_at:minutesAgo(31)},
+    {id:13004,title:'Scenario · Camera connection pending',category:'data_source',severity:'low',status:'active',created_at:minutesAgo(55)},
+    {id:13005,title:'Scenario · Peak-hour plan ready for review',category:'signals',severity:'info',status:'active',created_at:minutesAgo(70)},
   ]},
   demo_mode:true,
 };
 
 export const DEMO_TRANSIT_JOURNEYS = {
-  status:'available', demo_mode:true, limitations:['Synthetic public-transport alternatives for the demo; not a live departure board or confirmed schedule.'],
+  status:'available', demo_mode:true, limitations:['Illustrative public-transport alternatives; not a live departure board or confirmed schedule.'],
   options:[
-    {id:'DEMO-JOURNEY-1',label:'Blue Line · direct',mode:'metro',duration_seconds:1560,distance_meters:8100,transfers:0,provider:'synthetic-demo',data_quality:'synthetic-demo',warnings:['Illustrative timings only.']},
-    {id:'DEMO-JOURNEY-2',label:'Metro + short walk',mode:'transit',duration_seconds:1920,distance_meters:7800,transfers:1,provider:'synthetic-demo',data_quality:'synthetic-demo',warnings:['Illustrative timings only.']},
-    {id:'DEMO-JOURNEY-3',label:'Bus corridor',mode:'bus',duration_seconds:2280,distance_meters:9300,transfers:0,provider:'synthetic-demo',data_quality:'synthetic-demo',warnings:['Illustrative timings only.']},
+    {id:'DEMO-JOURNEY-1',label:'Blue Line · direct',mode:'metro',duration_seconds:1560,distance_meters:8100,transfers:0,provider:'scenario-sample',data_quality:'scenario-sample',warnings:['Illustrative timings only.']},
+    {id:'DEMO-JOURNEY-2',label:'Metro + short walk',mode:'transit',duration_seconds:1920,distance_meters:7800,transfers:1,provider:'scenario-sample',data_quality:'scenario-sample',warnings:['Illustrative timings only.']},
+    {id:'DEMO-JOURNEY-3',label:'Bus corridor',mode:'bus',duration_seconds:2280,distance_meters:9300,transfers:0,provider:'scenario-sample',data_quality:'scenario-sample',warnings:['Illustrative timings only.']},
   ],
 };
 
@@ -163,7 +169,7 @@ function haversineKm(origin,destination) {
 export function createDemoRoutePlan(payload) {
   const origin=[Number(payload.origin_latitude),Number(payload.origin_longitude)];
   const destination=[Number(payload.destination_latitude),Number(payload.destination_longitude)];
-  if (![...origin,...destination].every(Number.isFinite)) throw new Error('Enter valid coordinates to preview a demo route.');
+  if (![...origin,...destination].every(Number.isFinite)) throw new Error('Enter valid coordinates to preview an estimated route.');
   const directKm=Math.max(0.35,haversineKm(origin,destination));
   const mode=payload.modes?.[0] || 'driving';
   const baseSpeed=mode==='cycling'?15:mode==='walking'?4.6:mode==='transit'?23:27;
@@ -180,9 +186,9 @@ export function createDemoRoutePlan(payload) {
     return {
       id:null,label:labels[index],mode,duration_seconds:duration,distance_meters:Math.round(distance),traffic_delay_seconds:mode==='driving'?Math.round(duration*(index===0?0.13:index===1?0.07:0.03)):0,
       pollution_score:Math.min(100,Math.round(estimatedAqi/4)),estimated_aqi:estimatedAqi,estimated_co2_grams:co2,transfers:mode==='transit'?(index===0?0:1):0,
-      provider:'UrbanSaarthi synthetic demo engine',data_quality:'synthetic-demo',geometry:{type:'LineString',coordinates:[[origin[1],origin[0]],[((origin[1]+destination[1])/2)+offset,((origin[0]+destination[0])/2)-offset],[destination[1],destination[0]]]},
+      provider:'UrbanSaarthi scenario engine',data_quality:'scenario-sample',geometry:{type:'LineString',coordinates:[[origin[1],origin[0]],[((origin[1]+destination[1])/2)+offset,((origin[0]+destination[0])/2)-offset],[destination[1],destination[0]]]},
       itinerary:{note:'Synthetic illustration only. Not turn-by-turn navigation; values are not live traffic observations.',is_synthetic:true},
-      warnings:['Synthetic demo estimate. Configure a road-routing provider for verified road-network geometry.'],
+      warnings:['Scenario estimate; connect a road-routing provider for verified road-network geometry.'],
     };
   });
   const preference=payload.preference||'balanced';
@@ -192,7 +198,7 @@ export function createDemoRoutePlan(payload) {
   routes=routes.map((route,index)=>({...route,preference_rank:`${preference}-#${index+1}`}));
   return {
     trip_id:null,public_trip_id:`DEMO-${Math.random().toString(36).slice(2,9).toUpperCase()}`,preference,routes,demo_mode:true,
-    data_freshness:{traffic_last_observed_at:minutesAgo(4),aqi_last_observed_at:minutesAgo(18),routing_provider:'Synthetic frontend route engine',aqi_max_age_minutes:180},
-    warnings:['Demo route options are generated locally because the backend is empty or unavailable. They are for UI preview only.'],
+    data_freshness:{traffic_last_observed_at:minutesAgo(4),aqi_last_observed_at:minutesAgo(18),routing_provider:'Scenario route engine',aqi_max_age_minutes:180},
+    warnings:['Scenario route options are used while the route service is unavailable. They are not turn-by-turn navigation.'],
   };
 }
