@@ -11,8 +11,8 @@ The API maps to the project proposal: route planning by travel time and pollutio
 - **FastAPI + Pydantic v2**: validated REST contracts and interactive OpenAPI docs.
 - **SQLAlchemy 2.x**: ORM models with portable JSON columns; SQLite for quick local tests and PostgreSQL for deployment.
 - **Alembic**: the only production schema-versioning mechanism. The app does not call `Base.metadata.create_all()` at startup.
-- **JWT + Argon2**: citizen/operator/admin roles and password hashing.
-- **Provider adapters**: OSRM-compatible road routing, OpenAQ v3 pull adapter, GTFS static upload, and authenticated push-ingestion for camera-derived traffic measurements, CPCB AQI readings and transit real-time arrivals.
+- **Prototype demo identity**: shared demo operator identity; authentication is disabled in this archive.
+- **Provider adapters**: OSRM-compatible road routing, OpenAQ v3 pull adapter, GTFS static upload, and push-ingestion for camera-derived traffic measurements, CPCB AQI readings and transit real-time arrivals.
 - **Optional scikit-learn estimator**: queue-length predictor loaded from `MODEL_PATH`; until a trained model is supplied, forecasts use a bounded trend heuristic and identify themselves as such.
 
 ## 2. Quick start (Windows, macOS or Linux)
@@ -30,7 +30,7 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Copy `.env.example` to `.env`. Generate a real `SECRET_KEY` and a separate `INGESTION_API_KEY` before exposing the API. For a quick local run, SQLite is the default:
+Copy `.env.example` to `.env`. For a quick local run, SQLite is the default:
 
 ```bash
 alembic upgrade head
@@ -60,7 +60,7 @@ This explicitly creates `synthetic-demo` observations to let the frontend displa
 
 ## 3. Docker Compose (PostgreSQL)
 
-1. Copy `.env.example` to `.env` and set `SECRET_KEY`, `INGESTION_API_KEY`, and `POSTGRES_PASSWORD` to random secrets.
+1. Copy `.env.example` to `.env` and set `POSTGRES_PASSWORD` to a strong random password.
 2. Start the services:
 
 ```bash
@@ -69,7 +69,7 @@ docker compose up --build -d
 
 The API container waits for PostgreSQL, runs `alembic upgrade head`, then starts Uvicorn on port `8000`. View logs with `docker compose logs -f api`. Seed the database with `docker compose exec api python scripts/seed_demo.py`.
 
-The default values in `docker-compose.yml` are for local development only. Do not expose them on a public server. When `APP_ENV=production`, configuration validation rejects placeholder/short JWT secrets, wildcard/empty CORS origins, and SQLite. Use PostgreSQL and explicitly set the frontend origin(s).
+The default values in `docker-compose.yml` are for local development only. Do not expose them on a public server. When `APP_ENV=production`, configuration validation rejects wildcard/empty CORS origins and SQLite. Use PostgreSQL and explicitly set the frontend origin(s).
 
 ## 4. Schema versioning rules (keep versions from breaking)
 
@@ -99,7 +99,7 @@ Every REST route below is under `/api/v1`.
 
 | Domain | Endpoints | Purpose |
 |---|---|---|
-| Auth/profile | `POST /auth/register`, `POST /auth/login`, `GET/PATCH /auth/me` | Citizen identity, JWT, preferences |
+| Demo access | Authentication endpoints are disabled in this archive | Shared demo identity for prototype testing |
 | Route planning | `POST /routing/plan` | Fastest, cleanest or balanced trip options; returns source/data-quality warnings |
 | Trip history | `GET /trips`, `GET /trips/{id}`, `GET /trips/{id}/routes`, `POST /trips/{id}/select-route`, `/start`, `/complete`, `/cancel` | Private trip lifecycle and history for signed-in citizens |
 | Traffic | `GET /traffic/overview`, `GET /traffic/junctions`, `GET /traffic/junctions/{id}`, `GET /traffic/junctions/{id}/observations`, `POST /traffic/observations` | Junction status, vehicle count, queue, speeds, waits, density and lane demand |
@@ -122,7 +122,7 @@ Every REST route below is under `/api/v1`.
 
 ### Traffic cameras / YOLO
 
-Run video ingest and CV inference in a separate, authorized edge worker. Send count/queue/speed/density summaries to `POST /api/v1/ingestion/vision-events`. Authenticate with a city operator/admin bearer token or the `X-Ingestion-Key` header. Do not send unapproved public CCTV URLs or credentials in `safe_config`; secrets belong in environment/secret storage.
+Run video ingest and CV inference in a separate, authorized edge worker. Send count/queue/speed/density summaries to `POST /api/v1/ingestion/vision-events`. In this demo archive, authentication is disabled and this endpoint is publicly accessible. Do not send unapproved public CCTV URLs or credentials in `safe_config`; secrets belong in environment/secret storage.
 
 ### CPCB / OpenAQ
 
@@ -164,7 +164,7 @@ The current API creates/cancels *requests*. It does not contact a bus/metro oper
 - `operator`: traffic/AQI/transit ingestion, signal plans and reviews, command centre, alerts, simulations, source heartbeat and junction status.
 - `admin`: operator permissions plus data-source and role administration.
 
-Ingestion endpoints accept `Authorization: Bearer <operator JWT>` or `X-Ingestion-Key: <shared secret>`. Keep the shared ingestion key limited to trusted producers and rotate it if leaked. Production still needs reverse-proxy TLS, request rate limits, backups, observability, log retention rules and deployment-specific security review.
+In this simplified demo archive, ingestion and authority endpoints are publicly accessible. Use only synthetic data. Re-enable authentication, role checks and trusted-producer controls before production.
 
 ## 8. Basic smoke test
 
@@ -173,7 +173,7 @@ python -m pytest -q
 alembic check
 ```
 
-The six tests cover signup/login, authenticated route planning/history, traffic ingestion, all five forecast horizons, signal recommendation, analytical what-if simulation, approval/dispatch preview, GTFS frequency-feed import and routing, one-transfer journeys, no-fabricated-transit behavior, and fail-closed production configuration.
+The six tests cover unauthenticated demo route planning/history, traffic ingestion, all five forecast horizons, signal recommendation, analytical what-if simulation, approval/dispatch preview, GTFS frequency-feed import and routing, one-transfer journeys, no-fabricated-transit behavior, and fail-closed production configuration.
 
 ## 9. Important current boundaries
 
@@ -184,3 +184,8 @@ The six tests cover signup/login, authenticated route planning/history, traffic 
 - Forecast heuristics and analytical signal what-if outputs are not a validated traffic model.
 - No automatic online model retraining is performed; observations are retained for offline evaluation/training.
 - No physical traffic signal command or ticket/payment transaction is issued.
+
+
+## Prototype access mode
+
+Authentication and role checks are disabled in this simplified demo archive. Requests share a demo administrator identity so the UI can be tested without signing in. **All authority write APIs are publicly accessible in this mode. Do not use real data or deploy this build for production.**

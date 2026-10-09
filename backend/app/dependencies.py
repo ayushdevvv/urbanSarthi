@@ -1,55 +1,57 @@
+"""Demo-mode identity helpers. Authentication is intentionally disabled for this prototype.
+
+WARNING: This makes every API endpoint, including authority write actions, publicly accessible.
+Do not use this configuration with real operational data or in a production deployment.
+"""
 from collections.abc import Callable
-from hmac import compare_digest
-from fastapi import Depends, Header, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
-import jwt
-from app.core.config import settings
-from app.core.security import decode_access_token
 from app.db import get_db
 from app.models import User
 
-_bearer = HTTPBearer(auto_error=False)
+DEMO_EMAIL = "demo-admin@urbansaarthi.local"
 
 
-def get_optional_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    db: Session = Depends(get_db),
-) -> User | None:
-    if credentials is None:
-        return None
-    try:
-        payload = decode_access_token(credentials.credentials)
-        user_id = int(payload.get("sub", ""))
-    except (jwt.PyJWTError, TypeError, ValueError):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired access token")
-    user = db.get(User, user_id)
-    if not user or not user.is_active:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is inactive or does not exist")
+def _demo_user(db: Session) -> User:
+    user = db.scalar(select(User).where(User.email == DEMO_EMAIL))
+    if user is None:
+        user = User(
+            email=DEMO_EMAIL,
+            full_name="UrbanSaarthi Demo Operator",
+            password_hash="authentication-disabled-demo-mode",
+            role="admin",
+            is_active=True,
+            preferences={"demo_mode": True},
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    elif user.role != "admin" or not user.is_active:
+        user.role = "admin"
+        user.is_active = True
+        db.commit()
+        db.refresh(user)
     return user
 
 
-def get_current_user(user: User | None = Depends(get_optional_user)) -> User:
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required", headers={"WWW-Authenticate": "Bearer"})
+def get_optional_user(db: Session = Depends(get_db)) -> User:
+    """Return one shared demo identity without requiring an Authorization header."""
+    return _demo_user(db)
+
+
+def get_current_user(user: User = Depends(get_optional_user)) -> User:
     return user
 
 
 def require_roles(*allowed_roles: str) -> Callable:
     def _require_role(user: User = Depends(get_current_user)) -> User:
         if user.role not in allowed_roles:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role for this action")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This action is unavailable in demo mode")
         return user
     return _require_role
 
 
-def require_ingestion_access(
-    x_ingestion_key: str | None = Header(default=None, alias="X-Ingestion-Key"),
-    user: User | None = Depends(get_optional_user),
-) -> User | None:
-    if user is not None and user.role in {"operator", "admin"}:
-        return user
-    configured_key = settings.ingestion_api_key
-    if configured_key and x_ingestion_key and compare_digest(configured_key, x_ingestion_key):
-        return None
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Use an operator/admin account or a valid X-Ingestion-Key")
+def require_ingestion_access(user: User = Depends(get_optional_user)) -> User:
+    """In demo mode, ingestion is open like the rest of the API; no key is required."""
+    return user

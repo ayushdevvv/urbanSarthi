@@ -6,7 +6,7 @@ This matrix is the backend implementation checklist derived from the 14-page Nav
 
 | Proposal requirement | Backend support | Status / caveat |
 |---|---|---|
-| Citizen + commuter journey | JWT account/profile/preferences, route planning, own trip history, route selection, start/complete/cancel lifecycle | Implemented |
+| Citizen + commuter journey | Demo identity, route planning, shared trip history, route selection, start/complete/cancel lifecycle | Implemented |
 | One place for traffic, transit, AQI and routes | Route planner combines available observations, routing and GTFS data and returns provider/data-quality/freshness metadata | Implemented; values depend on ingested sources |
 | Starting point and destination / GPS coordinates | Coordinate-validated route-planning request with labels and optional departure time | Implemented; geocoding/search is a frontend/provider integration |
 | Fastest route | Preference sorting by estimated/provider route duration | Implemented; heuristic time is labelled as estimated without OSRM |
@@ -36,7 +36,7 @@ This matrix is the backend implementation checklist derived from the 14-page Nav
 | Continuous improvement | Retains telemetry, route choices, selected options, trip lifecycle and actual-metric JSON; training script produces MAE/RMSE | Implemented data pipeline surface; automated retraining/model registry/drift alerts still need deployment jobs |
 | City/mobility analytics | Personal usage metrics and operator city summary | Implemented; only registered-user trips are stored, not anonymous route queries |
 | Source health | Data-source registry, heartbeat endpoint, status/freshness and error fields | Implemented |
-| Security and accountability | Argon2 hashes, JWT, role-based authorization, per-user trip/ticket ownership, audit logs, environment secrets, non-actuating traffic design | Implemented baseline; production still needs TLS, rate limiting, secrets rotation, backups and external security testing |
+| Security and accountability | Unauthenticated demo endpoints, shared demo identity, audit logs, environment secrets, non-actuating traffic design | Demo-only; authentication and role checks must be restored before production |
 | Schema versioning without drift | SQLAlchemy 2.x metadata, Alembic migration history (base + GTFS frequency) and no startup `create_all` | Implemented; new changes must use new reviewed Alembic revisions |
 
 ## Database domains

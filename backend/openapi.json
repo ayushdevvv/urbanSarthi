@@ -63,158 +63,6 @@
         }
       }
     },
-    "/api/v1/auth/register": {
-      "post": {
-        "tags": [
-          "Authentication"
-        ],
-        "summary": "Register",
-        "operationId": "register_api_v1_auth_register_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegisterIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/auth/login": {
-      "post": {
-        "tags": [
-          "Authentication"
-        ],
-        "summary": "Login",
-        "operationId": "login_api_v1_auth_login_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/auth/me": {
-      "get": {
-        "tags": [
-          "Authentication"
-        ],
-        "summary": "Me",
-        "operationId": "me_api_v1_auth_me_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserOut"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "patch": {
-        "tags": [
-          "Authentication"
-        ],
-        "summary": "Update Me",
-        "operationId": "update_me_api_v1_auth_me_patch",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UserUpdateIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/routing/plan": {
       "post": {
         "tags": [
@@ -253,12 +101,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/trips": {
@@ -268,11 +111,6 @@
         ],
         "summary": "My Trips",
         "operationId": "my_trips_api_v1_trips_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "limit",
@@ -330,11 +168,6 @@
         ],
         "summary": "Trip Detail",
         "operationId": "trip_detail_api_v1_trips__trip_id__get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "trip_id",
@@ -377,11 +210,6 @@
         ],
         "summary": "Trip Routes",
         "operationId": "trip_routes_api_v1_trips__trip_id__routes_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "trip_id",
@@ -422,11 +250,6 @@
         ],
         "summary": "Select Route",
         "operationId": "select_route_api_v1_trips__trip_id__select_route_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "trip_id",
@@ -478,11 +301,6 @@
         ],
         "summary": "Start Trip",
         "operationId": "start_trip_api_v1_trips__trip_id__start_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "trip_id",
@@ -525,11 +343,6 @@
         ],
         "summary": "Complete Trip",
         "operationId": "complete_trip_api_v1_trips__trip_id__complete_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "trip_id",
@@ -572,11 +385,6 @@
         ],
         "summary": "Cancel Trip",
         "operationId": "cancel_trip_api_v1_trips__trip_id__cancel_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "trip_id",
@@ -706,11 +514,6 @@
         ],
         "summary": "Create Junction",
         "operationId": "create_junction_api_v1_traffic_junctions_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -869,38 +672,15 @@
         ],
         "summary": "Ingest Traffic",
         "operationId": "ingest_traffic_api_v1_traffic_observations_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "X-Ingestion-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Ingestion-Key"
-            }
-          }
-        ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/TrafficObservationIn"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -1038,29 +818,6 @@
         ],
         "summary": "Ingest Aqi",
         "operationId": "ingest_aqi_api_v1_aqi_observations_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "X-Ingestion-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Ingestion-Key"
-            }
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1522,12 +1279,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/transit/realtime-arrivals": {
@@ -1537,38 +1289,15 @@
         ],
         "summary": "Ingest Realtime Arrival",
         "operationId": "ingest_realtime_arrival_api_v1_transit_realtime_arrivals_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "X-Ingestion-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Ingestion-Key"
-            }
-          }
-        ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RealtimeArrivalIn"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -1648,11 +1377,6 @@
         ],
         "summary": "Upsert Transit Alert",
         "operationId": "upsert_transit_alert_api_v1_transit_alerts_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1769,11 +1493,6 @@
         ],
         "summary": "Create Signal Plan",
         "operationId": "create_signal_plan_api_v1_signals_plans_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1815,11 +1534,6 @@
         ],
         "summary": "Create Recommendation",
         "operationId": "create_recommendation_api_v1_signals_recommendations__junction_id__post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "junction_id",
@@ -1862,11 +1576,6 @@
         ],
         "summary": "Approve Signal Plan",
         "operationId": "approve_signal_plan_api_v1_signals_plans__plan_id__approve_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "plan_id",
@@ -1919,11 +1628,6 @@
         ],
         "summary": "Reject Signal Plan",
         "operationId": "reject_signal_plan_api_v1_signals_plans__plan_id__reject_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "plan_id",
@@ -1976,11 +1680,6 @@
         ],
         "summary": "Signal Dispatch Preview",
         "operationId": "signal_dispatch_preview_api_v1_signals_plans__plan_id__dispatch_preview_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "plan_id",
@@ -2021,11 +1720,6 @@
         ],
         "summary": "Create Simulation",
         "operationId": "create_simulation_api_v1_simulations_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -2063,11 +1757,6 @@
         ],
         "summary": "List Simulations",
         "operationId": "list_simulations_api_v1_simulations_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "junction_id",
@@ -2125,11 +1814,6 @@
         ],
         "summary": "Simulate Existing Plan",
         "operationId": "simulate_existing_plan_api_v1_signals_plans__plan_id__simulate_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "plan_id",
@@ -2179,12 +1863,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/command-center/clusters": {
@@ -2209,12 +1888,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/command-center/clusters/{cluster_id}": {
@@ -2224,11 +1898,6 @@
         ],
         "summary": "Cluster Detail",
         "operationId": "cluster_detail_api_v1_command_center_clusters__cluster_id__get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "cluster_id",
@@ -2278,12 +1947,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/alerts": {
@@ -2380,11 +2044,6 @@
         ],
         "summary": "Create Alert",
         "operationId": "create_alert_api_v1_alerts_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -2424,11 +2083,6 @@
         ],
         "summary": "Resolve Alert",
         "operationId": "resolve_alert_api_v1_alerts__alert_id__resolve_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "alert_id",
@@ -2479,11 +2133,6 @@
         ],
         "summary": "Request Ticket",
         "operationId": "request_ticket_api_v1_ticketing_orders_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -2523,11 +2172,6 @@
         ],
         "summary": "List Ticket Orders",
         "operationId": "list_ticket_orders_api_v1_ticketing_orders_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "limit",
@@ -2585,11 +2229,6 @@
         ],
         "summary": "Ticket Order Detail",
         "operationId": "ticket_order_detail_api_v1_ticketing_orders__order_id__get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "order_id",
@@ -2632,11 +2271,6 @@
         ],
         "summary": "Cancel Ticket Order",
         "operationId": "cancel_ticket_order_api_v1_ticketing_orders__order_id__cancel_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "order_id",
@@ -2688,12 +2322,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/analytics/my-mobility": {
@@ -2712,12 +2341,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/analytics/city-summary": {
@@ -2727,11 +2351,6 @@
         ],
         "summary": "City Summary",
         "operationId": "city_summary_api_v1_analytics_city_summary_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "days",
@@ -2788,12 +2407,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       },
       "post": {
         "tags": [
@@ -2832,12 +2446,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/admin/data-sources/{external_id}/heartbeat": {
@@ -2847,11 +2456,6 @@
         ],
         "summary": "Source Heartbeat",
         "operationId": "source_heartbeat_api_v1_admin_data_sources__external_id__heartbeat_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "external_id",
@@ -2918,11 +2522,6 @@
         ],
         "summary": "Set Junction Status",
         "operationId": "set_junction_status_api_v1_admin_junctions__junction_id__status_patch",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "junction_id",
@@ -2972,11 +2571,6 @@
         ],
         "summary": "List Users",
         "operationId": "list_users_api_v1_admin_users_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "limit",
@@ -3034,11 +2628,6 @@
         ],
         "summary": "Change User Role",
         "operationId": "change_user_role_api_v1_admin_users__user_id__role_patch",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "user_id",
@@ -3100,12 +2689,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/integrations/openaq/sync": {
@@ -3115,11 +2699,6 @@
         ],
         "summary": "Sync Openaq",
         "operationId": "sync_openaq_api_v1_integrations_openaq_sync_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "latitude",
@@ -3198,38 +2777,15 @@
         "summary": "Ingest Vision Event",
         "description": "Accept compact edge-computed detections from an external YOLO/CCTV worker; no video is uploaded.",
         "operationId": "ingest_vision_event_api_v1_ingestion_vision_events_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "X-Ingestion-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Ingestion-Key"
-            }
-          }
-        ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/TrafficObservationIn"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "201": {
@@ -3308,12 +2864,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/predictions/junctions/{junction_id}": {
@@ -4271,27 +3822,6 @@
         ],
         "title": "JunctionOut"
       },
-      "LoginIn": {
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "title": "Email"
-          },
-          "password": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 1,
-            "title": "Password"
-          }
-        },
-        "type": "object",
-        "required": [
-          "email",
-          "password"
-        ],
-        "title": "LoginIn"
-      },
       "RealtimeArrivalIn": {
         "properties": {
           "stop_external_id": {
@@ -4352,34 +3882,6 @@
           "expected_at"
         ],
         "title": "RealtimeArrivalIn"
-      },
-      "RegisterIn": {
-        "properties": {
-          "full_name": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 2,
-            "title": "Full Name"
-          },
-          "email": {
-            "type": "string",
-            "format": "email",
-            "title": "Email"
-          },
-          "password": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 8,
-            "title": "Password"
-          }
-        },
-        "type": "object",
-        "required": [
-          "full_name",
-          "email",
-          "password"
-        ],
-        "title": "RegisterIn"
       },
       "ResolveAlertIn": {
         "properties": {
@@ -5110,34 +4612,6 @@
         ],
         "title": "TicketOut"
       },
-      "TokenOut": {
-        "properties": {
-          "access_token": {
-            "type": "string",
-            "title": "Access Token"
-          },
-          "token_type": {
-            "type": "string",
-            "title": "Token Type",
-            "default": "bearer"
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Expires At"
-          },
-          "user": {
-            "$ref": "#/components/schemas/UserOut"
-          }
-        },
-        "type": "object",
-        "required": [
-          "access_token",
-          "expires_at",
-          "user"
-        ],
-        "title": "TokenOut"
-      },
       "TrafficObservationIn": {
         "properties": {
           "junction_id": {
@@ -5832,37 +5306,6 @@
         ],
         "title": "UserRoleChangeIn"
       },
-      "UserUpdateIn": {
-        "properties": {
-          "full_name": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 120,
-                "minLength": 2
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Full Name"
-          },
-          "preferences": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Preferences"
-          }
-        },
-        "type": "object",
-        "title": "UserUpdateIn"
-      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -5902,12 +5345,6 @@
           "type"
         ],
         "title": "ValidationError"
-      }
-    },
-    "securitySchemes": {
-      "HTTPBearer": {
-        "type": "http",
-        "scheme": "bearer"
       }
     }
   }

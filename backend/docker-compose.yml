@@ -22,11 +22,8 @@ services:
       APP_ENV: ${APP_ENV:-development}
       API_V1_PREFIX: /api/v1
       DATABASE_URL: postgresql+psycopg://urbansaarthi:${POSTGRES_PASSWORD:-local-dev-change-this}@db:5432/urbansaarthi
-      SECRET_KEY: ${SECRET_KEY:-dev-only-change-this-secret-before-deploying}
-      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
       TIMEZONE: Asia/Kolkata
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
-      INGESTION_API_KEY: ${INGESTION_API_KEY:-}
       OSRM_BASE_URL: ${OSRM_BASE_URL:-}
       OPENAQ_API_KEY: ${OPENAQ_API_KEY:-}
       MODEL_PATH: ${MODEL_PATH:-}

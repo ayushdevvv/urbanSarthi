@@ -29,7 +29,7 @@ export default function RoutePlannerPage() {
         origin_label: origin.label, destination_label: destination.label, preference, modes: [mode],
       });
       setResult(payload);
-    } catch (err) { setError(err.message); if (err.status === 401) notify('Sign in to save and select a route.'); }
+    } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
   async function selectRoute(route) {
@@ -48,7 +48,6 @@ export default function RoutePlannerPage() {
       <div className="field-label">ROUTE PREFERENCE</div><div className="route-pref-options">{[['fastest','Fastest',Clock],['balanced','Balanced',Route],['cleanest','Cleanest',Leaf]].map(([value,label,Icon])=><button key={value} className={preference===value?'selected':''} onClick={()=>setPreference(value)}><Icon size={14}/>{label}</button>)}</div>
       <label className="mode-select">Travel mode<select value={mode} onChange={(e)=>setMode(e.target.value)}><option value="driving">Driving</option><option value="walking">Walking</option><option value="cycling">Cycling</option><option value="transit">Public transport</option></select></label>
       <button className="primary full plan-submit" onClick={plan} disabled={busy}><Navigation size={16}/>{busy ? 'Planning route…' : 'Show route options'}</button>
-      {!localStorage.getItem('us_token') && <p className="inline-hint"><ShieldAlert size={14}/> Sign in to save and manage your trip. <button onClick={() => navigate('/auth?next=/citizen/plan')}>Sign in</button></p>}
     </section><section className="panel planner-map-panel"><div className="panel-head"><div><div className="eyebrow">ROUTE MAP</div><h3>{origin.label} → {destination.label}</h3></div><span className="status-pill">{result ? 'API response' : 'Preview'}</span></div><CityMap markers={markers} route={result?.routes?.[0]?.geometry?.coordinates?.map?.(([lon,lat]) => ({lat,lng:lon})) || coordinateRoute} zoom={12}/><div className="map-foot"><span><MapPin size={13}/> Origin & destination</span><small>Map tiles © OpenStreetMap</small></div></section></div>
     <section className="route-results"><div className="section-heading"><div><div className="eyebrow">ROUTE OPTIONS</div><h3>{result ? `${result.routes?.length || 0} options returned` : 'Compare available journeys'}</h3></div>{result?.public_trip_id && <span className="status-pill">Trip ref {result.public_trip_id}</span>}</div>
       {result?.warnings?.length > 0 && <div className="warning-stack">{result.warnings.map((warning, i) => <div key={i}><ShieldAlert size={14}/>{warning}</div>)}</div>}

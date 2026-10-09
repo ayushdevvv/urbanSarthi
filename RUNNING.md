@@ -30,11 +30,11 @@ npm install
 npm run dev
 ```
 
-The local default `VITE_API_BASE_URL` is `http://127.0.0.1:8000/api/v1`. The variable must include `/api/v1` in production as well. The Vite dev server shows the local URL in its terminal.
+The local default `VITE_API_URL` is `http://127.0.0.1:8000/api/v1`. The variable must include `/api/v1` in production as well. The Vite dev server shows the local URL in its terminal.
 
 ## Vercel
 
-Choose `frontend` as Vercel's Root Directory and set `VITE_API_BASE_URL` to the production backend host plus `/api/v1`. `frontend/vercel.json` handles SPA deep links. The backend CORS allow-list must include the deployed frontend origin.
+Choose `frontend` as Vercel's Root Directory and set `VITE_API_URL` to the production backend host plus `/api/v1`. `frontend/vercel.json` handles SPA deep links. The backend CORS allow-list must include the deployed frontend origin.
 
 ## Backend/frontend data boundary
 

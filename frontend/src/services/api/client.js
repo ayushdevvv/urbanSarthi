@@ -1,6 +1,6 @@
 const DEFAULT_API_URL = 'http://127.0.0.1:8000/api/v1';
 
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_URL).replace(/\/$/, '');
+export const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || DEFAULT_API_URL).replace(/\/$/, '');
 
 export class ApiError extends Error {
   constructor(message, status, payload) {
@@ -12,12 +12,10 @@ export class ApiError extends Error {
 }
 
 export async function request(path, options = {}) {
-  const token = localStorage.getItem('us_token');
   const headers = new Headers(options.headers || {});
   if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
 
   let response;
   try {
@@ -43,7 +41,6 @@ export const api = {
 };
 
 export const endpoints = {
-  login: '/auth/login', register: '/auth/register', me: '/auth/me',
   commandOverview: '/command-center/overview', clusters: '/command-center/clusters', sourceHealth: '/command-center/health/data-sources',
   citySummary: (days = 7) => `/analytics/city-summary?days=${encodeURIComponent(days)}`,
   myMobility: '/analytics/my-mobility', trips: '/trips', junctions: '/traffic/junctions',

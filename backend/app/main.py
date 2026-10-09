@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from app.api import admin, alerts, analytics, aqi, auth, command_center, ingestion, integrations, mobility, predictions, signals, ticketing, traffic, transit
+from app.api import admin, alerts, analytics, aqi, command_center, ingestion, integrations, mobility, predictions, signals, ticketing, traffic, transit
 from app.core.config import settings
 from app.db import engine
 
@@ -67,5 +67,5 @@ def readyz():
 
 
 prefix = settings.api_v1_prefix.rstrip("/")
-for route_module in (auth, mobility, traffic, aqi, transit, signals, command_center, alerts, ticketing, analytics, admin, integrations, ingestion, predictions):
+for route_module in (mobility, traffic, aqi, transit, signals, command_center, alerts, ticketing, analytics, admin, integrations, ingestion, predictions):
     app.include_router(route_module.router, prefix=prefix)

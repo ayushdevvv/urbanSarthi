@@ -1,18 +1,14 @@
 from datetime import datetime, timezone
 from sqlalchemy import select
-from app.core.security import create_access_token, hash_password
 from app.db import get_db
-from app.models import CityCluster, Junction, User
+from app.models import CityCluster, Junction
 
 
-def _operator_token(client):
+def _demo_junction(client):
     # The fixture's session is accessible through FastAPI's overridden dependency.
     override = client.app.dependency_overrides[get_db]
     db = next(override())
     try:
-        user = User(email="operator@example.com", full_name="Test Operator", password_hash=hash_password("development-password-123"), role="operator", is_active=True)
-        db.add(user)
-        db.flush()
         cluster = CityCluster(external_id="C-001", name="Cluster 1", city="Test City", status="unknown", config={})
         db.add(cluster)
         db.flush()
@@ -20,21 +16,16 @@ def _operator_token(client):
                             status="unknown", lane_count=4, baseline_cycle_seconds=90, configuration={})
         db.add(junction)
         db.commit()
-        user_id, junction_id = user.id, junction.id
+        junction_id = junction.id
     finally:
         db.close()
-    token, _ = create_access_token(user_id, "operator")
-    return {"Authorization": f"Bearer {token}"}, junction_id
+    return {}, junction_id
 
 
-def test_health_and_auth_and_route_planning(client):
+def test_health_and_open_route_planning(client):
     assert client.get("/healthz").status_code == 200
-    registered = client.post("/api/v1/auth/register", json={"full_name": "Citizen User", "email": "person@example.com", "password": "safe-password-123"})
-    assert registered.status_code == 201, registered.text
-    logged_in = client.post("/api/v1/auth/login", json={"email": "person@example.com", "password": "safe-password-123"})
-    assert logged_in.status_code == 200, logged_in.text
-    token = logged_in.json()["access_token"]
-    response = client.post("/api/v1/routing/plan", headers={"Authorization": f"Bearer {token}"}, json={
+    assert client.get("/api/v1/auth/me").status_code == 404  # authentication routes are removed
+    response = client.post("/api/v1/routing/plan", json={
         "origin_latitude": 28.6139, "origin_longitude": 77.2090,
         "destination_latitude": 28.6200, "destination_longitude": 77.2150,
         "origin_label": "Origin", "destination_label": "Destination", "preference": "balanced",
@@ -45,12 +36,12 @@ def test_health_and_auth_and_route_planning(client):
     assert body["trip_id"] is not None
     assert len(body["routes"]) >= 2
     assert body["routes"][0]["data_quality"] == "estimated"
-    history = client.get("/api/v1/trips", headers={"Authorization": f"Bearer {token}"})
+    history = client.get("/api/v1/trips")
     assert history.status_code == 200 and len(history.json()) == 1
 
 
 def test_ingestion_forecast_signal_simulation(client):
-    headers, junction_id = _operator_token(client)
+    headers, junction_id = _demo_junction(client)
     obs = client.post("/api/v1/traffic/observations", headers=headers, json={
         "junction_id": junction_id, "source": "test-camera", "vehicle_count": 48,
         "queue_length_m": 32.5, "average_speed_kmph": 12.5, "average_wait_seconds": 68,
@@ -75,9 +66,9 @@ def test_ingestion_forecast_signal_simulation(client):
     assert preview.json()["physical_dispatch_enabled"] is False
 
 
-def test_role_guard_and_no_fake_transit(client):
+def test_demo_authority_access_and_no_fake_transit(client):
     response = client.get("/api/v1/command-center/overview")
-    assert response.status_code == 401
+    assert response.status_code == 200
     anon = client.post("/api/v1/routing/plan", json={
         "origin_latitude": 28.6139, "origin_longitude": 77.2090,
         "destination_latitude": 28.63, "destination_longitude": 77.23,

@@ -10,11 +10,8 @@ class Settings(BaseSettings):
     app_env: str = "development"
     api_v1_prefix: str = "/api/v1"
     database_url: str = "sqlite:///./urbansaarthi.db"
-    secret_key: str = "dev-only-change-this-secret-before-deploying"
-    access_token_expire_minutes: int = 60
     timezone: str = "Asia/Kolkata"
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
-    ingestion_api_key: str = ""
     osrm_base_url: str = ""
     openaq_api_key: str = ""
     model_path: str = ""
@@ -30,9 +27,6 @@ class Settings(BaseSettings):
     def validate_production_security(self):
         if self.app_env.lower() != "production":
             return self
-        secret = self.secret_key.strip().lower()
-        if len(self.secret_key) < 32 or any(marker in secret for marker in ("dev-only", "change-this", "replace-this")):
-            raise ValueError("Production requires a unique SECRET_KEY with at least 32 characters")
         origins = self.cors_origin_list
         if not origins or "*" in origins:
             raise ValueError("Production CORS_ORIGINS must list explicit frontend origins; wildcard is not allowed")

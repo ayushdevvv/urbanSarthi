@@ -1,7 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useApp } from './context/AppContext.jsx';
 import PortalLanding from './pages/landing/PortalLanding.jsx';
-import AuthPage from './pages/auth/AuthPage.jsx';
 import AuthorityLayout from './components/layout/AuthorityLayout.jsx';
 import CitizenLayout from './components/layout/CitizenLayout.jsx';
 import CommandCenterPage from './pages/authority/CommandCenterPage.jsx';
@@ -21,7 +20,6 @@ export default function App() {
   return <div className={dark ? 'theme-root dark-theme' : 'theme-root'}>
     <Routes>
       <Route path="/" element={<PortalLanding />} />
-      <Route path="/auth" element={<AuthPage />} />
       <Route path="/authority" element={<AuthorityLayout />}>
         <Route index element={<Navigate to="control" replace />} />
         <Route path="control" element={<CommandCenterPage />} />

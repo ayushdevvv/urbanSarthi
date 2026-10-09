@@ -25,7 +25,7 @@ const meta = {
 
 export default function AuthorityLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { dark, setDark, language, toggleLanguage, notify, user } = useApp();
+  const { dark, setDark, language, toggleLanguage, notify } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const [crumb, title] = meta[location.pathname] || meta['/authority/control'];
@@ -38,8 +38,8 @@ export default function AuthorityLayout() {
           <Icon size={17} strokeWidth={1.8} /><span>{label}</span>{code && <em>{code}</em>}
         </NavLink>)}
       </section>)}</div>
-      <div className="system"><div className="online-dot"/><b>API configuration</b><p>{import.meta.env.VITE_API_BASE_URL ? 'Custom API endpoint set' : 'Using local API default'}</p></div>
-      <div className="profile"><div className="avatar">{(user?.full_name || 'AM').split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase()}</div><div><b>{user?.full_name || 'Authority operator'}</b><small>{user?.role || 'ICCC operator'}</small></div><ChevronRight size={17}/></div>
+      <div className="system"><div className="online-dot"/><b>API configuration</b><p>{(import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL) ? 'Custom API endpoint set' : 'Using local API default'}</p></div>
+      <div className="profile"><div className="avatar">US</div><div><b>UrbanSaarthi Demo</b><small>Authority workspace</small></div><ChevronRight size={17}/></div>
       <button className="switch" onClick={() => navigate('/')}>← Switch portal</button>
     </aside>
     <main className="main"><header className="topbar">

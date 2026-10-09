@@ -11,7 +11,7 @@ const links = [
   { to: '/citizen/trips', label: 'My trips', icon: MapPin },
 ];
 export default function CitizenLayout() {
-  const { dark, setDark, language, toggleLanguage, user } = useApp();
+  const { dark, setDark, language, toggleLanguage } = useApp();
   const navigate = useNavigate();
   return <div className={`citizen-app ${dark ? 'dark' : ''}`}>
     <header className="citizen-header">
@@ -21,10 +21,10 @@ export default function CitizenLayout() {
         <button className="utility" onClick={() => setDark(!dark)}>{dark ? <Sun size={15}/> : <Moon size={15}/>} {dark ? 'Light' : 'Dark'}</button>
         <button className="utility" onClick={toggleLanguage}><span className="hindi">हि</span>{language === 'EN' ? 'हिंदी' : 'English'}</button>
         <button className="utility" onClick={() => navigate('/')}><House size={15}/> Main portal</button>
-        <button className="citizen-avatar" title={user?.full_name || 'Sign in'} onClick={() => navigate('/auth')}>{(user?.full_name || 'U').split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase()}</button>
+        <button className="citizen-avatar" title="UrbanSaarthi citizen portal" onClick={() => navigate('/citizen')}>US</button>
       </div>
     </header>
     <main className="citizen-content"><Outlet /></main>
-    <footer className="citizen-footer"><span>CityPulse India · Multi-city platform</span><span>Aligned with India’s Smart Cities Mission</span><span>Emergency: 112</span></footer>
+    <footer className="citizen-footer"><span>UrbanSaarthi India · Multi-city platform</span><span>Aligned with India’s Smart Cities Mission</span><span>Emergency: 112</span></footer>
   </div>;
 }

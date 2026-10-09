@@ -3,7 +3,6 @@ import zipfile
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from app.core.security import create_access_token, hash_password
 from app.db import get_db
 from app.models import User
 
@@ -36,23 +35,8 @@ def _feed_zip(files: dict[str, str]) -> bytes:
 
 
 def _operator_headers(client):
-    override = client.app.dependency_overrides[get_db]
-    db = next(override())
-    try:
-        user = User(
-            email="transit-operator@example.com",
-            full_name="Transit Operator",
-            password_hash=hash_password("development-password-123"),
-            role="operator",
-            is_active=True,
-        )
-        db.add(user)
-        db.commit()
-        user_id = user.id
-    finally:
-        db.close()
-    token, _ = create_access_token(user_id, "operator")
-    return {"Authorization": f"Bearer {token}"}
+    # The simplified demo API accepts requests without authentication.
+    return {}
 
 
 def test_gtfs_frequency_feed_import_and_frequency_route_plan(client):
@@ -162,11 +146,10 @@ def test_production_configuration_fails_closed():
     from app.core.config import Settings
 
     with pytest.raises(ValidationError):
-        Settings(app_env="production", database_url="sqlite:///./prod.db", secret_key="dev-only-change-this-secret-before-deploying", cors_origins="*")
+        Settings(app_env="production", database_url="sqlite:///./prod.db", cors_origins="*")
     settings = Settings(
         app_env="production",
         database_url="postgresql+psycopg://user:pass@localhost:5432/urbansaarthi",
-        secret_key="a" * 48,
         cors_origins="https://frontend.example.org",
     )
     assert settings.app_env == "production"

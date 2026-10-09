@@ -7,17 +7,6 @@ class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class RegisterIn(BaseModel):
-    full_name: str = Field(min_length=2, max_length=120)
-    email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
-
-
-class LoginIn(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=1, max_length=128)
-
-
 class UserOut(ORMModel):
     id: int
     email: EmailStr
@@ -30,18 +19,6 @@ class UserOut(ORMModel):
 
 class UserRoleChangeIn(BaseModel):
     role: Literal["citizen", "operator"]
-
-
-class UserUpdateIn(BaseModel):
-    full_name: str | None = Field(default=None, min_length=2, max_length=120)
-    preferences: dict[str, Any] | None = None
-
-
-class TokenOut(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    expires_at: datetime
-    user: UserOut
 
 
 class Coordinates(BaseModel):
