@@ -11,6 +11,7 @@ import SettingsPage from './pages/authority/SettingsPage.jsx';
 import CitizenHomePage from './pages/citizen/CitizenHomePage.jsx';
 import RoutePlannerPage from './pages/citizen/RoutePlannerPage.jsx';
 import AirQualityPage from './pages/citizen/AirQualityPage.jsx';
+import AqiVisionPage from './pages/citizen/AqiVisionPage.jsx';
 import TransitPage from './pages/citizen/TransitPage.jsx';
 import TripsPage from './pages/citizen/TripsPage.jsx';
 import TrafficVisionPage from './pages/citizen/TrafficVisionPage.jsx';
@@ -33,6 +34,7 @@ export default function App() {
         <Route index element={<CitizenHomePage />} />
         <Route path="plan" element={<RoutePlannerPage />} />
         <Route path="air-quality" element={<AirQualityPage />} />
+        <Route path="aqi-vision" element={<AqiVisionPage />} />
         <Route path="transit" element={<TransitPage />} />
         <Route path="traffic-vision" element={<TrafficVisionPage />} />
         <Route path="trips" element={<TripsPage />} />

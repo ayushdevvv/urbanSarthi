@@ -1,0 +1,28 @@
+{
+    "model_name": "UrbanSarthi Multimodal AQI Model",
+    "architecture": "MultimodalAQIModel",
+    "image_size": 128,
+    "num_tabular_features": 9,
+    "num_classes": 6,
+    "image_channels": 3,
+    "input_images": [
+        "front",
+        "rear"
+    ],
+    "tabular_columns": [
+        "PM2.5",
+        "PM10",
+        "Temperature",
+        "Humidity",
+        "Season",
+        "Day_or_Night"
+    ],
+    "class_names": [
+        "Good",
+        "Moderate",
+        "Poor",
+        "Satisfactory",
+        "Severe",
+        "Very Poor"
+    ]
+}

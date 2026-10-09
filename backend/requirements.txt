@@ -11,9 +11,14 @@ httpx>=0.28,<1.0
 python-multipart>=0.0.20,<1.0
 joblib>=1.4,<2.0
 pytest>=8.3,<10.0
-scikit-learn>=1.5,<2.0
+scikit-learn==1.7.2
 pandas>=2.2,<4.0
 
 # YOLO11 inference for the supplied traffic model
 ultralytics>=8.3,<9
 Pillow>=10.0,<13
+
+# CPU-only PyTorch build for the supplied multimodal AQI checkpoint
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.10.0+cpu
+torchvision==0.25.0+cpu

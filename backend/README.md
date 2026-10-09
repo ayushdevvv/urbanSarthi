@@ -202,3 +202,15 @@ The backend uses Ultralytics YOLO inference at `imgsz=640`, counts the model's `
 `TRAFFIC_MODEL_PATH` can override the checkpoint path; otherwise it resolves to `backend/models/best.pt`. The frontend supports camera snapshots and image uploads. Browser camera access requires localhost or HTTPS and camera permission. It does not request audio. Only the frame explicitly analyzed is uploaded. If the backend/model is unavailable, the frontend can show a **labelled sample preview**; sample counts must never be presented as model output.
 
 The supplied notebook's Low/Medium/High rules (0–3, 4–8, 9+ counted vehicles) are preserved as a **preliminary heuristic**, not validated real-world congestion. This image model does not measure speed, direction, queue length, unique vehicles across time, or live road congestion. Live scan samples frames; it is not multi-object tracking and counts can repeat between frames. For production deployment, confirm that the Render instance has sufficient memory for PyTorch/Ultralytics and verify an actual inference request after deployment.
+
+
+## AQI Vision multimodal inference
+
+The `aqi-vision` API adds an image + sensor category prediction flow using the supplied `MultimodalAQIModel` architecture and saved checkpoint. The four matching artifacts are kept in `backend/models/aqi/`.
+
+- `GET /api/v1/aqi-vision/status` — checks required artifact presence and inference dependency availability without loading the heavy model.
+- `POST /api/v1/aqi-vision/analyze` — multipart fields `front_image`, `rear_image`, `pm25`, `pm10`, `temperature`, `humidity`, `season`, `day_or_night`. Each image must be JPG, PNG, or WebP up to 8 MB.
+
+Allowed season values are `Monsoon`, `Summer`, `Winter`; time-of-day values are `Day`, `Night`. Numeric validation uses PM2.5/PM10 0–2000 µg/m³, temperature −50–70 °C, and humidity 0–100%. The fitted preprocessor must output the expected nine features; the model checkpoint is loaded with strict state-dict matching. Model output is a six-class category probability distribution. It is not an official measured numeric AQI.
+
+The supplied notebook reports test accuracy 82.09% and macro F1 0.7226. Those are notebook-reported metrics, not independent validation by this service. PyTorch and torchvision are pinned to CPU-only wheels in `requirements.txt`; inference is lazy-loaded and cached per process. Confirm memory headroom if Traffic Vision and AQI Vision are both used on the same small Render instance.

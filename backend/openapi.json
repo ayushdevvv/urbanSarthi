@@ -989,6 +989,64 @@
         }
       }
     },
+    "/api/v1/aqi-vision/status": {
+      "get": {
+        "tags": [
+          "AQI AI"
+        ],
+        "summary": "Aqi Model Status",
+        "operationId": "aqi_model_status_api_v1_aqi_vision_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/aqi-vision/analyze": {
+      "post": {
+        "tags": [
+          "AQI AI"
+        ],
+        "summary": "Analyze Aqi",
+        "operationId": "analyze_aqi_api_v1_aqi_vision_analyze_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_analyze_aqi_api_v1_aqi_vision_analyze_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/transit/routes": {
       "get": {
         "tags": [
@@ -3276,6 +3334,66 @@
           "category"
         ],
         "title": "AqiObservationOut"
+      },
+      "Body_analyze_aqi_api_v1_aqi_vision_analyze_post": {
+        "properties": {
+          "front_image": {
+            "type": "string",
+            "format": "binary",
+            "title": "Front Image",
+            "description": "Front road view: JPG, PNG, or WebP"
+          },
+          "rear_image": {
+            "type": "string",
+            "format": "binary",
+            "title": "Rear Image",
+            "description": "Rear road view: JPG, PNG, or WebP"
+          },
+          "pm25": {
+            "type": "number",
+            "maximum": 2000.0,
+            "minimum": 0.0,
+            "title": "Pm25"
+          },
+          "pm10": {
+            "type": "number",
+            "maximum": 2000.0,
+            "minimum": 0.0,
+            "title": "Pm10"
+          },
+          "temperature": {
+            "type": "number",
+            "maximum": 70.0,
+            "minimum": -50.0,
+            "title": "Temperature"
+          },
+          "humidity": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Humidity"
+          },
+          "season": {
+            "type": "string",
+            "title": "Season"
+          },
+          "day_or_night": {
+            "type": "string",
+            "title": "Day Or Night"
+          }
+        },
+        "type": "object",
+        "required": [
+          "front_image",
+          "rear_image",
+          "pm25",
+          "pm10",
+          "temperature",
+          "humidity",
+          "season",
+          "day_or_night"
+        ],
+        "title": "Body_analyze_aqi_api_v1_aqi_vision_analyze_post"
       },
       "Body_analyze_traffic_image_api_v1_traffic_detection_analyze_post": {
         "properties": {

@@ -12,3 +12,6 @@ __pycache__/
 htmlcov/
 *.joblib
 .DS_Store
+
+# Commit only the matching trusted AQI preprocessing artifacts shipped with this model.
+!models/aqi/*.joblib
