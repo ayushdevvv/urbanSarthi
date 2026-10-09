@@ -3,7 +3,7 @@
 A React/Vite frontend paired with a FastAPI backend, simplified for a no-login UrbanSaarthi demo. The frontend is organized by shared components, layouts, citizen pages, authority pages and one API client.
 
 
-> **Prototype/demo mode:** This archive has login and role checks disabled so the Citizen and Authority portals open directly. The backend creates/uses a shared demo admin identity, and authority write endpoints are unauthenticated. Use only with synthetic demo data; do not deploy this version for real users or connect it to operational systems. Re-enable authentication before production.
+> **Prototype/demo mode:** Citizen and Authority portals open directly with no login, password, bearer token, or role checks. A legacy shared-workspace row remains only to satisfy existing database foreign keys; authority write endpoints are public. Use synthetic data only; do not connect this build to real operations or sensitive feeds.
 
 ## Repository structure
 
@@ -79,11 +79,15 @@ Set the Vercel project Root Directory to `frontend`. Set `VITE_API_URL` in Verce
 - Data-source health, source registration and refresh
 - Authority demo settings and preferences
 
-## API integration and data integrity
+## API integration and demo data
 
-The frontend calls documented API routes from `backend/openapi.json`. For example, command overview uses `/command-center/overview`, city analytics uses `/analytics/city-summary`, signal plans use `/signals/plans`, air quality uses `/aqi/observations`, routing uses `/routing/plan`, and trip history uses `/trips`.
+The frontend calls the documented routes in `backend/openapi.json`: command overview `/command-center/overview`, city analytics `/analytics/city-summary`, signal plans `/signals/plans`, air quality `/aqi/observations`, route optimization `/routing/plan`, and saved trips `/trips`.
 
-There is no invented weather API, fabricated transit schedule, seeded browser-side AQI, or fake live CCTV status. When an API is not configured, returns no records, or has no configured source, the corresponding page displays an empty/unavailable/error state. Route estimates and source caveats are shown as returned by the backend. The existing backend explicitly does not issue physical traffic signal writes or valid paid travel tickets.
+If the API is unreachable or returns no records, the frontend has labelled synthetic fixtures for AQI, bus/metro routes, transit stops and alerts, route alternatives, trip history, analytics, traffic/junction status, signal plans and source health. The backend seed script similarly populates 24 clusters, 48 junctions, 192 AQI observations, 1,632 traffic readings, transit sample routes/stops, 10 signal plans, 144 forecasts, 12 trips and ticket-request examples. These are demo values—not official or live city readings. No physical traffic signal write or valid paid ticket/payment is issued.
+
+### Deployed configuration
+
+For Vercel, set `VITE_API_URL` to the exact Render API service hostname plus `/api/v1` and redeploy the frontend. On Render, set `CORS_ORIGINS=https://urbansarthi.vercel.app` (plus any other exact frontend origins) and redeploy the backend. The project enables the Vercel preview origin pattern as well. The exact Render service hostname must be copied from your Render dashboard; it cannot be inferred from this archive.
 
 ## Screenshots and design target
 

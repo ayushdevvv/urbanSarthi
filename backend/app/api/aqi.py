@@ -3,7 +3,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.db import get_db
-from app.dependencies import require_ingestion_access
 from app.models import AqiObservation
 from app.schemas import AqiObservationIn, AqiObservationOut
 from app.services.common import audit, haversine_m, utc_now
@@ -39,10 +38,10 @@ def nearby_aqi(latitude: float = Query(ge=-90, le=90), longitude: float = Query(
 
 
 @router.post("/observations", response_model=AqiObservationOut, status_code=201)
-def ingest_aqi(payload: AqiObservationIn, request: Request, db: Session = Depends(get_db), actor=Depends(require_ingestion_access)):
+def ingest_aqi(payload: AqiObservationIn, request: Request, db: Session = Depends(get_db)):
     row = AqiObservation(**payload.model_dump(exclude={"observed_at"}), observed_at=payload.observed_at or utc_now())
     db.add(row)
-    audit(db, getattr(actor, "id", None), "aqi.observation_ingested", "aqi_observation", None, {"station": payload.station_name, "source": payload.source}, request.client.host if request.client else None)
+    audit(db, None, "aqi.observation_ingested", "aqi_observation", None, {"station": payload.station_name, "source": payload.source}, request.client.host if request.client else None)
     db.commit()
     db.refresh(row)
     return row

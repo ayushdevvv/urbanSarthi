@@ -6,7 +6,7 @@ import BrandMark from '../shared/BrandMark.jsx';
 
 const navGroups = [
   { label: 'WORKSPACE', items: [
-    { label: 'Live control centre', to: '/authority/control', icon: Map, code: 'ICCC' },
+    { label: 'Command centre', to: '/authority/control', icon: Map, code: 'ICCC' },
     { label: 'Signal plans', to: '/authority/signals', icon: Zap },
     { label: 'Analytics', to: '/authority/analytics', icon: BarChart3 },
   ]},
@@ -16,7 +16,7 @@ const navGroups = [
   ]},
 ];
 const meta = {
-  '/authority/control': ['Delhi ICCC', 'Live authority control centre'],
+  '/authority/control': ['Delhi NCR demo', 'City operations overview'],
   '/authority/signals': ['Network control', 'Signal plans'],
   '/authority/analytics': ['Performance', 'City analytics'],
   '/authority/sources': ['Manage', 'Data sources'],

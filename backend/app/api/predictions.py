@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.db import get_db
-from app.dependencies import require_roles
 from app.models import Junction
 from app.schemas import ForecastOut
 from app.services.common import audit
@@ -24,11 +23,11 @@ def model_status():
 
 
 @router.post("/refresh")
-def refresh(payload: ForecastRefreshIn, request: Request, db: Session = Depends(get_db), user=Depends(require_roles("operator", "admin"))):
+def refresh(payload: ForecastRefreshIn, request: Request, db: Session = Depends(get_db)):
     if payload.junction_id is not None and not db.get(Junction, payload.junction_id):
         raise HTTPException(status_code=404, detail="Junction not found")
     rows = refresh_forecasts(db, payload.junction_id)
-    audit(db, user.id, "prediction.forecasts_refreshed", "junction", str(payload.junction_id) if payload.junction_id else "all", {"forecast_count": len(rows), "model_version": engine.model_version}, request.client.host if request.client else None)
+    audit(db, None, "prediction.forecasts_refreshed", "junction", str(payload.junction_id) if payload.junction_id else "all", {"forecast_count": len(rows), "model_version": engine.model_version}, request.client.host if request.client else None)
     db.commit()
     return {"generated_count": len(rows), "junction_count": len({r.junction_id for r in rows}),
             "model_version": engine.model_version, "model_mode": engine.mode,

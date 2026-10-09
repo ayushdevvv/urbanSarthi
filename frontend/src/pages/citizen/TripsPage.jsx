@@ -6,19 +6,28 @@ import { EmptyState, ErrorNotice } from '../../components/shared/Toast.jsx';
 import useApiResource from '../../hooks/useApiResource.js';
 import { api, endpoints } from '../../services/api/client.js';
 import { useApp } from '../../context/AppContext.jsx';
+import { DEMO_MOBILITY_SUMMARY, DEMO_TRIPS } from '../../data/demoData.js';
 
 const distance = (meters) => meters == null ? '—' : meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
 const duration = (seconds) => seconds == null ? '—' : `${Math.max(1, Math.round(seconds / 60))} min`;
 const dateText = (s) => s ? new Date(s).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Time not recorded';
 export default function TripsPage() {
   const { notify } = useApp(); const navigate = useNavigate(); const [filter, setFilter] = useState('all'); const [selectedId, setSelectedId] = useState(null);
-  const { data: trips, loading, error, reload } = useApiResource(() => api.get(endpoints.trips), []);
-  const { data: mobility } = useApiResource(() => api.get(endpoints.myMobility), []);
+  const { data: trips, loading, error, reload } = useApiResource(() => api.get(endpoints.trips), [], { fallback: DEMO_TRIPS });
+  const { data: mobility } = useApiResource(() => api.get(endpoints.myMobility), [], { fallback: DEMO_MOBILITY_SUMMARY });
   const list = Array.isArray(trips) ? trips : [];
-  const filtered = useMemo(() => filter === 'all' ? list : list.filter((trip) => filter === 'this-week' ? Date.now() - new Date(trip.created_at).getTime() < 7 * 86400000 : Date.now() - new Date(trip.created_at).getTime() < 30 * 86400000), [list, filter]);
+  const [localStatuses, setLocalStatuses] = useState({});
+  const displayList = list.map((trip) => ({ ...trip, status: localStatuses[trip.id] || trip.status }));
+  const filtered = useMemo(() => filter === 'all' ? displayList : displayList.filter((trip) => filter === 'this-week' ? Date.now() - new Date(trip.created_at).getTime() < 7 * 86400000 : Date.now() - new Date(trip.created_at).getTime() < 30 * 86400000), [displayList, filter]);
   const selected = filtered.find((trip) => trip.id === selectedId) || filtered[0] || null;
   async function updateTrip(action) {
     if (!selected) return;
+    if (error.startsWith('DEMO_FALLBACK:')) {
+      const nextStatus = action === 'start' ? 'in_progress' : action === 'complete' ? 'completed' : 'cancelled';
+      setLocalStatuses((current) => ({ ...current, [selected.id]: nextStatus }));
+      notify(`Demo trip marked ${nextStatus.replaceAll('_', ' ')} locally. It was not saved to the backend.`);
+      return;
+    }
     try { await api.post(`/trips/${selected.id}/${action}`); notify(`Trip ${action.replace('-', ' ')} successfully.`); await reload(); }
     catch (err) { notify(err.message); }
   }
@@ -28,9 +37,9 @@ export default function TripsPage() {
     const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })); link.download = 'urbansaarthi-trip-report.csv'; link.click(); URL.revokeObjectURL(link.href);
   }
   return <>
-    <PageIntro eyebrow="YOUR TRAVEL ACTIVITY" title="My trips" description="Review previous journeys, saved commutes and your recorded mobility activity." action={<button className="primary" disabled={!filtered.length} onClick={downloadReport}><Download size={15}/> Download trip report</button>} />
+    <PageIntro eyebrow="YOUR TRAVEL ACTIVITY" title="My trips" description="Review saved journeys and try the trip lifecycle with demo records when the API is not available." action={<button className="primary" disabled={!filtered.length} onClick={downloadReport}><Download size={15}/> Download trip report</button>} />
     <ErrorNotice message={error} onRetry={reload}/>
-    <div className="analytics-kpis trip-kpis"><MetricCard icon={Route} label="Total trips" value={mobility?.total_trips ?? (error ? '—' : '—')} detail="Saved by the API"/><MetricCard icon={MapPin} label="Distance travelled" value={mobility?.recorded_distance_km == null ? '—' : `${mobility.recorded_distance_km} km`} detail="Completed saved trips"/><MetricCard icon={Leaf} label="CO₂ saved" value="—" detail="Not calculated by this API"/><MetricCard icon={Timer} label="Recorded travel time" value={mobility?.recorded_travel_hours == null ? '—' : `${mobility.recorded_travel_hours} hr`} detail="Saved journey records"/></div>
+    <div className="analytics-kpis trip-kpis"><MetricCard icon={Route} label="Total trips" value={mobility?.total_trips ?? 0} detail={error.startsWith('DEMO_FALLBACK:') ? 'Synthetic demo records' : 'Saved trip requests'}/><MetricCard icon={MapPin} label="Distance travelled" value={mobility?.recorded_distance_km == null ? '—' : `${mobility.recorded_distance_km} km`} detail="Completed saved trips"/><MetricCard icon={Leaf} label="CO₂ saved" value="—" detail="Not calculated by this API"/><MetricCard icon={Timer} label="Recorded travel time" value={mobility?.recorded_travel_hours == null ? '—' : `${mobility.recorded_travel_hours} hr`} detail="Saved journey records"/></div>
     <div className="trips-toolbar"><div className="range-tabs">{[['all','All trips'],['this-week','This week'],['this-month','This month']].map(([value,label])=><button className={filter===value?'active':''} key={value} onClick={()=>setFilter(value)}>{label}</button>)}</div><button className="utility" onClick={reload}><CalendarDays size={14}/> Refresh</button></div>
     <div className="trips-layout"><section className="panel trip-history"><div className="panel-head"><div><div className="eyebrow">JOURNEY HISTORY</div><h3>{filtered.length} saved {filtered.length === 1 ? 'trip' : 'trips'}</h3></div></div>{loading ? <div className="loading-lines">Loading saved trips…</div> : filtered.length ? filtered.map((trip) => <button key={trip.id} className={`trip-row ${selected?.id===trip.id?'selected':''}`} onClick={()=>setSelectedId(trip.id)}><span className="trip-icon"><Route size={16}/></span><span className="trip-row-main"><small>{dateText(trip.created_at)} · {trip.preference || 'Balanced'}</small><b>{trip.origin_label || 'Origin not supplied'}</b><span className="trip-destination">• {trip.destination_label || 'Destination not supplied'}</span><small className="trip-status">{trip.status?.replaceAll('_',' ') || 'Status unavailable'}</small></span><span className="trip-duration"><b>{duration(trip.duration_seconds)}</b><small>{distance(trip.distance_meters)}</small></span><ArrowRight size={15}/></button>) : <EmptyState title="No saved trips" description={error ? 'The API could not load saved journeys. Check the backend connection and try again.' : 'Plan a journey and select an option to save it in this UrbanSaarthi demo workspace.'}/> }</section>
       <section className="panel trip-detail"><div className="panel-head"><div><div className="eyebrow">TRIP DETAILS</div><h3>{selected ? dateText(selected.created_at) : 'Select a trip'}</h3></div>{selected && <span className={`trip-status-pill status-${selected.status}`}>{selected.status?.replaceAll('_',' ')}</span>}</div>

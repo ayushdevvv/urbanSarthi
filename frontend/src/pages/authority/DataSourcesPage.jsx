@@ -5,12 +5,13 @@ import { EmptyState, ErrorNotice } from '../../components/shared/Toast.jsx';
 import useApiResource from '../../hooks/useApiResource.js';
 import { api, endpoints } from '../../services/api/client.js';
 import { useApp } from '../../context/AppContext.jsx';
+import { DEMO_DATA_SOURCES } from '../../data/demoData.js';
 
 const humanAge = (s) => s == null ? 'No successful update' : s < 60 ? `${s}s ago` : s < 3600 ? `${Math.floor(s / 60)} min ago` : `${Math.floor(s / 3600)} hr ago`;
 const iconFor = (kind = '') => /air|aqi/i.test(kind) ? AirVent : /transit|bus|metro/i.test(kind) ? Users : /road|map|geo/i.test(kind) ? Map : /traffic|camera/i.test(kind) ? Map : Cloud;
 export default function DataSourcesPage() {
   const { notify } = useApp();
-  const { data, loading, error, reload } = useApiResource(() => api.get(endpoints.sourceHealth), []);
+  const { data, loading, error, reload } = useApiResource(() => api.get(endpoints.sourceHealth), [], { fallback: () => ({ generated_at: new Date().toISOString(), sources: DEMO_DATA_SOURCES, warning: 'Synthetic source registry shown because no backend source-health data is available.' }) });
   const [connectOpen, setConnectOpen] = useState(false);
   const [draft, setDraft] = useState({ external_id: '', name: '', source_type: 'other', provider: '', status: 'not_configured', freshness_seconds: '300' });
   const [saving, setSaving] = useState(false);

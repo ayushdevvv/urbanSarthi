@@ -6,6 +6,7 @@ import CityMap from '../../components/maps/CityMap.jsx';
 import useApiResource from '../../hooks/useApiResource.js';
 import { api, endpoints } from '../../services/api/client.js';
 import { useApp } from '../../context/AppContext.jsx';
+import { DEMO_COMMAND_OVERVIEW, DEMO_JUNCTIONS } from '../../data/demoData.js';
 
 const display = (value, suffix = '') => value === null || value === undefined ? '—' : `${value}${suffix}`;
 const minutes = (seconds) => seconds == null ? '—' : `${(seconds / 60).toFixed(1)} min`;
@@ -15,8 +16,8 @@ function Kpi({ icon: Icon, label, value, caption }) {
 
 export default function CommandCenterPage() {
   const { notify } = useApp();
-  const { data, loading, error, reload } = useApiResource(() => api.get(endpoints.commandOverview), []);
-  const { data: junctions } = useApiResource(() => api.get(endpoints.junctions), []);
+  const { data, loading, error, reload } = useApiResource(() => api.get(endpoints.commandOverview), [], { fallback: DEMO_COMMAND_OVERVIEW });
+  const { data: junctions } = useApiResource(() => api.get(endpoints.junctions), [], { fallback: DEMO_JUNCTIONS });
   const [selected, setSelected] = useState(null);
   const [detailOpen, setDetailOpen] = useState(true);
 
@@ -29,7 +30,7 @@ export default function CommandCenterPage() {
   const picked = selected || hotSpots[0] || null;
 
   return <>
-    <PageIntro eyebrow="INTEGRATED COMMAND & CONTROL CENTRE" title="Authority operations" description="Monitor, predict and safely control the selected city's traffic and air quality from one operational view." action={<button className="live-pill" onClick={reload}><i/>{loading ? 'Refreshing…' : 'Refresh overview'} <RefreshCw size={13}/></button>} />
+    <PageIntro eyebrow="INTEGRATED COMMAND & CONTROL CENTRE" title="Authority operations" description="Explore sample traffic pressure, junction health, alerts and AQI. All demo numbers are synthetic and do not command real traffic lights." action={<button className="live-pill" onClick={reload}><i/>{loading ? 'Refreshing…' : 'Refresh overview'} <RefreshCw size={13}/></button>} />
     <ErrorNotice message={error} onRetry={reload}/>
     <div className="kpi-grid">
       <Kpi icon={Activity} label="Congestion index" value={display(data?.traffic?.mean_congestion_score)} caption="Mean score from recent observations" />
@@ -38,12 +39,12 @@ export default function CommandCenterPage() {
       <Kpi icon={Cloud} label="Active alerts" value={display(data?.alerts?.active_count)} caption="Alerts currently active" />
     </div>
     <div className="control-grid">
-      <section className="panel map-panel"><div className="panel-head"><div><div className="eyebrow">LIVE CITY MAP</div><h3>Congestion + AQI hotspots</h3></div><div className="legend"><span><i className="green-dot"/>Normal</span><span><i className="yellow-dot"/>Busy</span><span><i className="red-dot"/>Critical</span></div></div>
+      <section className="panel map-panel"><div className="panel-head"><div><div className="eyebrow">CITY NETWORK MAP</div><h3>Congestion + AQI hotspots</h3></div><div className="legend"><span><i className="green-dot"/>Normal</span><span><i className="yellow-dot"/>Busy</span><span><i className="red-dot"/>Critical</span></div></div>
         <CityMap markers={markers} zoom={11} className="authority-map" />
         <div className="map-foot"><span><Navigation size={13}/> Traffic junctions</span><span><AirVent size={13}/> AQI observations</span><small>Configured junction coordinates are plotted; seeded demo coordinates may be placeholders.</small></div>
       </section>
       <aside className="panel hotspot"><div className="hotspot-head"><span className={picked ? 'critical' : 'status-pill'}>{picked ? 'HIGH CONGESTION' : 'NO HOTSPOT DATA'}</span><button className="icon-btn" aria-label="Toggle selected hotspot" onClick={() => setDetailOpen(!detailOpen)}>{detailOpen ? <X size={16}/> : <MapPin size={16}/>}</button></div>
-        {detailOpen && picked ? <><h3>{picked.name || `Junction ${picked.junction_id}`}</h3><p>Latest congestion observation</p><div className="hot-metrics"><div><small>Vehicles</small><b>{display(picked.vehicle_count)}</b></div><div><small>Queue length</small><b>{display(picked.queue_length_m, ' m')}</b></div><div><small>Congestion</small><b>{display(picked.congestion_score)}</b></div></div><div className="hotspot-detail-row"><span>Observed at</span><b>{picked.observed_at ? new Date(picked.observed_at).toLocaleString() : '—'}</b></div><button className="control-link" onClick={() => notify('Signal timing changes require a reviewed plan and an authorized operator account.')}>Signal control <b>Open signal plans <Navigation size={14}/></b></button></> : <EmptyState title="No recent traffic observations" description="The backend has not returned high-congestion observations for this city yet."/>}
+        {detailOpen && picked ? <><h3>{picked.name || `Junction ${picked.junction_id}`}</h3><p>Latest congestion observation</p><div className="hot-metrics"><div><small>Vehicles</small><b>{display(picked.vehicle_count)}</b></div><div><small>Queue length</small><b>{display(picked.queue_length_m, ' m')}</b></div><div><small>Congestion</small><b>{display(picked.congestion_score)}</b></div></div><div className="hotspot-detail-row"><span>Observed at</span><b>{picked.observed_at ? new Date(picked.observed_at).toLocaleString() : '—'}</b></div><button className="control-link" onClick={() => notify('Open the signal-plan what-if workspace. No physical traffic-light command is sent by this demo.')}>Signal control <b>Open signal plans <Navigation size={14}/></b></button></> : <EmptyState title="No recent traffic observations" description="The backend has not returned high-congestion observations for this city yet."/>}
         <div className="source-footnote"><AlertTriangle size={13}/> The API does not imply live CCTV or physical signal control is connected.</div>
       </aside>
     </div>

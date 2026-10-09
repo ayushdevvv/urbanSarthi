@@ -4,11 +4,12 @@ import PageIntro, { MetricCard } from '../../components/shared/PageIntro.jsx';
 import { EmptyState, ErrorNotice } from '../../components/shared/Toast.jsx';
 import useApiResource from '../../hooks/useApiResource.js';
 import { api, endpoints } from '../../services/api/client.js';
+import { createDemoCitySummary } from '../../data/demoData.js';
 
 const value = (n, suffix = '') => n === null || n === undefined ? '—' : `${n.toLocaleString?.() ?? n}${suffix}`;
 export default function AnalyticsPage() {
   const [range, setRange] = useState(7);
-  const { data, loading, error, reload } = useApiResource(() => api.get(endpoints.citySummary(range)), [range]);
+  const { data, loading, error, reload } = useApiResource(() => api.get(endpoints.citySummary(range)), [range], { fallback: () => createDemoCitySummary(range) });
   const exportReport = () => {
     if (!data) return;
     const rows = [['Metric', 'Value'], ['Period (days)', data.period_days], ['Trip requests', data.trip_requests], ['Completed trips', data.completed_trips], ['Cancelled trips', data.cancelled_trips], ['Recorded route distance km', data.recorded_route_distance_km], ['Note', data.note]];

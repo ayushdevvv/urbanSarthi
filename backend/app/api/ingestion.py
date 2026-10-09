@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.db import get_db
-from app.dependencies import require_ingestion_access
 from app.models import Junction, TrafficObservation
 from app.schemas import TrafficObservationIn
 from app.services.common import audit, utc_now
@@ -12,7 +11,7 @@ router = APIRouter(prefix="/ingestion", tags=["Edge and provider ingestion"])
 
 
 @router.post("/vision-events", status_code=201)
-def ingest_vision_event(payload: TrafficObservationIn, request: Request, db: Session = Depends(get_db), actor=Depends(require_ingestion_access)):
+def ingest_vision_event(payload: TrafficObservationIn, request: Request, db: Session = Depends(get_db)):
     """Accept compact edge-computed detections from an external YOLO/CCTV worker; no video is uploaded."""
     junction = db.get(Junction, payload.junction_id) if payload.junction_id is not None else None
     if payload.external_junction_id:
@@ -33,7 +32,7 @@ def ingest_vision_event(payload: TrafficObservationIn, request: Request, db: Ses
     db.add(row)
     db.flush()
     junction.status = "online"
-    audit(db, getattr(actor, "id", None), "camera.vision_event_ingested", "junction", str(junction.id), {"source": row.source, "observation_id": row.id}, request.client.host if request.client else None)
+    audit(db, None, "camera.vision_event_ingested", "junction", str(junction.id), {"source": row.source, "observation_id": row.id}, request.client.host if request.client else None)
     maybe_refresh_forecasts(db, junction.id)
     db.commit()
     db.refresh(row)

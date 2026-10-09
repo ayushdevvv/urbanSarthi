@@ -3,7 +3,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from app.db import get_db
-from app.dependencies import require_roles
 from app.models import AqiObservation, CityAlert, CityCluster, DataSource, Junction, TrafficForecast, TrafficObservation
 from app.schemas import ClusterOut
 from app.services.common import utc_now
@@ -12,7 +11,7 @@ router = APIRouter(prefix="/command-center", tags=["City command centre"])
 
 
 @router.get("/overview")
-def command_overview(db: Session = Depends(get_db), user=Depends(require_roles("operator", "admin"))):
+def command_overview(db: Session = Depends(get_db)):
     now = utc_now()
     recent_cutoff = now - timedelta(minutes=30)
     hour_cutoff = now - timedelta(hours=1)
@@ -63,12 +62,12 @@ def command_overview(db: Session = Depends(get_db), user=Depends(require_roles("
 
 
 @router.get("/clusters", response_model=list[ClusterOut])
-def list_clusters(db: Session = Depends(get_db), user=Depends(require_roles("operator", "admin"))):
+def list_clusters(db: Session = Depends(get_db)):
     return list(db.scalars(select(CityCluster).order_by(CityCluster.name)))
 
 
 @router.get("/clusters/{cluster_id}")
-def cluster_detail(cluster_id: int, db: Session = Depends(get_db), user=Depends(require_roles("operator", "admin"))):
+def cluster_detail(cluster_id: int, db: Session = Depends(get_db)):
     cluster = db.get(CityCluster, cluster_id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
@@ -82,7 +81,7 @@ def cluster_detail(cluster_id: int, db: Session = Depends(get_db), user=Depends(
 
 
 @router.get("/health/data-sources")
-def data_source_health(db: Session = Depends(get_db), user=Depends(require_roles("operator", "admin"))):
+def data_source_health(db: Session = Depends(get_db)):
     rows = list(db.scalars(select(DataSource).order_by(DataSource.source_type, DataSource.name)))
     now = utc_now()
     result = []
