@@ -1,0 +1,40 @@
+import { useMemo, useState } from 'react';
+import { AlertTriangle, ArrowRight, Bus, Clock, MapPin, Navigation, RefreshCw, Train } from 'lucide-react';
+import PageIntro from '../../components/shared/PageIntro.jsx';
+import { EmptyState, ErrorNotice } from '../../components/shared/Toast.jsx';
+import useApiResource from '../../hooks/useApiResource.js';
+import { api, endpoints } from '../../services/api/client.js';
+import { getLocationCoordinates } from '../../components/maps/CityMap.jsx';
+import { useApp } from '../../context/AppContext.jsx';
+
+export default function TransitPage() {
+  const { notify } = useApp(); const [mode, setMode] = useState('all'); const [from, setFrom] = useState('Rajiv Chowk'); const [to, setTo] = useState('Akshardham');
+  const [journeys, setJourneys] = useState(null); const [planError, setPlanError] = useState(''); const [busy, setBusy] = useState(false);
+  const { data: routes, loading: routesLoading, error: routesError, reload: reloadRoutes } = useApiResource(() => api.get(`${endpoints.transitRoutes}${mode === 'all' ? '' : `?mode=${mode}`}`), [mode]);
+  const { data: stops, loading: stopsLoading } = useApiResource(() => api.get(endpoints.transitStops()), []);
+  const { data: alerts, error: alertsError } = useApiResource(() => api.get(endpoints.transitAlerts), []);
+  const stopOptions = useMemo(() => stops || [], [stops]);
+  const matchingRoutes = routes || [];
+  async function planTransit(event) {
+    event.preventDefault(); setBusy(true); setPlanError(''); setJourneys(null);
+    const origin = stopOptions.find((stop) => stop.name.toLowerCase() === from.toLowerCase()) || stopOptions.find((stop) => stop.name.toLowerCase().includes(from.toLowerCase()));
+    const destination = stopOptions.find((stop) => stop.name.toLowerCase() === to.toLowerCase()) || stopOptions.find((stop) => stop.name.toLowerCase().includes(to.toLowerCase()));
+    const originCoords = origin?.latitude != null && origin?.longitude != null ? [origin.latitude, origin.longitude] : getLocationCoordinates(from);
+    const destCoords = destination?.latitude != null && destination?.longitude != null ? [destination.latitude, destination.longitude] : getLocationCoordinates(to);
+    try {
+      const query = new URLSearchParams({ origin_latitude: originCoords[0], origin_longitude: originCoords[1], destination_latitude: destCoords[0], destination_longitude: destCoords[1] });
+      setJourneys(await api.get(`/transit/plan?${query.toString()}`));
+    } catch (err) { setPlanError(err.message); }
+    finally { setBusy(false); }
+  }
+  return <>
+    <PageIntro eyebrow="PUBLIC TRANSPORT" title="Metro and bus, in one place" description="Review configured routes, stops and disruption notices for your daily commute." action={<button className="utility" onClick={reloadRoutes}><RefreshCw size={14}/> Refresh feeds</button>} />
+    <ErrorNotice message={routesError} onRetry={reloadRoutes}/>
+    <div className="transport-tabs">{[['all','All modes'],['metro','Metro'],['bus','Bus']].map(([value,label])=><button className={mode===value?'active':''} onClick={()=>setMode(value)} key={value}>{value==='bus'?<Bus size={15}/>:value==='metro'?<Train size={15}/>:<Navigation size={15}/>} {label}</button>)}</div>
+    <div className="transit-layout"><section className="panel transit-planner"><div className="panel-head"><div><div className="eyebrow">LIVE JOURNEY PLANNER</div><h3>Public transport trip</h3></div><Bus size={18}/></div><form onSubmit={planTransit} className="transit-form"><label>Starting from<input list="transit-stops" value={from} onChange={(e)=>setFrom(e.target.value)} required/><small>Use a stop name from the loaded GTFS feed when available.</small></label><label>Going to<input list="transit-stops" value={to} onChange={(e)=>setTo(e.target.value)} required/></label><datalist id="transit-stops">{stopOptions.map((stop)=><option key={stop.id} value={stop.name}/>)}</datalist><button className="primary full" disabled={busy}><Navigation size={15}/>{busy?'Finding journeys…':'Find public transport'}</button></form>
+      {planError && <div className="notice notice-error">{planError}</div>}{journeys && <div className="transit-journey-results"><b>{journeys.status === 'available' ? `${journeys.options?.length || 0} journey options` : 'No journey found'}</b>{(journeys.options || []).map((option, index) => <div className="transit-option" key={option.id || `${option.route_id}-${index}`}><div><b>{option.label || option.route_name || option.route_short_name || `Journey ${index + 1}`}</b><small>{option.mode || option.route_mode || 'Mode not supplied'}</small></div><span>{option.duration_seconds != null ? `${Math.round(option.duration_seconds / 60)} min` : 'Duration —'}</span></div>)}{(journeys.limitations || []).map((limitation) => <p className="api-note" key={limitation}>{limitation}</p>)}</div>}{!journeys && <div className="transit-result-placeholder"><MapPin size={16}/><span>Journey alternatives will appear after a successful API response.</span></div>}</section>
+      <section className="panel transit-routes"><div className="panel-head"><div><div className="eyebrow">NETWORK STATUS</div><h3>Configured public transport</h3></div><span className="status-pill">{matchingRoutes.length} routes</span></div>{routesLoading ? <div className="loading-lines">Loading public transport routes…</div> : matchingRoutes.length ? matchingRoutes.slice(0, 30).map((route) => <div className="transit-route-row" key={route.id}><span className="route-mode-icon" style={{borderColor: route.route_color ? `#${String(route.route_color).replace('#','')}` : undefined}}>{/bus/i.test(route.mode)?<Bus size={16}/>:<Train size={16}/>}</span><div><b>{route.short_name || route.long_name || route.external_id}</b><small>{route.long_name || route.agency_name || route.mode}</small></div><span className="route-mode-label">{route.mode}</span></div>) : <EmptyState title="No transit routes configured" description="Import an authorized GTFS Static feed through the documented backend endpoint to populate routes and stops."/>}</section></div>
+    <div className="transit-status-cards"><section className="panel status-card"><Clock size={17}/><div><small>Stops in feed</small><b>{stopsLoading?'Loading…':stopOptions.length}</b><span>GTFS stops returned</span></div></section><section className="panel status-card"><AlertTriangle size={17}/><div><small>Active service alerts</small><b>{Array.isArray(alerts)?alerts.length:'—'}</b><span>{alertsError?'Alerts unavailable':'From configured transit feed'}</span></div></section><section className="panel status-card"><Train size={17}/><div><small>Feed source</small><b>Configured GTFS</b><span>Realtime arrival feed may be absent</span></div></section></div>
+    {(Array.isArray(alerts) && alerts.length > 0) && <section className="panel transit-alerts"><div className="panel-head"><div><div className="eyebrow">SERVICE ALERTS</div><h3>Current notices</h3></div></div>{alerts.map((alert, index)=><div className="alert-row" key={alert.id || index}><span className="severity-dot severity-high"/><div><b>{alert.title || alert.summary || 'Service notice'}</b><small>{alert.description || alert.status || 'Details were not supplied by the feed.'}</small></div><ArrowRight size={14}/></div>)}</section>}
+  </>;
+}

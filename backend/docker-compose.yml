@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: urbansaarthi
+      POSTGRES_USER: urbansaarthi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-change-this}
+    volumes:
+      - urbansaarthi_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U urbansaarthi -d urbansaarthi"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      APP_NAME: UrbanSaarthi API
+      APP_ENV: ${APP_ENV:-development}
+      API_V1_PREFIX: /api/v1
+      DATABASE_URL: postgresql+psycopg://urbansaarthi:${POSTGRES_PASSWORD:-local-dev-change-this}@db:5432/urbansaarthi
+      SECRET_KEY: ${SECRET_KEY:-dev-only-change-this-secret-before-deploying}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      TIMEZONE: Asia/Kolkata
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      INGESTION_API_KEY: ${INGESTION_API_KEY:-}
+      OSRM_BASE_URL: ${OSRM_BASE_URL:-}
+      OPENAQ_API_KEY: ${OPENAQ_API_KEY:-}
+      MODEL_PATH: ${MODEL_PATH:-}
+      AUTO_REFRESH_FORECASTS: ${AUTO_REFRESH_FORECASTS:-true}
+      FORECAST_REFRESH_MIN_INTERVAL_SECONDS: ${FORECAST_REFRESH_MIN_INTERVAL_SECONDS:-300}
+    volumes:
+      - ./models:/app/models:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  urbansaarthi_pgdata:
