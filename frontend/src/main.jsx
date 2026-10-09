@@ -15,5 +15,3 @@ createRoot(document.getElementById('root')).render(
     </BrowserRouter>
   </React.StrictMode>,
 );
-
-import './styles/ui-refresh.css';

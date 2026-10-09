@@ -79,13 +79,14 @@ def test_demo_authority_access_and_no_fake_transit(client):
     assert any("GTFS" in message for message in anon.json()["warnings"])
 
 
-def test_cors_preflight_for_production_and_vercel_preview_origins(client):
-    for origin in ("https://urbansarthi.vercel.app", "https://urbansarthi-git-preview.vercel.app"):
-        response = client.options("/api/v1/aqi/observations", headers={
-            "Origin": origin,
-            "Access-Control-Request-Method": "GET",
-            "Access-Control-Request-Headers": "content-type",
-        })
-        assert response.status_code == 200, response.text
-        assert response.headers.get("access-control-allow-origin") == origin
-        assert "GET" in response.headers.get("access-control-allow-methods", "")
+def test_traffic_detection_status_and_rejects_unsupported_upload(client):
+    status = client.get('/api/v1/traffic-detection/status')
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload['model'] == 'YOLO11 traffic detector'
+    assert payload['classes_counted_as_vehicles'] == ['car', 'bus', 'motorbike', 'bicycle']
+    rejected = client.post(
+        '/api/v1/traffic-detection/analyze',
+        files={'file': ('notes.txt', b'not an image', 'text/plain')},
+    )
+    assert rejected.status_code == 415

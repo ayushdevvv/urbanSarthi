@@ -6,7 +6,7 @@ This matrix is the backend implementation checklist derived from the 14-page Nav
 
 | Proposal requirement | Backend support | Status / caveat |
 |---|---|---|
-| Citizen + commuter journey | No-login route planning, shared demo trip history, route selection, start/complete/cancel lifecycle | Implemented |
+| Citizen + commuter journey | Demo identity, route planning, shared trip history, route selection, start/complete/cancel lifecycle | Implemented |
 | One place for traffic, transit, AQI and routes | Route planner combines available observations, routing and GTFS data and returns provider/data-quality/freshness metadata | Implemented; values depend on ingested sources |
 | Starting point and destination / GPS coordinates | Coordinate-validated route-planning request with labels and optional departure time | Implemented; geocoding/search is a frontend/provider integration |
 | Fastest route | Preference sorting by estimated/provider route duration | Implemented; heuristic time is labelled as estimated without OSRM |
@@ -23,25 +23,25 @@ This matrix is the backend implementation checklist derived from the 14-page Nav
 | Live public transport routes | GTFS static route/stop/trip/stop-time/calendar importer and route/stop endpoints | Implemented for GTFS static files |
 | Live arrivals/frequency | GTFS timetable + optional `frequencies.txt` headway calculations; push endpoint for real-time ETAs/delays | Implemented contract; live ETA feed required; `exact_times=0` frequencies are estimates |
 | Multi-modal journey | Transit direct and one-transfer options plus driving/walking/cycling route options | Partial: journeys requiring two or more transfers are not computed; provider routing is still required for road geometry/live traffic |
-| Smart ticketing | Shared demo ticket-request history, status, cancellation, provider-status contract | Prototype boundary: not a confirmed booking, valid ticket, QR admission credential or payment transaction until an official operator is integrated |
+| Smart ticketing | Authenticated ticket-request history, status, cancellation, provider-status contract | Prototype boundary: not a confirmed booking, valid ticket, QR admission credential or payment transaction until an official operator is integrated |
 | Service disruptions | Transit alerts and city traffic/AQI/roadwork/incident/system alerts with severity and lifecycle | Implemented |
 | Live Urban Command Centre | Network and cluster summaries, online/degraded statuses, current congestion, queue/vehicle metrics, AQI coverage, alerts, latest forecasts and source freshness | Implemented; only data actually received by API is shown |
 | 24 connected clusters | Seed command creates 24 clearly synthetic clusters with 48 placeholder junctions | Implemented seed baseline; replace synthetic coordinates and labels before real pilot |
 | Adaptive signal planning | Demand-weighted signal-phase recommendation; configurable green/yellow/all-red timings; draft/simulated/approved/rejected lifecycle | Implemented as recommendation and review workflow |
 | Dynamic green split | Uses incoming lane-demand weights to create a draft phase allocation under cycle limits | Prototype boundary: not validated for field control |
-| Demo signal review | Audit entries, approval/rejection and dispatch-preview payload | Public demo API; physical ATCS dispatch is disabled and no controller command is sent |
+| Human-authorized control | Role checks, audit entries, approval/rejection and dispatch-preview payload | Implemented; physical ATCS dispatch is disabled and no controller command is sent |
 | Digital twin / what-if comparison | Records current observation baseline, proposed phases, queue/wait/throughput estimates and caveats | Prototype boundary: analytical model now; no SUMO execution in this build |
 | SUMO integration | Data-source registry and simulation engine boundary | Integration required: calibrated `.net.xml`, routes/demand, TLS mapping and a dedicated runner must be configured |
 | City alerts / operational actions | Create, list, filter, resolve, severity and resolution note | Implemented |
 | Continuous improvement | Retains telemetry, route choices, selected options, trip lifecycle and actual-metric JSON; training script produces MAE/RMSE | Implemented data pipeline surface; automated retraining/model registry/drift alerts still need deployment jobs |
-| City/mobility analytics | Personal usage metrics and operator city summary | Implemented for the shared demo workspace; records are not private or user-isolated |
+| City/mobility analytics | Personal usage metrics and operator city summary | Implemented; only registered-user trips are stored, not anonymous route queries |
 | Source health | Data-source registry, heartbeat endpoint, status/freshness and error fields | Implemented |
-| Security and accountability | Public unauthenticated demo endpoints, shared workspace, audit logs, environment secrets, non-actuating traffic design | Demo-only; authentication and role checks must be restored before production |
-| Schema versioning without drift | SQLAlchemy 2.x metadata, Alembic migration history (base + GTFS frequency + missing-transit-table repair) and no startup `create_all` | Implemented; new changes must use new reviewed Alembic revisions |
+| Security and accountability | Unauthenticated demo endpoints, shared demo identity, audit logs, environment secrets, non-actuating traffic design | Demo-only; authentication and role checks must be restored before production |
+| Schema versioning without drift | SQLAlchemy 2.x metadata, Alembic migration history (base + GTFS frequency) and no startup `create_all` | Implemented; new changes must use new reviewed Alembic revisions |
 
 ## Database domains
 
-- **Legacy workspace reference:** `users` table remains for existing foreign-key compatibility; no login or role APIs consume it.
+- **Identity:** `users`, role, preferences, active state, password hash.
 - **Road network/traffic:** `city_clusters`, `junctions`, `traffic_observations`, `traffic_forecasts`.
 - **Air quality:** `aqi_observations`, with original-source and timestamp metadata.
 - **Mobility:** `trips`, `route_options`, per-user selected-route/lifecycle records.
@@ -51,10 +51,10 @@ This matrix is the backend implementation checklist derived from the 14-page Nav
 
 ## Core safety/validity decisions
 
-1. Missing live data returns a clearly labelled scenario estimate in the UI where the prototype has a fallback; provider-specific records and live timestamps are not invented. Missing pollutant values remain unavailable.
+1. Missing live data returns null/unavailable state and a warning rather than invented values.
 2. Every heuristic/model forecast contains a model version and a snapshot of the inputs used.
 3. Ticket requests do not collect card details or claim to issue valid tickets.
-4. Signal proposals are advisory and auditable in this public demo mode. A preview is never sent to physical equipment.
+4. Signal proposals are advisory, role-gated and auditable. A preview is never sent to physical equipment.
 5. Simulation output explicitly says whether SUMO was executed. The current analytical engine never claims it ran SUMO.
-6. Seeded scenario records retain internal provenance (`synthetic-demo` / `is_synthetic`) and unverified coordinates; user-facing labels say “Scenario estimate” or “Illustrative” instead of exposing internal demo tags.
+6. Demo seed data is tagged `synthetic-demo`, and synthetic coordinates are marked unverified.
 7. Schema changes are controlled through Alembic so development and deployed databases can be upgraded in sequence.

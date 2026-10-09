@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, Bell, ChevronRight, HelpCircle, Database, House, Map, Menu, Moon, Settings, Sun, Wind, Zap, TrendingUp } from 'lucide-react';
+import { BarChart3, Bell, ChevronRight, HelpCircle, Database, House, Map, Menu, Moon, Settings, Sun, Wind, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 
 const navGroups = [
   { label: 'WORKSPACE', items: [
-    { label: 'Command centre', to: '/authority/control', icon: Map, code: 'ICCC' },
+    { label: 'Live control centre', to: '/authority/control', icon: Map, code: 'ICCC' },
     { label: 'Signal plans', to: '/authority/signals', icon: Zap },
     { label: 'Analytics', to: '/authority/analytics', icon: BarChart3 },
-    { label: 'Forecasts', to: '/authority/forecasts', icon: TrendingUp },
   ]},
   { label: 'MANAGE', items: [
     { label: 'Data sources', to: '/authority/sources', icon: Database },
@@ -17,10 +16,9 @@ const navGroups = [
   ]},
 ];
 const meta = {
-  '/authority/control': ['Delhi NCR workspace', 'City operations overview'],
+  '/authority/control': ['Delhi ICCC', 'Live authority control centre'],
   '/authority/signals': ['Network control', 'Signal plans'],
   '/authority/analytics': ['Performance', 'City analytics'],
-  '/authority/forecasts': ['Forecasting', 'Junction forecasts'],
   '/authority/sources': ['Manage', 'Data sources'],
   '/authority/settings': ['Manage', 'Settings'],
 };
@@ -41,7 +39,7 @@ export default function AuthorityLayout() {
         </NavLink>)}
       </section>)}</div>
       <div className="system"><div className="online-dot"/><b>API configuration</b><p>{(import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL) ? 'Custom API endpoint set' : 'Using local API default'}</p></div>
-      <div className="profile"><div className="avatar">US</div><div><b>UrbanSaarthi workspace</b><small>Authority workspace</small></div><ChevronRight size={17}/></div>
+      <div className="profile"><div className="avatar">US</div><div><b>UrbanSaarthi Demo</b><small>Authority workspace</small></div><ChevronRight size={17}/></div>
       <button className="switch" onClick={() => navigate('/')}>← Switch portal</button>
     </aside>
     <main className="main"><header className="topbar">

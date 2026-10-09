@@ -1,9 +1,9 @@
 # UrbanSaarthi — full-stack repository
 
-A React/Vite frontend paired with a FastAPI backend for the UrbanSaarthi smart-mobility prototype. The frontend uses a consistent green design system, English/Hindi toggle, shared logo/favicon, city mobility pages, citizen tools and an authority workspace.
+A React/Vite frontend paired with a FastAPI backend, simplified for a no-login UrbanSaarthi demo. The frontend is organized by shared components, layouts, citizen pages, authority pages and one API client.
 
 
-> **Prototype boundary:** Citizen and Authority portals open directly without login. Synthetic scenario records are used when live feeds are unavailable and are labelled as estimates/illustrations rather than live readings. Authority write endpoints remain public in this no-auth build, so use it only with non-sensitive prototype data and never connect it to physical signal controllers.
+> **Prototype/demo mode:** This archive has login and role checks disabled so the Citizen and Authority portals open directly. The backend creates/uses a shared demo admin identity, and authority write endpoints are unauthenticated. Use only with synthetic demo data; do not deploy this version for real users or connect it to operational systems. Re-enable authentication before production.
 
 ## Repository structure
 
@@ -16,8 +16,8 @@ UrbanSaarthi/
 │   │   ├── hooks/             # API resource lifecycle
 │   │   ├── pages/
 │   │   │   ├── landing/       # main portal selector
-│   │   │   ├── citizen/       # home, planner, AQI, transit, trips, ticket requests
-│   │   │   └── authority/     # command centre, signals, analytics, forecasts, sources, settings
+│   │   │   ├── citizen/       # home, planner, AQI, transit, trips
+│   │   │   └── authority/     # command centre, signals, analytics, sources, settings
 │   │   ├── services/api/      # shared API client/endpoints
 │   │   └── styles/            # authority and citizen UI styles
 │   ├── .env.example
@@ -74,27 +74,17 @@ Set the Vercel project Root Directory to `frontend`. Set `VITE_API_URL` in Verce
 - Air-quality stations and observations
 - Public transport routes, stops and service alerts
 - Saved trips, details, lifecycle actions and CSV export
-- Public-transport ticket-request workflow (request only; no ticket/payment issued)
-- Five-horizon junction forecasts (NOW, +15, +30, +45, +60 minutes)
 - Authority command centre, traffic map and alert panels
 - Signal plan list, create, simulate and phase preview
 - Data-source health, source registration and refresh
 - Authority demo settings and preferences
 
-## API integration and demo data
+## API integration and data integrity
 
-The frontend calls the documented routes in `backend/openapi.json`: command overview `/command-center/overview`, city analytics `/analytics/city-summary`, signal plans `/signals/plans`, air quality `/aqi/observations`, route optimization `/routing/plan`, and saved trips `/trips`.
+The frontend calls documented API routes from `backend/openapi.json`. For example, command overview uses `/command-center/overview`, city analytics uses `/analytics/city-summary`, signal plans use `/signals/plans`, air quality uses `/aqi/observations`, routing uses `/routing/plan`, and trip history uses `/trips`.
 
-If the API is unreachable or returns an empty response, the frontend keeps its principal screens usable with clearly labelled scenario estimates for AQI, transit, route alternatives, trip history, analytics, traffic/junction status, signal plans and source health. Backend startup runs forward-only Alembic migrations on PostgreSQL by default, repairs the missing `transit_routes` table via a dedicated migration, and runs the idempotent seeder when core tables are empty. The seed baseline includes 24 clusters, 48 junctions, 192 AQI observations, 1,632 traffic readings, 12 transit routes, 28 transit stops, 10 signal plans, 240 forecast horizon records, 12 trips and ticket-request examples. These are synthetic scenario values—not official or live city readings. No physical traffic signal write or valid paid ticket/payment is issued.
-
-### Render database recovery
-
-On PostgreSQL, `AUTO_MIGRATE_ON_STARTUP=true` and `AUTO_SEED_DEMO_DATA=true` are enabled by default. On startup the backend applies `alembic upgrade head`, then seeds the shared sample workspace only if any core data table is empty. The new forward-only migration repairs a missing `transit_routes` table without rewriting previous migrations. Confirm the Render service uses this updated code and has the correct `DATABASE_URL`; watch the startup logs for `Applying database migrations` and `UrbanSaarthi scenario seed complete`. Do not manually delete or rebuild production data.
-
-### Deployed configuration
-
-For Vercel, set `VITE_API_URL` to the exact Render API service hostname plus `/api/v1` and redeploy the frontend. On Render, set `CORS_ORIGINS=https://urbansarthi.vercel.app` (plus any other exact frontend origins) and redeploy the backend. The project enables the Vercel preview origin pattern as well. The exact Render service hostname must be copied from your Render dashboard; it cannot be inferred from this archive.
+There is no invented weather API, fabricated transit schedule, seeded browser-side AQI, or fake live CCTV status. When an API is not configured, returns no records, or has no configured source, the corresponding page displays an empty/unavailable/error state. Route estimates and source caveats are shown as returned by the backend. The existing backend explicitly does not issue physical traffic signal writes or valid paid travel tickets.
 
 ## Screenshots and design target
 
-The interface uses the uploaded UrbanSaarthi logo in shared navigation and as the favicon. The default palette is green with light surfaces, dark green navigation, lime selection accents, premium card/button hover and focus states, and an English/Hindi toggle. It uses Leaflet/OpenStreetMap views. The authority layouts follow the supplied dashboard structure; citizen-facing pages mirror the supplied portal, route-planning, AQI, public-transit and trips layouts. Exact rendered pixel equality must still be checked in a browser at the reference viewport sizes and with the same API data density.
+The interface uses the uploaded UrbanSaarthi references as the visual target: light green-tinted work surfaces, dark green navigation, lime selection accents, compact cards and Leaflet/OpenStreetMap views. The authority layouts follow the supplied dashboard structure; citizen-facing pages mirror the supplied portal, route-planning, AQI, public-transit and trips layouts. Exact rendered pixel equality must still be checked in a browser at the reference viewport sizes and with the same API data density.

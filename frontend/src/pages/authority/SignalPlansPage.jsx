@@ -5,22 +5,19 @@ import { EmptyState, ErrorNotice } from '../../components/shared/Toast.jsx';
 import useApiResource from '../../hooks/useApiResource.js';
 import { api, endpoints } from '../../services/api/client.js';
 import { useApp } from '../../context/AppContext.jsx';
-import { DEMO_JUNCTIONS, DEMO_SIGNAL_PLANS } from '../../data/demoData.js';
 
 const seconds = (n) => Number.isFinite(n) ? `${n}s` : '—';
 export default function SignalPlansPage() {
   const { notify } = useApp();
-  const { data: plans, loading, error, reload } = useApiResource(() => api.get(endpoints.signalPlans), [], { fallback: DEMO_SIGNAL_PLANS });
-  const { data: junctions, error: junctionError } = useApiResource(() => api.get(endpoints.junctions), [], { fallback: DEMO_JUNCTIONS });
+  const { data: plans, loading, error, reload } = useApiResource(() => api.get(endpoints.signalPlans), []);
+  const { data: junctions } = useApiResource(() => api.get(endpoints.junctions), []);
   const [selectedId, setSelectedId] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [junctionId, setJunctionId] = useState('');
   const [name, setName] = useState('Operator-submitted signal plan');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
-  const [simulationResult, setSimulationResult] = useState(null);
-  const [localPlans, setLocalPlans] = useState([]);
-  const list = [...localPlans, ...(Array.isArray(plans) ? plans : [])];
+  const list = Array.isArray(plans) ? plans : [];
   const selected = list.find((plan) => plan.id === selectedId) || list[0] || null;
   const phases = useMemo(() => selected?.phases || [], [selected]);
 
@@ -28,15 +25,7 @@ export default function SignalPlansPage() {
     if (!selected) return notify('Select an existing plan first.');
     setBusy(true); setNotice('');
     try {
-      if (error.startsWith('SAMPLE_FALLBACK:') || selected.public_id?.startsWith('DEMO-')) {
-        const outcomes = selected.projected_outcomes || {};
-        setSimulationResult({ engine: 'analytical-scenario-v1', status: 'completed', scenario: true, results: { estimated_delay_reduction_pct: outcomes.estimated_delay_reduction_pct ?? 12, estimated_queue_reduction_pct: outcomes.estimated_queue_reduction_pct ?? 16, estimated_wait_reduction_seconds: Math.max(3, Math.round((outcomes.estimated_delay_reduction_pct ?? 12) * 0.45)), cycle_seconds: selected.cycle_seconds }, caveats: ['Illustrative scenario calculations only; not calibrated against measured traffic trajectories.', 'No backend record or physical traffic signal was changed.'] });
-        setNotice(`Scenario preview completed for ${selected.plan_type}. No physical signal was changed.`);
-        notify('Scenario simulation complete');
-        return;
-      }
       const result = await api.post(`/signals/plans/${selected.id}/simulate`, {});
-      setSimulationResult({ ...result, scenario: false });
       setNotice('Analytical simulation completed. Review the results before approval; no command was sent to physical traffic lights.');
       notify(result?.engine ? `Simulation complete · ${result.engine}` : 'Simulation completed');
       reload();
@@ -48,21 +37,6 @@ export default function SignalPlansPage() {
     if (!junctionId) return notify('Choose a junction returned by the API.');
     setBusy(true);
     try {
-      if (error.startsWith('SAMPLE_FALLBACK:') || junctionError.startsWith('SAMPLE_FALLBACK:') || String(junctionId).startsWith('10')) {
-        const localId = `local-${Date.now()}`;
-        const created = { id: localId, public_id: `US-LOCAL-${String(localPlans.length + 1).padStart(3, '0')}`, junction_id: Number(junctionId), plan_type: 'scenario-manual', status: 'draft', cycle_seconds: 90, phases: [
-          { name: 'North–South', movement: 'north_south', green_seconds: 26, yellow_seconds: 3, all_red_seconds: 1, demand_weight: 1 },
-          { name: 'East–West', movement: 'east_west', green_seconds: 18, yellow_seconds: 3, all_red_seconds: 1, demand_weight: 1 },
-          { name: 'Protected turns', movement: 'turns', green_seconds: 34, yellow_seconds: 3, all_red_seconds: 1, demand_weight: 0.6 },
-        ], rationale: name, projected_outcomes: { estimated_delay_reduction_pct: 10, estimated_queue_reduction_pct: 14 } };
-        setLocalPlans((previous) => [created, ...previous]);
-        setSelectedId(localId);
-        setSimulationResult(null);
-        setNotice('');
-        notify('Signal plan preview added to this page. It is not saved on the server.');
-        setCreateOpen(false);
-        return;
-      }
       await api.post('/signals/plans', { junction_id: Number(junctionId), plan_type: 'manual', rationale: name, phases: [
         { name: 'North–South', movement: 'north_south', green_seconds: 26, yellow_seconds: 3, all_red_seconds: 1, demand_weight: 1 },
         { name: 'East–West', movement: 'east_west', green_seconds: 18, yellow_seconds: 3, all_red_seconds: 1, demand_weight: 1 },
@@ -73,19 +47,18 @@ export default function SignalPlansPage() {
   }
 
   return <>
-    <PageIntro eyebrow="ADAPTIVE CONTROL" title="Signal plans" description="Review junction timing strategies and run safe analytical what-if previews. No physical traffic-light command is sent." action={<><button className="utility" onClick={reload}><RefreshCw size={14}/> Refresh</button><button className="primary" onClick={simulateSelected} disabled={busy || !selected}><Play size={15}/>{busy ? 'Working…' : 'Run what-if simulation'}</button></>} />
+    <PageIntro eyebrow="ADAPTIVE CONTROL" title="Signal plans" description="Review predicted impact, test timing changes and deploy a coordinated plan." action={<><button className="utility" onClick={reload}><RefreshCw size={14}/> Refresh</button><button className="primary" onClick={simulateSelected} disabled={busy || !selected}><Play size={15}/>{busy ? 'Working…' : 'Apply selected plan'}</button></>} />
     <ErrorNotice message={error} onRetry={reload}/>{notice && <div className="notice"><Check size={15}/>{notice}</div>}
     <div className="signals-grid">
       <section className="panel plan-list"><div className="panel-head"><div><div className="eyebrow">AVAILABLE PLANS</div><h3>Timing strategies</h3></div><button className="icon-btn" onClick={reload} aria-label="Refresh plans"><SlidersHorizontal size={16}/></button></div>
-        {loading ? <div className="loading-lines">Loading signal plans…</div> : list.length ? list.map((plan) => <button className={`plan ${selected?.id === plan.id ? 'selected' : ''}`} key={plan.id} onClick={() => { setSelectedId(plan.id); setSimulationResult(null); setNotice(''); }}><span className="radio-dot"/><span className="plan-copy"><b>{String(plan.plan_type || 'Signal plan').replace(/^demo[-_ ]?/i, 'scenario ').replace(/[-_]+/g, ' ')}</b><small>Junction {plan.junction_id} · {plan.status}</small></span><span className="impact"><b>{seconds(plan.cycle_seconds)} cycle</b><small>{plan.status}</small></span></button>) : <EmptyState title="No signal plans yet" description="Plans appear here once the backend has stored them. You can create one if a junction is available."/>}
+        {loading ? <div className="loading-lines">Loading signal plans…</div> : list.length ? list.map((plan) => <button className={`plan ${selected?.id === plan.id ? 'selected' : ''}`} key={plan.id} onClick={() => setSelectedId(plan.id)}><span className="radio-dot"/><span className="plan-copy"><b>{plan.plan_type?.replaceAll('_', ' ') || 'Signal plan'}</b><small>Junction {plan.junction_id} · {plan.status}</small></span><span className="impact"><b>{seconds(plan.cycle_seconds)} cycle</b><small>{plan.status}</small></span></button>) : <EmptyState title="No signal plans yet" description="Plans appear here once the backend has stored them. You can create one if a junction is available."/>}
         <button className="create-plan" onClick={() => setCreateOpen(!createOpen)}><Plus size={14}/> Create a new signal plan</button>
-        {createOpen && <form className="create-plan-form" onSubmit={createPlan}><label>Junction<select value={junctionId} onChange={(e) => setJunctionId(e.target.value)} required><option value="">Select junction</option>{(junctions || []).map((j) => <option key={j.id} value={j.id}>{j.name} · ID {j.id}</option>)}</select></label><label>Plan rationale<input value={name} onChange={(e) => setName(e.target.value)} maxLength={3000} required/></label><button className="primary" type="submit" disabled={busy}>Create plan preview</button></form>}
+        {createOpen && <form className="create-plan-form" onSubmit={createPlan}><label>Junction<select value={junctionId} onChange={(e) => setJunctionId(e.target.value)} required><option value="">Select junction</option>{(junctions || []).map((j) => <option key={j.id} value={j.id}>{j.name} · ID {j.id}</option>)}</select></label><label>Plan rationale<input value={name} onChange={(e) => setName(e.target.value)} maxLength={3000} required/></label><button className="primary" type="submit" disabled={busy}>Create through API</button></form>}
       </section>
-      <section className="panel preview"><div className="panel-head"><div><div className="eyebrow">PLAN DETAILS</div><h3>{selected ? `Junction ${selected.junction_id} · ${String(selected.plan_type || 'Signal plan').replace(/^demo[-_ ]?/i, 'scenario ').replace(/[-_]+/g, ' ')}` : 'Select a plan'}</h3></div><span className="simulation">{selected?.status || 'No plan selected'}</span></div>
+      <section className="panel preview"><div className="panel-head"><div><div className="eyebrow">PLAN DETAILS</div><h3>{selected ? `Junction ${selected.junction_id} · ${selected.plan_type?.replaceAll('_', ' ')}` : 'Select a plan'}</h3></div><span className="simulation">{selected?.status || 'No plan selected'}</span></div>
         {selected ? <><div className="intersection"><div className="road-h"/><div className="road-v"/><div className="center-line h"/><div className="center-line v"/><div className="light"><i/><i/><i/></div><span className="time north">N/S {seconds(phases.find((p) => /north|south/i.test(p.movement || p.name))?.green_seconds)}</span><span className="time west">W {seconds(phases.find((p) => /west/i.test(p.movement || p.name))?.green_seconds)}</span><span className="time east">E {seconds(phases.find((p) => /east/i.test(p.movement || p.name))?.green_seconds)}</span><span className="time south">S {seconds(phases.find((p) => /south/i.test(p.movement || p.name))?.green_seconds)}</span></div>
           <div className="preview-stats"><div><small>Signal cycle</small><b>{seconds(selected.cycle_seconds)}</b></div><div><small>Plan status</small><b>{selected.status}</b></div><div><small>Phases</small><b>{phases.length}</b></div></div><div className="plan-rationale"><Zap size={16}/><span><b>Plan rationale</b><small>{selected.rationale || 'No rationale was supplied.'}</small></span></div><div className="phase-list">{phases.map((phase, i) => <div key={`${phase.name}-${i}`}><b>{phase.name || phase.movement}</b><span>{phase.movement}</span><strong>{seconds(phase.green_seconds)} green</strong></div>)}</div><p className="api-note">Simulation is an analytical what-if result. It does not write to physical traffic lights.</p></> : <EmptyState title="No plan selected" description="Connect a junction and create a signal plan to preview its phase timings."/>}
       </section>
     </div>
-    {simulationResult && <section className="panel simulation-report"><div className="panel-head"><div><div className="eyebrow">WHAT-IF RESULTS</div><h3>{simulationResult.scenario ? 'Scenario estimate' : 'Analytical simulation'}</h3></div><span className="status-pill">{simulationResult.engine || 'scenario engine'}</span></div><div className="simulation-report-grid">{simulationResult.scenario ? <><div><small>Expected delay change</small><b>{simulationResult.results?.estimated_delay_reduction_pct ?? '—'}%</b></div><div><small>Expected queue change</small><b>{simulationResult.results?.estimated_queue_reduction_pct ?? '—'}%</b></div><div><small>Wait-time estimate</small><b>{simulationResult.results?.estimated_wait_reduction_seconds ?? '—'} sec</b></div><div><small>Signal cycle</small><b>{simulationResult.results?.cycle_seconds ?? '—'} sec</b></div></> : <><div><small>Queue after scenario</small><b>{simulationResult.results?.queue_length_m == null ? 'Not available' : `${simulationResult.results.queue_length_m} m`}</b></div><div><small>Average wait</small><b>{simulationResult.results?.average_wait_seconds == null ? 'Not available' : `${simulationResult.results.average_wait_seconds} sec`}</b></div><div><small>Throughput estimate</small><b>{simulationResult.results?.throughput_vehicle_count ?? 'Not available'}</b></div><div><small>Demand alignment</small><b>{simulationResult.results?.demand_green_alignment_score == null ? 'Not available' : `${Math.round(simulationResult.results.demand_green_alignment_score * 100)}%`}</b></div></>}</div><ul className="simulation-caveats">{(simulationResult.caveats || ['Illustrative estimates only. No physical traffic signal was changed.']).map((caveat, index) => <li key={index}>{caveat}</li>)}</ul></section>}
   </>;
 }

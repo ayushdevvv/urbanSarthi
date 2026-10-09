@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db import get_db
+from app.dependencies import require_roles
 from app.models import AqiObservation, DataSource, TransitRoute, TransitStop
 from app.services.common import audit, utc_now
 
@@ -12,7 +13,7 @@ router = APIRouter(prefix="/integrations", tags=["External data integrations"])
 
 
 @router.get("/status")
-def integration_status(db: Session = Depends(get_db)):
+def integration_status(db: Session = Depends(get_db), user=Depends(require_roles("operator", "admin"))):
     sources = list(db.scalars(select(DataSource).order_by(DataSource.source_type, DataSource.name)))
     return {
         "generated_at": utc_now().isoformat(),
@@ -29,7 +30,7 @@ def integration_status(db: Session = Depends(get_db)):
 
 
 @router.post("/openaq/sync")
-def sync_openaq(request: Request, latitude: float = Query(ge=-90, le=90), longitude: float = Query(ge=-180, le=180), radius_km: int = Query(default=20, ge=1, le=50), max_locations: int = Query(default=10, ge=1, le=25), db: Session = Depends(get_db)):
+def sync_openaq(request: Request, latitude: float = Query(ge=-90, le=90), longitude: float = Query(ge=-180, le=180), radius_km: int = Query(default=20, ge=1, le=50), max_locations: int = Query(default=10, ge=1, le=25), db: Session = Depends(get_db), user=Depends(require_roles("operator", "admin"))):
     if not settings.openaq_api_key:
         raise HTTPException(status_code=409, detail="OPENAQ_API_KEY is not configured")
     headers = {"X-API-Key": settings.openaq_api_key, "Accept": "application/json"}
@@ -89,7 +90,7 @@ def sync_openaq(request: Request, latitude: float = Query(ge=-90, le=90), longit
         )
         db.add(row)
         imported.append({"location_id": location_id, "station_name": row.station_name, "observed_at": observed_at.isoformat()})
-    audit(db, None, "integration.openaq_sync", "aqi_observation", None, {"imported_count": len(imported), "error_count": len(errors)}, request.client.host if request and request.client else None)
+    audit(db, user.id, "integration.openaq_sync", "aqi_observation", None, {"imported_count": len(imported), "error_count": len(errors)}, request.client.host if request and request.client else None)
     db.commit()
     return {"provider": "openaq-v3", "locations_found": len(locations), "observations_created": len(imported), "imported": imported, "errors": errors,
             "note": "OpenAQ provides pollutant concentrations. This connector does not infer or relabel those values as CPCB AQI; ingest official AQI separately when available."}

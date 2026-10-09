@@ -1,10 +1,24 @@
 from datetime import date, datetime
 from typing import Any, Literal
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserOut(ORMModel):
+    id: int
+    email: EmailStr
+    full_name: str
+    role: str
+    is_active: bool
+    preferences: dict[str, Any]
+    created_at: datetime
+
+
+class UserRoleChangeIn(BaseModel):
+    role: Literal["citizen", "operator"]
 
 
 class Coordinates(BaseModel):

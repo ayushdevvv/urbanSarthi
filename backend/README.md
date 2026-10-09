@@ -11,7 +11,7 @@ The API maps to the project proposal: route planning by travel time and pollutio
 - **FastAPI + Pydantic v2**: validated REST contracts and interactive OpenAPI docs.
 - **SQLAlchemy 2.x**: ORM models with portable JSON columns; SQLite for quick local tests and PostgreSQL for deployment.
 - **Alembic**: the only production schema-versioning mechanism. The app does not call `Base.metadata.create_all()` at startup.
-- **No-login demo workspace**: all REST endpoints are public; the legacy users row is retained only to satisfy existing foreign-key relationships and is not used for authentication.
+- **Prototype demo identity**: shared demo operator identity; authentication is disabled in this archive.
 - **Provider adapters**: OSRM-compatible road routing, OpenAQ v3 pull adapter, GTFS static upload, and push-ingestion for camera-derived traffic measurements, CPCB AQI readings and transit real-time arrivals.
 - **Optional scikit-learn estimator**: queue-length predictor loaded from `MODEL_PATH`; until a trained model is supplied, forecasts use a bounded trend heuristic and identify themselves as such.
 
@@ -40,15 +40,23 @@ uvicorn app.main:app --reload
 
 Open `http://127.0.0.1:8000/docs`. Health checks: `/healthz` and `/readyz`.
 
-### Synthetic demo dataset
+To create a first admin account safely, set these environment variables **before** running the seed script:
 
-The seed script is idempotent and populates demo AQI, traffic, transit, signal, forecast, trip and ticket-request records in one run:
-
-```bash
-python scripts/seed_demo.py
+```text
+BOOTSTRAP_ADMIN_EMAIL=your-admin-email
+BOOTSTRAP_ADMIN_PASSWORD=a-long-unique-password
+BOOTSTRAP_ADMIN_NAME=UrbanSaarthi Admin
 ```
 
-All generated values are labelled synthetic. The 24 clusters and 48 junctions use unverified placeholder coordinates and are not official sensor locations.
+Then run `python scripts/seed_demo.py` again. The public registration endpoint can create citizen accounts only; it cannot self-assign an operator/admin role.
+
+### Optional UI demo records
+
+```bash
+python scripts/seed_demo.py --demo-telemetry
+```
+
+This explicitly creates `synthetic-demo` observations to let the frontend display populated charts. They are not real traffic/AQI readings and should never be presented as live city intelligence. The seeded 24 clusters and 48 junctions use synthetic placeholder coordinates. Replace them with surveyed/authorized coordinates before the pilot.
 
 ## 3. Docker Compose (PostgreSQL)
 
@@ -91,9 +99,9 @@ Every REST route below is under `/api/v1`.
 
 | Domain | Endpoints | Purpose |
 |---|---|---|
-| Access mode | No login, bearer token, session or role checks; all API routes are public in this demo build | Shared demo workspace rows are only retained to satisfy legacy database foreign keys |
+| Demo access | Authentication endpoints are disabled in this archive | Shared demo identity for prototype testing |
 | Route planning | `POST /routing/plan` | Fastest, cleanest or balanced trip options; returns source/data-quality warnings |
-| Trip history | `GET /trips`, `GET /trips/{id}`, `GET /trips/{id}/routes`, `POST /trips/{id}/select-route`, `/start`, `/complete`, `/cancel` | Shared demo trip lifecycle and history (not private per-person data) |
+| Trip history | `GET /trips`, `GET /trips/{id}`, `GET /trips/{id}/routes`, `POST /trips/{id}/select-route`, `/start`, `/complete`, `/cancel` | Private trip lifecycle and history for signed-in citizens |
 | Traffic | `GET /traffic/overview`, `GET /traffic/junctions`, `GET /traffic/junctions/{id}`, `GET /traffic/junctions/{id}/observations`, `POST /traffic/observations` | Junction status, vehicle count, queue, speeds, waits, density and lane demand |
 | Edge vision | `POST /ingestion/vision-events` | Accept compact JSON detections from an external CCTV/YOLO edge worker; does not upload/store video |
 | AQI | `GET /aqi/observations`, `GET /aqi/nearby`, `POST /aqi/observations` | Geospatial station readings, PM2.5/PM10/NO2/O3/CO/AQI, source timestamp and freshness |
@@ -105,7 +113,7 @@ Every REST route below is under `/api/v1`.
 | City alerts | `GET /alerts`, `POST /alerts`, `POST /alerts/{id}/resolve` | Incident, AQI, roadwork and traffic alerts |
 | Ticketing | `GET /ticketing/provider-status`, `POST /ticketing/orders`, `GET /ticketing/orders`, `GET /ticketing/orders/{id}`, `POST /ticketing/orders/{id}/cancel` | Ticket request lifecycle; the returned request reference is **not** a valid travel ticket |
 | Analytics | `GET /analytics/my-mobility`, `GET /analytics/city-summary` | Recorded trip, usage and operational summaries |
-| Administration | `GET /admin/data-sources`, `POST /admin/data-sources`, `POST /admin/data-sources/{external_id}/heartbeat`, `PATCH /admin/junctions/{id}/status` | Public source registry and junction status endpoints; user/role management endpoints are removed |
+| Administration | `GET /admin/data-sources`, `POST /admin/data-sources`, `POST /admin/data-sources/{external_id}/heartbeat`, `PATCH /admin/junctions/{id}/status`, `GET /admin/users`, `PATCH /admin/users/{id}/role` | Source registry, health, junction status and role management |
 | Integrations | `GET /integrations/status`, `POST /integrations/openaq/sync` | Provider configuration state and OpenAQ v3 station sync |
 
 `/docs` provides the exact request/response models, query parameters and status codes for the frontend integration.
@@ -114,7 +122,7 @@ Every REST route below is under `/api/v1`.
 
 ### Traffic cameras / YOLO
 
-Run video ingest and CV inference in a separate, authorized edge worker. Send count/queue/speed/density summaries to `POST /api/v1/ingestion/vision-events`. This no-login demo exposes the endpoint publicly. Do not send unapproved public CCTV URLs or credentials in `safe_config`; secrets belong in environment/secret storage.
+Run video ingest and CV inference in a separate, authorized edge worker. Send count/queue/speed/density summaries to `POST /api/v1/ingestion/vision-events`. In this demo archive, authentication is disabled and this endpoint is publicly accessible. Do not send unapproved public CCTV URLs or credentials in `safe_config`; secrets belong in environment/secret storage.
 
 ### CPCB / OpenAQ
 
@@ -150,13 +158,13 @@ Signal plans progress through `draft`, `simulated`, `approved`, `rejected`. `/di
 
 The current API creates/cancels *requests*. It does not contact a bus/metro operator, charge a card, confirm a booking, or issue a valid ticket QR. Connect an authorized provider before changing an order to confirmed or adding payments.
 
-## 7. Demo access and deployment configuration
+## 7. Roles and ingestion access
 
-This build intentionally removes login and role enforcement. No sign-in, password, session, bearer-token or user/role-management API is exposed. A shared technical record is still stored in the legacy `users` table only because trip/ticket database rows use existing foreign-key constraints; it is not used to authenticate requests or isolate users. All users of this unauthenticated demo see a shared workspace.
+- `citizen`: profile, route planning, own trips, own ticket requests, personal analytics.
+- `operator`: traffic/AQI/transit ingestion, signal plans and reviews, command centre, alerts, simulations, source heartbeat and junction status.
+- `admin`: operator permissions plus data-source and role administration.
 
-**Security boundary:** every API route, including authority write operations, is publicly reachable in this mode. Use synthetic data only; do not connect real municipal control, CCTV, accounts, payments or sensitive feeds. Authentication and authorization must be restored before any production or operational use.
-
-For the Vercel frontend, set `VITE_API_URL` to the exact Render service URL followed by `/api/v1`, for example `https://<your-render-service>.onrender.com/api/v1` (replace the placeholder with the service's actual hostname). On Render, set `CORS_ORIGINS=https://urbansarthi.vercel.app` plus any additional exact frontend origins. The backend also allows Vercel preview deployments via its `CORS_ORIGIN_REGEX`. Redeploy both services after environment changes.
+In this simplified demo archive, ingestion and authority endpoints are publicly accessible. Use only synthetic data. Re-enable authentication, role checks and trusted-producer controls before production.
 
 ## 8. Basic smoke test
 
@@ -165,11 +173,11 @@ python -m pytest -q
 alembic check
 ```
 
-The tests cover public demo route planning/history, traffic ingestion, all five forecast horizons, signal recommendation and safe what-if simulation, GTFS frequency-feed import and routing, one-transfer journeys, no-fabricated-transit behavior, and fail-closed production configuration.
+The six tests cover unauthenticated demo route planning/history, traffic ingestion, all five forecast horizons, signal recommendation, analytical what-if simulation, approval/dispatch preview, GTFS frequency-feed import and routing, one-transfer journeys, no-fabricated-transit behavior, and fail-closed production configuration.
 
 ## 9. Important current boundaries
 
-- The companion Vite frontend is in `../frontend`. Frontend fallback records and the backend seed data are labelled synthetic, not live city intelligence.
+- No frontend is included; the REST/OpenAPI contract is ready for it.
 - Real telemetry depends on actual provider credentials/feeds. No data is silently generated as a substitute.
 - The default route fallback is not turn-by-turn navigation.
 - GTFS pathfinding currently supports direct and one-transfer journeys. Journeys needing two or more transfers are not computed; frequency windows with `exact_times=0` are correctly labelled as headway estimates tied to the supplied static feed.
@@ -178,3 +186,19 @@ The tests cover public demo route planning/history, traffic ingestion, all five 
 - No physical traffic signal command or ticket/payment transaction is issued.
 
 
+## Prototype access mode
+
+Authentication and role checks are disabled in this simplified demo archive. Requests share a demo administrator identity so the UI can be tested without signing in. **All authority write APIs are publicly accessible in this mode. Do not use real data or deploy this build for production.**
+
+## YOLO11 traffic vision MVP
+
+The supplied `best.pt` checkpoint is stored at `backend/models/best.pt`. The API lazily loads it on the first inference request (rather than blocking API startup):
+
+- `GET /api/v1/traffic-detection/status` reports whether weights and Ultralytics are available.
+- `POST /api/v1/traffic-detection/analyze?confidence=0.25` accepts a multipart `file` field containing a JPG, PNG, or WebP image (maximum 8 MB).
+
+The backend uses Ultralytics YOLO inference at `imgsz=640`, counts the model's `car`, `bus`, `motorbike`/`motorcycle`, and `bicycle` classes, returns all detected objects, and includes a JPEG-encoded annotated image. `person` detections are returned in the detection list but are not counted as vehicles. The confidence threshold is configurable between 0.05 and 0.9. The model is loaded once per worker and inference runs on CPU unless Ultralytics selects another available device.
+
+`TRAFFIC_MODEL_PATH` can override the checkpoint path; otherwise it resolves to `backend/models/best.pt`. The frontend supports camera snapshots and image uploads. Browser camera access requires localhost or HTTPS and camera permission. It does not request audio. Only the frame explicitly analyzed is uploaded. If the backend/model is unavailable, the frontend can show a **labelled sample preview**; sample counts must never be presented as model output.
+
+The supplied notebook's Low/Medium/High rules (0–3, 4–8, 9+ counted vehicles) are preserved as a **preliminary heuristic**, not validated real-world congestion. This image model does not measure speed, direction, queue length, unique vehicles across time, or live road congestion. Live scan samples frames; it is not multi-object tracking and counts can repeat between frames. For production deployment, confirm that the Render instance has sufficient memory for PyTorch/Ultralytics and verify an actual inference request after deployment.

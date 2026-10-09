@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db import get_db
+from app.dependencies import require_ingestion_access, require_roles
 from app.models import TransitAlert, TransitCalendarDate, TransitFrequency, TransitRealtimeArrival, TransitRoute, TransitStop, TransitStopTime, TransitTrip
 from app.schemas import GtfsImportOut, RealtimeArrivalIn, TransitAlertIn, TransitRouteOut, TransitStopOut
 from app.services.common import audit, utc_now
@@ -157,7 +158,7 @@ def plan_transit(origin_latitude: float = Query(ge=-90, le=90), origin_longitude
 
 
 @router.post("/gtfs/import", response_model=GtfsImportOut, status_code=200)
-async def upload_gtfs(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_gtfs(file: UploadFile = File(...), db: Session = Depends(get_db), user=Depends(require_roles("operator", "admin"))):
     filename = file.filename or "feed.zip"
     max_bytes = settings.gtfs_max_upload_mb * 1024 * 1024
     content = await file.read(max_bytes + 1)
@@ -168,13 +169,13 @@ async def upload_gtfs(file: UploadFile = File(...), db: Session = Depends(get_db
         result = import_gtfs_zip(db, content, filename)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    audit(db, None, "gtfs.feed_imported", "gtfs_feed", filename, result)
+    audit(db, user.id, "gtfs.feed_imported", "gtfs_feed", filename, result)
     db.commit()
     return result
 
 
 @router.post("/realtime-arrivals", status_code=201)
-def ingest_realtime_arrival(payload: RealtimeArrivalIn, request: Request, db: Session = Depends(get_db)):
+def ingest_realtime_arrival(payload: RealtimeArrivalIn, request: Request, db: Session = Depends(get_db), actor=Depends(require_ingestion_access)):
     stop = db.scalar(select(TransitStop).where(TransitStop.external_id == payload.stop_external_id))
     if not stop:
         raise HTTPException(status_code=404, detail="stop_external_id is unknown; import/register the stop first")
@@ -186,7 +187,7 @@ def ingest_realtime_arrival(payload: RealtimeArrivalIn, request: Request, db: Se
     row = TransitRealtimeArrival(stop_id=stop.id, route_id=route.id if route else None, expected_at=payload.expected_at,
                                  delay_seconds=payload.delay_seconds, vehicle_id=payload.vehicle_id, source=payload.source)
     db.add(row)
-    audit(db, None, "transit.realtime_arrival_ingested", "transit_stop", str(stop.id), {"source": payload.source}, request.client.host if request.client else None)
+    audit(db, getattr(actor, "id", None), "transit.realtime_arrival_ingested", "transit_stop", str(stop.id), {"source": payload.source}, request.client.host if request.client else None)
     db.commit()
     db.refresh(row)
     return {"id": row.id, "stop_external_id": stop.external_id, "route_external_id": route.external_id if route else None, "expected_at": row.expected_at.isoformat(), "status": "accepted"}
@@ -201,7 +202,7 @@ def transit_alerts(db: Session = Depends(get_db), status_filter: str = Query(def
 
 
 @router.post("/alerts", status_code=201)
-def upsert_transit_alert(payload: TransitAlertIn, request: Request, db: Session = Depends(get_db)):
+def upsert_transit_alert(payload: TransitAlertIn, request: Request, db: Session = Depends(get_db), user=Depends(require_roles("operator", "admin"))):
     row = db.scalar(select(TransitAlert).where(TransitAlert.external_id == payload.external_id)) if payload.external_id else None
     if row is None:
         row = TransitAlert(external_id=payload.external_id, **payload.model_dump(exclude={"external_id"}))
@@ -209,7 +210,7 @@ def upsert_transit_alert(payload: TransitAlertIn, request: Request, db: Session 
     else:
         for key, value in payload.model_dump(exclude={"external_id"}).items():
             setattr(row, key, value)
-    audit(db, None, "transit.alert_upserted", "transit_alert", payload.external_id, {"severity": payload.severity}, request.client.host if request.client else None)
+    audit(db, user.id, "transit.alert_upserted", "transit_alert", payload.external_id, {"severity": payload.severity}, request.client.host if request.client else None)
     db.commit()
     db.refresh(row)
     return row

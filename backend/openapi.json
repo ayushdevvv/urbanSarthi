@@ -109,8 +109,8 @@
         "tags": [
           "Citizen mobility"
         ],
-        "summary": "List Trips",
-        "operationId": "list_trips_api_v1_trips_get",
+        "summary": "My Trips",
+        "operationId": "my_trips_api_v1_trips_get",
         "parameters": [
           {
             "name": "limit",
@@ -143,7 +143,7 @@
                   "items": {
                     "$ref": "#/components/schemas/TripOut"
                   },
-                  "title": "Response List Trips Api V1 Trips Get"
+                  "title": "Response My Trips Api V1 Trips Get"
                 }
               }
             }
@@ -690,6 +690,78 @@
                 "schema": {
                   "$ref": "#/components/schemas/TrafficObservationOut"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/traffic-detection/status": {
+      "get": {
+        "tags": [
+          "Traffic AI"
+        ],
+        "summary": "Traffic Model Status",
+        "operationId": "traffic_model_status_api_v1_traffic_detection_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/traffic-detection/analyze": {
+      "post": {
+        "tags": [
+          "Traffic AI"
+        ],
+        "summary": "Analyze Traffic Image",
+        "operationId": "analyze_traffic_image_api_v1_traffic_detection_analyze_post",
+        "parameters": [
+          {
+            "name": "confidence",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 0.9,
+              "minimum": 0.05,
+              "default": 0.25,
+              "title": "Confidence"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_analyze_traffic_image_api_v1_traffic_detection_analyze_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -2564,6 +2636,115 @@
         }
       }
     },
+    "/api/v1/admin/users": {
+      "get": {
+        "tags": [
+          "Platform administration"
+        ],
+        "summary": "List Users",
+        "operationId": "list_users_api_v1_admin_users_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserOut"
+                  },
+                  "title": "Response List Users Api V1 Admin Users Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{user_id}/role": {
+      "patch": {
+        "tags": [
+          "Platform administration"
+        ],
+        "summary": "Change User Role",
+        "operationId": "change_user_role_api_v1_admin_users__user_id__role_patch",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserRoleChangeIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/integrations/status": {
       "get": {
         "tags": [
@@ -3095,6 +3276,20 @@
           "category"
         ],
         "title": "AqiObservationOut"
+      },
+      "Body_analyze_traffic_image_api_v1_traffic_detection_analyze_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_analyze_traffic_image_api_v1_traffic_detection_analyze_post"
       },
       "Body_upload_gtfs_api_v1_transit_gtfs_import_post": {
         "properties": {
@@ -5133,6 +5328,69 @@
           "created_at"
         ],
         "title": "TripOut"
+      },
+      "UserOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "preferences": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Preferences"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "full_name",
+          "role",
+          "is_active",
+          "preferences",
+          "created_at"
+        ],
+        "title": "UserOut"
+      },
+      "UserRoleChangeIn": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "citizen",
+              "operator"
+            ],
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "UserRoleChangeIn"
       },
       "ValidationError": {
         "properties": {

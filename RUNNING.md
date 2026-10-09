@@ -30,16 +30,16 @@ npm install
 npm run dev
 ```
 
-The local default `VITE_API_URL` is `http://127.0.0.1:8000/api/v1`. The variable must include `/api/v1` in production as well. The Vite dev server shows the local URL in its terminal. The frontend displays scenario estimates if the API is empty or unreachable, while keeping them distinct from live observations.
-
-## Render database recovery
-
-For PostgreSQL deployments, startup runs `alembic upgrade head` and then seeds the shared workspace only when core tables are empty. The migration chain includes a forward-only repair for a missing `transit_routes` table. Make sure Render deploys this archive and has the correct `DATABASE_URL`; after redeploy, inspect logs for migration and seed completion. No SQL shell work or manual table creation should be required. Do not wipe the database to resolve a schema error.
+The local default `VITE_API_URL` is `http://127.0.0.1:8000/api/v1`. The variable must include `/api/v1` in production as well. The Vite dev server shows the local URL in its terminal.
 
 ## Vercel
 
-Choose `frontend` as Vercel's Root Directory and set `VITE_API_URL` to the exact Render service host plus `/api/v1`, then redeploy Vercel. On Render, set `CORS_ORIGINS=https://urbansarthi.vercel.app`, then redeploy the backend. The Vercel preview regex is enabled too. The exact Render hostname must come from your Render dashboard; this source archive cannot change cloud project settings.
+Choose `frontend` as Vercel's Root Directory and set `VITE_API_URL` to the production backend host plus `/api/v1`. `frontend/vercel.json` handles SPA deep links. The backend CORS allow-list must include the deployed frontend origin.
 
 ## Backend/frontend data boundary
 
-The frontend consumes the supplied OpenAPI contract. Empty or unavailable responses fall back to labelled scenario estimates, never claiming those AQI, transit or traffic values are live. Physical signal-control connectivity is not implied.
+The frontend consumes the supplied OpenAPI contract. Empty or unavailable endpoint responses remain visible as empty/error states; they are not replaced by browser-side claims of live traffic, air quality, transit arrivals, weather, or physical signal-control connectivity.
+
+## Traffic Vision (YOLO11)
+
+The Traffic AI page is available at `/citizen/traffic-vision`. Camera access requires `localhost` or HTTPS and explicit browser permission. If camera access is unavailable, use image upload. The backend's `GET /api/v1/traffic-detection/status` endpoint shows whether the weights and inference package are present. If deploying to Render, install the updated `backend/requirements.txt`, keep `backend/models/best.pt` in the deployed source, set `TRAFFIC_MODEL_PATH` only if the weights are stored elsewhere, and verify a real image inference request. PyTorch/Ultralytics may exceed the memory budget of a small free instance; the frontend shows a clearly labelled sample preview if the model endpoint fails.

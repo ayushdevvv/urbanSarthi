@@ -16,26 +16,23 @@ def _latest_traffic(db: Session) -> tuple[float, datetime | None]:
     return (mean(scores) if scores else 0.0, observations[0].observed_at if observations else None)
 
 
-def _aqi_near_points(db: Session, points: list[tuple[float, float]]) -> tuple[float | None, int, datetime | None, bool]:
+def _aqi_near_points(db: Session, points: list[tuple[float, float]]) -> tuple[float | None, int, datetime | None]:
     cutoff = utc_now() - timedelta(hours=3)
     stations = list(db.scalars(select(AqiObservation).where(AqiObservation.observed_at >= cutoff, AqiObservation.aqi.is_not(None)).order_by(AqiObservation.observed_at.desc()).limit(500)))
     if not stations:
-        return None, 0, None, False
+        return None, 0, None
     samples: list[float] = []
     seen: set[int] = set()
     nearest_time = None
-    includes_scenario_data = False
     for lat, lon in points:
         choices = sorted(((haversine_m(lat, lon, s.latitude, s.longitude), s) for s in stations), key=lambda x: x[0])
         if choices and choices[0][0] <= 20_000:
             station = choices[0][1]
             samples.append(float(station.aqi))
             seen.add(station.id)
-            raw_payload = station.raw_payload if isinstance(station.raw_payload, dict) else {}
-            includes_scenario_data = includes_scenario_data or bool(raw_payload.get("is_synthetic")) or station.source in {"synthetic-demo", "scenario-sample"}
             if nearest_time is None or station.observed_at > nearest_time:
                 nearest_time = station.observed_at
-    return (round(mean(samples), 1) if samples else None, len(seen), nearest_time, includes_scenario_data)
+    return (round(mean(samples), 1) if samples else None, len(seen), nearest_time)
 
 
 def _congestion_penalty(db: Session) -> tuple[float, datetime | None]:
@@ -132,11 +129,11 @@ def build_routes(db: Session, request, user_id: int | None = None) -> dict:
             for index in (len(coords) // 3, 2 * len(coords) // 3):
                 lon, lat = coords[index][:2]
                 sample_points.append((lat, lon))
-        aqi, station_count, sampled_at, aqi_is_scenario = _aqi_near_points(db, sample_points)
+        aqi, station_count, sampled_at = _aqi_near_points(db, sample_points)
         if aqi is not None:
             route["estimated_aqi"] = aqi
             route["pollution_score"] = round(min(100.0, aqi / 5.0), 1)
-            route["itinerary"] = {**route.get("itinerary", {}), "aqi_sample_station_count": station_count, "aqi_sampled_at": sampled_at.isoformat() if sampled_at else None, "pollution_metric": "mean of nearest recent station observations at route sample points; not personal exposure dosimetry", "aqi_data_quality": "scenario-estimate" if aqi_is_scenario else "configured-station-observation", "aqi_provenance": "illustrative seeded observations" if aqi_is_scenario else "configured station observations"}
+            route["itinerary"] = {**route.get("itinerary", {}), "aqi_sample_station_count": station_count, "aqi_sampled_at": sampled_at.isoformat() if sampled_at else None, "pollution_metric": "mean of nearest recent station observations at route sample points; not personal exposure dosimetry"}
         elif route["mode"] == "transit":
             route["warnings"] = list(route.get("warnings", [])) + ["No recent AQI station was found within 20 km of sampled route points; pollution score omitted."]
         else:
