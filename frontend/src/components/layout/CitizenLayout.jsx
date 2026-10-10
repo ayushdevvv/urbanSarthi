@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Activity, Bus, Camera, House, Leaf, MapPin, Moon, Route, Sun, Wind } from 'lucide-react';
+import { Activity, Bus, Camera, House, MapPin, Moon, Route, Sun, Wind } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 
@@ -7,7 +7,7 @@ const links = [
   { to: '/citizen', label: 'Home', icon: House, end: true },
   { to: '/citizen/plan', label: 'Plan a trip', icon: Route },
   { to: '/citizen/air-quality', label: 'Air quality', icon: Activity },
-  { to: '/citizen/aqi-vision', label: 'AQI Vision', icon: Wind },
+  { to: '/citizen/aqi-vision', label: 'Predict AQI', icon: Wind },
   { to: '/citizen/traffic', label: 'Traffic conditions', icon: Camera },
   { to: '/citizen/transit', label: 'Public transport', icon: Bus },
   { to: '/citizen/trips', label: 'My trips', icon: MapPin },

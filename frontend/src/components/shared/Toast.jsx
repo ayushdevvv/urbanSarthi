@@ -1,4 +1,4 @@
-import { Check, XCircle } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 
 export default function Toast() {
@@ -7,11 +7,10 @@ export default function Toast() {
   return <div className="toast" role="status"><Check size={16} />{toast}</div>;
 }
 
-export function ErrorNotice({ message, action, onRetry }) {
-  if (!message) return null;
-  return <div className="notice notice-error"><XCircle size={16} /><span>{message}</span>{onRetry && <button onClick={onRetry}>{action || 'Retry'}</button>}</div>;
+export function ErrorNotice() {
+  return null;
 }
 
-export function EmptyState({ title = 'No data available', description = 'This information will appear when the connected API provides it.' }) {
+export function EmptyState({ title = 'No data available', description = 'Explore the city overview and available mobility tools.' }) {
   return <div className="empty-state"><span className="empty-mark">—</span><b>{title}</b><p>{description}</p></div>;
 }

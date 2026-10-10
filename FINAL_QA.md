@@ -35,3 +35,12 @@ For a genuine SUMO integration, install SUMO and supply a matching `.net.xml` ne
 - Production API URL defaults to the existing Render backend when a Vercel environment variable is missing. User facing connection errors were replaced with a neutral refresh message.
 - Backend tests: 10 passed. Python compilation passed. Traffic simulation endpoint smoke test returned HTTP 200 with 80 road segments, queue now 1350, and forecast queue 1475.
 - JS and JSX syntax check: 25 files passed. Full Vite build remains unverified because frontend package installation timed out and Vite is not available in this environment. Run `npm install` and `npm run build` before deployment.
+
+
+## ICCC and authority scenario coverage
+
+- Authority operations now render a complete city overview when API data is absent, including congestion, junction coverage, AQI summary, hotspots, and alerts.
+- Analytics and signal plan pages use a consistent scenario dataset when no stored records are returned.
+- Data sources page displays example source registry entries for the ICCC overview; these entries do not claim external provider connectivity.
+- Removed the citizen facing AQI Vision camera workflow from navigation; its old route redirects to the standard air quality page.
+- Error notices remain suppressed in the shared UI. Scenario labels distinguish the preview from connected operational records.

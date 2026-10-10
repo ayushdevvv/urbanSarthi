@@ -8,3 +8,5 @@
 @media(max-width:800px){.sidebar .brand{align-items:center}}
 .sidebar-scrim{display:none}
 @media(max-width:800px){.sidebar-scrim{display:block;position:fixed;inset:0;border:0;background:#00140f66;z-index:4}.sidebar{z-index:5}.sidebar.show{box-shadow:0 12px 35px #00140f33}}
+
+.scenario-notice{display:flex;align-items:center;gap:8px;margin:0 0 16px;padding:10px 13px;border-radius:10px;font-size:12px;color:var(--muted);background:var(--surface2);border:1px solid var(--border)}
