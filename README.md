@@ -100,3 +100,9 @@ The model predicts one of six categories (`Good`, `Moderate`, `Poor`, `Satisfact
 ## Final quality check
 
 See [`FINAL_QA.md`](./FINAL_QA.md) for the AQI page render fix, model inference smoke test, responsive refinements, known verification limits, and deployment checklist.
+
+## Traffic simulation forecast
+
+The supplied SUMO generated dataset and trained XGBoost model are included under `backend/app/ml/traffic_simulation`. The backend endpoint `GET /api/v1/traffic/simulation` predicts queue levels 30 minutes ahead for the 80 road segments. The citizen traffic page also includes a static snapshot for resilience if the backend is sleeping or unreachable. The snapshot is a simulation model result, not a live city sensor feed. Held out simulation evaluation reports 83.4% congestion level accuracy, MAE 1.84 vehicles, and R² 0.718.
+
+For production, set `VITE_API_URL=https://urbansarthi.onrender.com/api/v1` in Vercel and configure provider credentials only in the backend environment. The frontend has a production API fallback, but an explicit Vercel value is recommended.

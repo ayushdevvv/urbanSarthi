@@ -24,3 +24,14 @@
 Set `TOMTOM_API_KEY` in Render backend environment, redeploy, and visit `/api/v1/traffic/current?latitude=28.6139&longitude=77.2090`. If the response is not configured, verify the environment variable and service restart. The key must never be placed in a `VITE_` frontend variable.
 
 For a genuine SUMO integration, install SUMO and supply a matching `.net.xml` network plus route or demand files for the chosen junction. Until then the analytical scenario engine remains clearly distinguished from SUMO.
+
+## Visual and traffic model refinement (2026 10 10)
+
+- Replaced the logo image dependency in the shared brand component with an inline SVG mark so the logo remains visible even if a public asset path fails. Updated the browser icon to the same verified SVG asset.
+- Refined the landing page typography, portal cards, city illustration, model summary cards, responsive layout, and font fallbacks.
+- Added the supplied SUMO dataset and XGBoost queue model to the backend. `GET /api/v1/traffic/simulation` returns a 30 minute forecast across the 80 roads using the latest included simulation run.
+- Added a public static forecast snapshot so the citizen traffic screen still renders traffic metrics when the backend cannot be reached. It does not claim those values are live sensor readings.
+- The traffic provider endpoint now falls back to the included simulation forecast when a TomTom key is absent or the provider request fails.
+- Production API URL defaults to the existing Render backend when a Vercel environment variable is missing. User facing connection errors were replaced with a neutral refresh message.
+- Backend tests: 10 passed. Python compilation passed. Traffic simulation endpoint smoke test returned HTTP 200 with 80 road segments, queue now 1350, and forecast queue 1475.
+- JS and JSX syntax check: 25 files passed. Full Vite build remains unverified because frontend package installation timed out and Vite is not available in this environment. Run `npm install` and `npm run build` before deployment.

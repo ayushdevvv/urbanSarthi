@@ -10,6 +10,7 @@ from app.models import Junction, TrafficObservation, CityCluster
 from app.schemas import JunctionCreateIn, JunctionOut, TrafficObservationIn, TrafficObservationOut
 from app.services.common import audit, utc_now
 from app.services.predictions import maybe_refresh_forecasts
+from app.services.traffic_simulation import get_simulation_snapshot
 
 router = APIRouter(prefix="/traffic", tags=["Traffic intelligence"])
 
@@ -19,21 +20,23 @@ def current_traffic(latitude: float = Query(default=28.6139, ge=-90, le=90), lon
     """Fetch a current road segment snapshot from TomTom when configured. The API key stays server side."""
     if not settings.tomtom_api_key:
         return {
-            "provider": "TomTom Traffic Flow", "configured": False, "mode": "unavailable",
-            "message": "Traffic data is not connected yet. Add TOMTOM_API_KEY to the backend environment to enable current road flow data.",
-            "latitude": latitude, "longitude": longitude, "observed_at": None, "flow": None,
+            "provider": "UrbanSaarthi SUMO traffic model", "configured": False, "mode": "sumo_model",
+            "message": "Showing a forecast from the supplied SUMO simulation model.",
+            "latitude": latitude, "longitude": longitude, "observed_at": utc_now().isoformat(), "flow": None,
+            "simulation": get_simulation_snapshot(),
         }
     url = "https://api.tomtom.com/traffic/services/4/flowSegmentData/relative/10/json"
     try:
         response = httpx.get(url, params={"point": f"{latitude},{longitude}", "key": settings.tomtom_api_key}, timeout=12)
         response.raise_for_status()
         payload = response.json().get("flowSegmentData") or {}
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code in (401, 403):
-            raise HTTPException(status_code=502, detail="TomTom rejected the configured traffic API key. Check its permissions and quota.") from exc
-        raise HTTPException(status_code=502, detail="The traffic provider could not return a current road flow snapshot.") from exc
-    except (httpx.HTTPError, ValueError) as exc:
-        raise HTTPException(status_code=502, detail="The traffic provider is temporarily unavailable.") from exc
+    except (httpx.HTTPError, ValueError):
+        return {
+            "provider": "UrbanSaarthi SUMO traffic model", "configured": False, "mode": "sumo_model",
+            "message": "Showing a forecast from the supplied SUMO simulation model.",
+            "latitude": latitude, "longitude": longitude, "observed_at": utc_now().isoformat(), "flow": None,
+            "simulation": get_simulation_snapshot(),
+        }
     return {
         "provider": "TomTom Traffic Flow", "configured": True, "mode": "provider",
         "latitude": latitude, "longitude": longitude, "observed_at": utc_now().isoformat(),
@@ -47,6 +50,12 @@ def current_traffic(latitude: float = Query(default=28.6139, ge=-90, le=90), lon
         },
         "note": "Road segment flow snapshot from the configured provider. Coverage depends on provider availability at the selected coordinates.",
     }
+
+
+@router.get("/simulation")
+def traffic_simulation():
+    """Forecast the next 30 minutes using the supplied SUMO dataset and trained model."""
+    return get_simulation_snapshot()
 
 
 @router.get("/junctions", response_model=list[JunctionOut])

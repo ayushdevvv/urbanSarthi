@@ -1,4 +1,4 @@
-const DEFAULT_API_URL = 'http://127.0.0.1:8000/api/v1';
+const DEFAULT_API_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000/api/v1' : 'https://urbansarthi.onrender.com/api/v1';
 
 export const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || DEFAULT_API_URL).replace(/\/$/, '');
 
@@ -21,14 +21,14 @@ export async function request(path, options = {}) {
   try {
     response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   } catch (error) {
-    throw new ApiError(`Unable to reach the UrbanSaarthi API at ${API_BASE_URL}. Check that the backend is running and CORS allows this frontend.`, 0, error);
+    throw new ApiError('We could not refresh this information just now. The available city overview is still shown.', 0, error);
   }
 
   const contentType = response.headers.get('content-type') || '';
   const payload = contentType.includes('application/json') ? await response.json().catch(() => null) : await response.text().catch(() => '');
   if (!response.ok) {
     const detail = typeof payload?.detail === 'string' ? payload.detail : Array.isArray(payload?.detail) ? payload.detail.map((item) => item.msg).join(', ') : response.statusText;
-    throw new ApiError(detail || `Request failed (${response.status})`, response.status, payload);
+    throw new ApiError('This information could not be refreshed just now. Please try again shortly.', response.status, { detail, payload });
   }
   return payload;
 }
