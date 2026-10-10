@@ -2,3 +2,14 @@
 @media(max-width:900px){.below-grid{grid-template-columns:1fr}.authority-map{height:300px}}@media(max-width:520px){.summary-chart-row{grid-template-columns:100px minmax(50px,1fr) 48px;gap:7px}.authority-map{height:250px}.intro-actions{width:100%}.intro-actions .primary{flex:1}}
 .theme-root{--bg:#f3f5ef;--surface:#fffefa;--surface2:#f0f3ec;--border:#e0e4dc;--text:#173a33;--muted:#7e8b85;--green:#143f35;--accent:#b7e86a;background:var(--bg);color:var(--text)}.theme-root.dark-theme{--bg:#071d19;--surface:#102d26;--surface2:#173b32;--border:#24483e;--text:#e6efe7;--muted:#9db2a8;--green:#0d3028;--accent:#c5ef70;background:var(--bg);color:var(--text)}
 .modal-scrim{position:fixed;inset:0;display:grid;place-items:center;padding:18px;background:#061a15a6;z-index:1000}.connect-modal{width:min(100%,500px);max-height:90vh;overflow-y:auto;padding:20px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:14px;box-shadow:0 20px 65px #0003}.modal-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:17px}.modal-title h3{font:600 17px Manrope,sans-serif;margin:6px 0 0}.connect-modal label{display:grid;gap:5px;font-size:10px;font-weight:700;margin-bottom:12px;color:var(--muted)}.connect-modal input,.connect-modal select{width:100%;padding:10px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-size:11px}.modal-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.modal-disclaimer{font-size:9px;line-height:1.5;color:var(--muted);background:var(--surface2);padding:9px;border-radius:7px}.citizen-app .intro-actions{align-items:center}.transit-option{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--border);font-size:10px}.transit-option>div{display:flex;flex-direction:column;gap:4px}.transit-option small,.transit-option>span{color:var(--muted);font-size:9px}
+
+/* Shared brand and premium responsive refinements */
+.brand{align-items:center;min-width:0}
+.brand-icon-image{display:block;width:38px;height:38px;border-radius:11px;flex:0 0 auto;object-fit:cover}
+.brand-wordmark{min-width:0}
+.brand-wordmark b{letter-spacing:-.45px}
+.brand-wordmark small{white-space:normal;line-height:1.35}
+.panel,.kpi,.metric-card,.shortcut-card,.route-widget,.aqiv-info-panel,.traffic-capture-panel,.traffic-results-panel{transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease}
+@media(hover:hover){.panel:hover,.kpi:hover,.metric-card:hover{border-color:color-mix(in srgb,var(--border) 55%,#91b86b);box-shadow:0 10px 28px #173b3310}.shortcut-card:hover{transform:translateY(-2px);border-color:#a9c78b}}
+button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
+img,video,canvas,svg{max-width:100%}

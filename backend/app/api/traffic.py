@@ -2,6 +2,8 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+import httpx
+from app.core.config import settings
 from app.db import get_db
 from app.dependencies import require_ingestion_access, require_roles
 from app.models import Junction, TrafficObservation, CityCluster
@@ -10,6 +12,41 @@ from app.services.common import audit, utc_now
 from app.services.predictions import maybe_refresh_forecasts
 
 router = APIRouter(prefix="/traffic", tags=["Traffic intelligence"])
+
+
+@router.get("/current")
+def current_traffic(latitude: float = Query(default=28.6139, ge=-90, le=90), longitude: float = Query(default=77.2090, ge=-180, le=180)):
+    """Fetch a current road segment snapshot from TomTom when configured. The API key stays server side."""
+    if not settings.tomtom_api_key:
+        return {
+            "provider": "TomTom Traffic Flow", "configured": False, "mode": "unavailable",
+            "message": "Traffic data is not connected yet. Add TOMTOM_API_KEY to the backend environment to enable current road flow data.",
+            "latitude": latitude, "longitude": longitude, "observed_at": None, "flow": None,
+        }
+    url = "https://api.tomtom.com/traffic/services/4/flowSegmentData/relative/10/json"
+    try:
+        response = httpx.get(url, params={"point": f"{latitude},{longitude}", "key": settings.tomtom_api_key}, timeout=12)
+        response.raise_for_status()
+        payload = response.json().get("flowSegmentData") or {}
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (401, 403):
+            raise HTTPException(status_code=502, detail="TomTom rejected the configured traffic API key. Check its permissions and quota.") from exc
+        raise HTTPException(status_code=502, detail="The traffic provider could not return a current road flow snapshot.") from exc
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="The traffic provider is temporarily unavailable.") from exc
+    return {
+        "provider": "TomTom Traffic Flow", "configured": True, "mode": "provider",
+        "latitude": latitude, "longitude": longitude, "observed_at": utc_now().isoformat(),
+        "flow": {
+            "current_speed_kmph": payload.get("currentSpeed"),
+            "free_flow_speed_kmph": payload.get("freeFlowSpeed"),
+            "current_travel_time_seconds": payload.get("currentTravelTime"),
+            "free_flow_travel_time_seconds": payload.get("freeFlowTravelTime"),
+            "confidence": payload.get("confidence"), "road_closed": payload.get("roadClosure"),
+            "frc": payload.get("frc"),
+        },
+        "note": "Road segment flow snapshot from the configured provider. Coverage depends on provider availability at the selected coordinates.",
+    }
 
 
 @router.get("/junctions", response_model=list[JunctionOut])

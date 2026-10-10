@@ -30,3 +30,14 @@
 5. Confirm Render has enough RAM for PyTorch/Ultralytics CPU inference. A small free instance may not be sufficient; frontend sample mode is a fallback, not a substitute for verified model output.
 6. Deploy frontend source to Vercel and confirm `VITE_API_URL` points to the backend base ending in `/api/v1`, and backend `CORS_ORIGINS` includes the exact Vercel origin without a trailing slash.
 7. Test camera permission on HTTPS and image upload on desktop and mobile. Live scan is repeated frame sampling, not object tracking; do not describe its counts as unique vehicles or measured real-time congestion.
+
+
+## Authority only traffic model and public traffic data
+
+The YOLO image model is available in the authority workspace at `/authority/traffic-model`; it is no longer a citizen navigation item. A successful model inference can be sent to a selected registered junction to create a traffic observation and a draft signal recommendation. A single image supplies vehicle counts only. It does not measure queue length, lane demand, or speed, so those values are not invented.
+
+Citizen traffic conditions use the backend `/api/v1/traffic/current` adapter. Configure `TOMTOM_API_KEY` in the backend environment to enable TomTom Flow Segment Data. The key is never exposed to the frontend. Without a key, the API returns a clear not configured state rather than fake live readings.
+
+SUMO is not automatically installed or run by this project. Signal plan simulation currently uses the existing analytical what if engine and explicitly returns `sumo_run: false`. A genuine SUMO run requires a SUMO installation plus a compatible network file and route or demand inputs for the target junction. Do not present the analytical result as a SUMO result.
+
+The supplied AQI checkpoint, label encoder, preprocessor and model configuration are preserved unchanged. No retraining was performed, so the reported model accuracy is unchanged and has not been independently improved by this integration.

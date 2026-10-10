@@ -6,7 +6,7 @@ import { API_BASE_URL } from '../../services/api/client.js';
 export default function SettingsPage() {
   const { dark, setDark, language, toggleLanguage } = useApp();
   return <>
-    <PageIntro eyebrow="PREFERENCES" title="Settings" description="Simple UrbanSaarthi demo preferences. No account or sign-in is required." />
+    <PageIntro eyebrow="PREFERENCES" title="Settings" description="Simple UrbanSaarthi preferences. No account or sign in is required." />
     <section className="panel settings-panel">
       <h3><Users size={17}/> Demo workspace</h3>
       <div className="setting-row"><div><b>Access mode</b><small>Citizen and authority portals open directly in this demo build.</small></div><span className="setting-value">Demo mode · No login</span></div>

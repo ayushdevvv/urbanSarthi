@@ -39,3 +39,7 @@ The supplied notebook reports 82.09% test accuracy and 0.7226 macro F1. The repo
 5. Verify the existing `GET /api/v1/traffic-detection/status` and perform one actual traffic inference too. Loading both models can consume significant RAM; small Render instances may need more memory or separated inference workers.
 6. Deploy the frontend to Vercel with `frontend` as root directory and `VITE_API_URL` pointing to the backend URL ending in `/api/v1`. Ensure the backend's CORS allow-list includes the exact Vercel origin.
 7. Test the camera feature on HTTPS on both desktop and mobile. It captures the front and rear images separately; it does not record continuously.
+
+## Final repair note
+
+The AQI page previously referenced `useCallback` without importing it. That caused a render error and prevented AQI Vision from appearing correctly. The import is now fixed. See `FINAL_QA.md` for the checks performed and the remaining deployment verification items.

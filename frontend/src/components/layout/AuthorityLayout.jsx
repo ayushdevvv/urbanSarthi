@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, Bell, ChevronRight, HelpCircle, Database, House, Map, Menu, Moon, Settings, Sun, Wind, Zap } from 'lucide-react';
+import { BarChart3, Bell, ChevronRight, HelpCircle, Database, House, Map, Menu, Camera, Moon, Settings, Sun, Wind, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 
@@ -8,6 +8,7 @@ const navGroups = [
   { label: 'WORKSPACE', items: [
     { label: 'Live control centre', to: '/authority/control', icon: Map, code: 'ICCC' },
     { label: 'Signal plans', to: '/authority/signals', icon: Zap },
+    { label: 'Traffic model lab', to: '/authority/traffic-model', icon: Camera },
     { label: 'Analytics', to: '/authority/analytics', icon: BarChart3 },
   ]},
   { label: 'MANAGE', items: [
@@ -18,6 +19,7 @@ const navGroups = [
 const meta = {
   '/authority/control': ['Delhi ICCC', 'Live authority control centre'],
   '/authority/signals': ['Network control', 'Signal plans'],
+  '/authority/traffic-model': ['Computer vision', 'Traffic model lab'],
   '/authority/analytics': ['Performance', 'City analytics'],
   '/authority/sources': ['Manage', 'Data sources'],
   '/authority/settings': ['Manage', 'Settings'],
@@ -30,6 +32,7 @@ export default function AuthorityLayout() {
   const navigate = useNavigate();
   const [crumb, title] = meta[location.pathname] || meta['/authority/control'];
   return <div className={`app authority-app ${dark ? 'dark' : ''}`}>
+    {mobileOpen && <button className="sidebar-scrim" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />}
     <aside className={`sidebar ${mobileOpen ? 'show' : ''}`}>
       <BrandMark />
       <div className="nav-area">{navGroups.map((group) => <section key={group.label}>
@@ -39,7 +42,7 @@ export default function AuthorityLayout() {
         </NavLink>)}
       </section>)}</div>
       <div className="system"><div className="online-dot"/><b>API configuration</b><p>{(import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL) ? 'Custom API endpoint set' : 'Using local API default'}</p></div>
-      <div className="profile"><div className="avatar">US</div><div><b>UrbanSaarthi Demo</b><small>Authority workspace</small></div><ChevronRight size={17}/></div>
+      <div className="profile"><div className="avatar">US</div><div><b>UrbanSaarthi Operations</b><small>Authority workspace</small></div><ChevronRight size={17}/></div>
       <button className="switch" onClick={() => navigate('/')}>← Switch portal</button>
     </aside>
     <main className="main"><header className="topbar">
@@ -49,7 +52,7 @@ export default function AuthorityLayout() {
         <button className="utility" onClick={() => setDark(!dark)}>{dark ? <Sun size={15}/> : <Moon size={15}/>} {dark ? 'Light' : 'Dark'}</button>
         <button className="utility" onClick={toggleLanguage}><span className="hindi">हि</span>{language === 'EN' ? 'हिंदी' : 'English'}</button>
         <button className="utility" onClick={() => navigate('/')}><House size={15}/> Main portal</button>
-        <button className="icon-btn" aria-label="Help" onClick={() => notify('UrbanSaarthi command-centre help')}><HelpCircle size={18}/></button>
+        <button className="icon-btn" aria-label="Help" onClick={() => notify('UrbanSaarthi command centre help')}><HelpCircle size={18}/></button>
         <button className="icon-btn" aria-label="Alerts" onClick={() => navigate('/authority/control')}><Bell size={18}/></button>
       </div>
     </header><div className="content"><Outlet /></div></main>

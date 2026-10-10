@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Activity, AlertTriangle, Camera, CheckCircle2, CloudOff, FlaskConical, ImagePlus, Leaf, LoaderCircle, RotateCcw, ShieldCheck, Sparkles, Upload, Wind } from 'lucide-react';
 import PageIntro from '../../components/shared/PageIntro.jsx';
 import { api } from '../../services/api/client.js';
@@ -16,7 +16,7 @@ function makeSampleResult() {
       { category: 'Poor', probability: 8 }, { category: 'Satisfactory', probability: 6 },
       { category: 'Severe', probability: 2 }, { category: 'Very Poor', probability: 2 },
     ],
-    note: 'Illustrative sample only. The AQI model did not return this result; it does not describe your photos or current air conditions.',
+    note: 'Example values are shown because the model service did not return a result. They do not describe your photos or current air conditions.',
   };
 }
 
@@ -180,7 +180,7 @@ export default function AqiVisionPage() {
     event.preventDefault();
     if (busy) return;
     if (!files.front || !files.rear) {
-      setError('Add both a front road image and a rear road image before running the model.');
+      setError('Add both a front road photo and a rear road photo before running the model.');
       return;
     }
     const numericRules = [
@@ -208,7 +208,7 @@ export default function AqiVisionPage() {
       const message = e?.message || 'AQI analysis did not complete.';
       // Only infrastructure/model failures use the explicit demo fallback; input errors stay actionable.
       if (!e?.status || e.status === 404 || e.status >= 500) {
-        setError(`${message} The model did not produce this result, so a labelled sample preview is shown.`);
+        setError(`${message} The model did not produce this result, so a example report is shown.`);
         setResult(makeSampleResult());
       } else {
         setError(message);
@@ -229,7 +229,7 @@ export default function AqiVisionPage() {
       action={<span className={`traffic-model-pill ${status?.ready ? 'ready' : 'pending'}`}><span />{status?.ready ? 'Model files detected' : 'Model service unconfirmed'}</span>}
     />
 
-    {!status?.ready && <div className="aqiv-inline-note"><CloudOff size={17} /><span><b>Model service not confirmed.</b> You can prepare the inputs. If inference fails, the page uses a clearly labelled sample preview, never a fake model result.</span></div>}
+    {!status?.ready && <div className="aqiv-inline-note"><CloudOff size={17} /><span><b>Model service not connected.</b> You can prepare the inputs. If inference fails, the page uses a example preview, never a fake model result.</span></div>}
 
     <div className="aqiv-hero-grid">
       <section className="panel aqiv-capture-panel">
@@ -304,24 +304,24 @@ export default function AqiVisionPage() {
     </div>
 
     <section className={`panel aqiv-result-panel ${hasResult ? 'has-result' : ''}`}>
-      <div className="traffic-panel-heading"><div><span className="traffic-kicker">STEP 03 · MODEL OUTPUT</span><h3>Prediction report</h3><p>Confidence describes the model's distribution for this input, not a guarantee of real-world accuracy.</p></div>{hasResult && <span className={`traffic-status-label ${isSample ? 'sample' : ''}`}>{isSample ? 'SAMPLE ONLY' : 'MODEL RESULT'}</span>}</div>
+      <div className="traffic-panel-heading"><div><span className="traffic-kicker">STEP 03 · MODEL OUTPUT</span><h3>Prediction report</h3><p>Confidence describes the model's distribution for this input, not a guarantee of real world accuracy.</p></div>{hasResult && <span className={`traffic-status-label ${isSample ? 'sample' : ''}`}>{isSample ? 'EXAMPLE' : 'MODEL RESULT'}</span>}</div>
       {!hasResult ? <div className="aqiv-result-empty"><span><Leaf size={24}/></span><b>Your report will appear here</b><p>Capture or upload both views, enter the six required fields, then run the model.</p><div className="aqiv-result-steps"><i>1</i> Images <span>→</span> <i>2</i> Readings <span>→</span> <i>3</i> Prediction</div></div> : <>
         <div className="aqiv-result-summary">
           <div className={`aqiv-category-orb category-${(result.predicted_category || 'moderate').toLowerCase().replaceAll(' ', '-')}`}><span>{isSample ? <FlaskConical size={26}/> : <Wind size={26}/>}</span></div>
-          <div className="aqiv-result-main"><span>{isSample ? 'ILLUSTRATIVE SAMPLE' : 'PREDICTED AQI CATEGORY'}</span><h2>{result.predicted_category}</h2><p>{isSample ? result.note : (CATEGORY_HELP[result.predicted_category] || result.note)}</p></div>
+          <div className="aqiv-result-main"><span>{isSample ? 'EXAMPLE REPORT' : 'PREDICTED AQI CATEGORY'}</span><h2>{result.predicted_category}</h2><p>{isSample ? result.note : (CATEGORY_HELP[result.predicted_category] || result.note)}</p></div>
           <div className="aqiv-confidence"><b>{Number(result.confidence).toFixed(1)}<small>%</small></b><span>MODEL CONFIDENCE</span></div>
         </div>
-        <div className="aqiv-probabilities"><div className="aqiv-prob-heading"><b>Category probabilities</b><small>{isSample ? 'Illustrative values only' : 'Model output · not calibrated as a probability of true AQI'}</small></div>
+        <div className="aqiv-probabilities"><div className="aqiv-prob-heading"><b>Category probabilities</b><small>{isSample ? 'Example values' : 'Model output · not calibrated as a probability of true AQI'}</small></div>
           {(result.probabilities || []).map((item) => <div className="aqiv-prob-row" key={item.category}><span>{item.category}</span><div><i style={{ width: `${Math.min(100, Math.max(0, Number(item.probability) || 0))}%` }}/></div><b>{Number(item.probability).toFixed(1)}%</b></div>)}
         </div>
         {result.inputs && <div className="aqiv-used-inputs"><b>Inputs used</b><div><span>PM2.5 <b>{result.inputs['PM2.5']} µg/m³</b></span><span>PM10 <b>{result.inputs.PM10} µg/m³</b></span><span>Temperature <b>{result.inputs.Temperature} °C</b></span><span>Humidity <b>{result.inputs.Humidity}%</b></span><span>Season <b>{result.inputs.Season}</b></span><span>Time <b>{result.inputs.Day_or_Night}</b></span></div></div>}
-        <div className={`aqiv-result-disclaimer ${isSample ? 'sample' : ''}`}><AlertTriangle size={15}/><span>{isSample ? 'This sample is not generated by the trained model and does not describe your conditions.' : result.note}</span></div>
+        <div className={`aqiv-result-disclaimer ${isSample ? 'sample' : ''}`}><AlertTriangle size={15}/><span>{isSample ? 'These example values are not generated by the trained model and do not describe your conditions.' : result.note}</span></div>
         <button className="traffic-secondary aqiv-reset-result" onClick={() => { setResult(null); setError(''); }}><RotateCcw size={14}/> Clear report and try again</button>
       </>}
     </section>
 
     <div className="aqiv-bottom-grid">
-      <section className="panel aqiv-info-panel"><span className="traffic-kicker">HOW IT WORKS</span><h3>Built for paired road imagery</h3><div className="aqiv-info-row"><i>01</i><span><b>Two image encoders</b><small>Separate ResNet18 branches process the front and rear road views resized to the training size.</small></span></div><div className="aqiv-info-row"><i>02</i><span><b>Sensor preprocessing</b><small>The supplied scaler and one-hot encoder transform the six fields into the nine features expected by the saved network.</small></span></div><div className="aqiv-info-row"><i>03</i><span><b>Category prediction</b><small>The classifier returns one of six labels and a softmax distribution. It does not return a numeric AQI.</small></span></div></section>
+      <section className="panel aqiv-info-panel"><span className="traffic-kicker">HOW IT WORKS</span><h3>Built for paired road imagery</h3><div className="aqiv-info-row"><i>01</i><span><b>Two image encoders</b><small>Separate ResNet18 branches process the front and rear road views resized to the training size.</small></span></div><div className="aqiv-info-row"><i>02</i><span><b>Sensor preprocessing</b><small>The supplied scaler and one hot encoder transform the six fields into the nine features expected by the saved network.</small></span></div><div className="aqiv-info-row"><i>03</i><span><b>Category prediction</b><small>The classifier returns one of six labels and a softmax distribution. It does not return a numeric AQI.</small></span></div></section>
       <section className="panel aqiv-info-panel aqiv-limits-panel"><span className="traffic-kicker">IMPORTANT LIMITS</span><h3>Read the result responsibly</h3><div className="aqiv-limit-line"><CheckCircle2 size={15}/><span><b>Model checkpoint verified</b><small>Loaded with the architecture and preprocessing provided in the uploaded notebook.</small></span></div><div className="aqiv-limit-line"><AlertTriangle size={15}/><span><b>Not an official reading</b><small>Use a trusted sensor or official monitoring station for the numeric AQI and health guidance.</small></span></div><div className="aqiv-limit-line"><Activity size={15}/><span><b>Training results are not independent validation</b><small>The notebook reports 82.09% test accuracy and macro F1 0.7226; deployment accuracy can differ.</small></span></div></section>
     </div>
   </div>;

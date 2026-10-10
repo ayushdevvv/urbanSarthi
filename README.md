@@ -96,3 +96,7 @@ The interface uses the uploaded UrbanSaarthi references as the visual target: li
 The AQI Vision page is available at `/citizen/aqi-vision`; the existing `/citizen/air-quality` station-observation view remains separate. The model uses two road images (front + rear) and six supplied values (`PM2.5`, `PM10`, temperature, humidity, season, and day/night). The trained model is loaded lazily from `backend/models/aqi/`. See `AQI_VISION_IMPLEMENTATION.md` for the architecture, status endpoint, input schema, validation, and deployment checks.
 
 The model predicts one of six categories (`Good`, `Moderate`, `Poor`, `Satisfactory`, `Severe`, `Very Poor`). It does not calculate a numeric AQI or fetch official station readings. The UI only shows the sample preview if the API/model service is unavailable; the sample is explicitly labelled and cannot be mistaken for a real prediction.
+
+## Final quality check
+
+See [`FINAL_QA.md`](./FINAL_QA.md) for the AQI page render fix, model inference smoke test, responsive refinements, known verification limits, and deployment checklist.

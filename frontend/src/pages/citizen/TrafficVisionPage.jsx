@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Activity, AlertTriangle, Camera, CheckCircle2, ChevronRight, CircleHelp, CloudOff, ImagePlus, LoaderCircle, RefreshCw, ScanLine, ShieldCheck, Sparkles, Upload, Video, VideoOff, X } from 'lucide-react';
 import PageIntro from '../../components/shared/PageIntro.jsx';
 import { api } from '../../services/api/client.js';
@@ -9,7 +10,7 @@ const VEHICLE_LABELS = { car: 'Cars', bus: 'Buses', motorbike: 'Motorbikes', bic
 function makeDemoResult() {
   const total = Object.values(DEMO_COUNTS).reduce((sum, count) => sum + count, 0);
   return {
-    mode: 'sample', model: 'Sample preview', counts: DEMO_COUNTS, total_vehicles: total,
+    mode: 'sample', model: 'Example preview', counts: DEMO_COUNTS, total_vehicles: total,
     total_detections: total + 2, congestion_estimate: 'High',
     congestion_note: 'Illustrative sample only. These counts were not detected from your image or camera.',
     detections: [],
@@ -28,6 +29,11 @@ export default function TrafficVisionPage() {
   const [error, setError] = useState('');
   const [confidence, setConfidence] = useState(0.25);
   const [cameraError, setCameraError] = useState('');
+  const [junctions, setJunctions] = useState([]);
+  const [junctionId, setJunctionId] = useState('');
+  const [signalBusy, setSignalBusy] = useState(false);
+  const [signalMessage, setSignalMessage] = useState('');
+  const navigate = useNavigate();
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const canvasRef = useRef(null);
@@ -36,6 +42,7 @@ export default function TrafficVisionPage() {
 
   useEffect(() => {
     let alive = true;
+    api.get('/traffic/junctions').then((items) => { if (alive) { setJunctions(Array.isArray(items) ? items : []); if (items?.length) setJunctionId(String(items[0].id)); } }).catch(() => {});
     api.get('/traffic-detection/status').then((data) => { if (alive) setStatus(data); }).catch(() => {
       if (alive) setStatus({ ready: false, weights_present: false, inference_dependency_available: false });
     });
@@ -158,15 +165,32 @@ export default function TrafficVisionPage() {
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [liveScan, cameraActive, runAnalysis]);
 
+  const useForSignalPlan = async () => {
+    if (!result || result.mode !== 'model') return;
+    if (!junctionId) { setSignalMessage('Create or register a junction in the authority workspace first.'); return; }
+    setSignalBusy(true); setSignalMessage('');
+    try {
+      await api.post('/traffic/observations', {
+        junction_id: Number(junctionId), source: 'yolo11_image_detection', vehicle_count: Number(result.total_vehicles || 0),
+        queue_length_m: 0, congestion_score: Math.min(100, Math.round((Number(result.total_vehicles || 0) / 20) * 100)),
+        detection_summary: { model: result.model, counts: result.counts, total_detections: result.total_detections, confidence_threshold: result.confidence_threshold, image_size: result.image_size, caveat: 'Single frame count only. Queue length, speed, and lane demand were not measured.' },
+        lane_demand: {},
+      });
+      const plan = await api.post(`/signals/recommendations/${Number(junctionId)}`, {});
+      setSignalMessage(`Draft signal recommendation created for junction ${junctionId}, plan ${plan.id}.`);
+    } catch (e) { setSignalMessage(e.message || 'Could not create a signal recommendation.'); }
+    finally { setSignalBusy(false); }
+  };
+
   const clearResult = () => { setResult(null); setError(''); };
   const total = result?.total_vehicles ?? 0;
   const isSample = result?.mode === 'sample';
   const imageToShow = result?.annotated_image && !isSample ? `data:image/jpeg;base64,${result.annotated_image}` : preview;
 
   return <div className="traffic-vision-page">
-    <PageIntro eyebrow="COMPUTER VISION · MVP" title="Traffic vision" description="Use your camera or upload a road image. YOLO11 detects vehicles and returns class-wise counts with an annotated frame." action={<span className={`traffic-model-pill ${status?.ready ? 'ready' : 'pending'}`}><span />{status?.ready ? 'Model service ready' : 'Fallback ready'}</span>} />
+    <PageIntro eyebrow="COMPUTER VISION · MVP" title="Traffic vision" description="Use your camera or upload a road image. YOLO11 detects vehicles and returns counts by vehicle type with an annotated frame." action={<span className={`traffic-model-pill ${status?.ready ? 'ready' : 'pending'}`}><span />{status?.ready ? 'Model service ready' : 'Example preview ready'}</span>} />
 
-    {!status?.ready && <div className="traffic-inline-note"><CloudOff size={16}/><span><b>Model service not confirmed.</b> You can still explore the flow; if inference is unavailable, a clearly labelled sample preview appears.</span></div>}
+    {!status?.ready && <div className="traffic-inline-note"><CloudOff size={16}/><span><b>Model service not confirmed.</b> You can still explore the flow; if inference is unavailable, a an example preview is available.</span></div>}
 
     <div className="traffic-hero-grid">
       <section className="panel traffic-capture-panel">
@@ -201,22 +225,23 @@ export default function TrafficVisionPage() {
       <section className="panel traffic-results-panel" aria-live="polite">
         <div className="traffic-panel-heading"><div><span className="traffic-kicker">ANALYSIS OUTPUT</span><h3>Detection summary</h3><p>Vehicle counts are based on one analyzed frame.</p></div>{result && <button className="traffic-icon-button" onClick={clearResult} aria-label="Clear analysis"><RefreshCw size={16}/></button>}</div>
         {result ? <>
-          <div className={`traffic-result-mode ${isSample ? 'sample' : 'actual'}`}><span>{isSample ? <Sparkles size={15}/> : <CheckCircle2 size={15}/>}</span><div><b>{isSample ? 'Sample preview' : 'YOLO11 analysis complete'}</b><small>{isSample ? 'Illustrative values · not detected from your scene' : 'Model output · uploaded frame is not stored by this feature'}</small></div></div>
-          <div className="traffic-total-card"><div><span>Total vehicles detected</span><b>{total}</b><small>{isSample ? 'Sample count' : `${result.total_detections} total objects detected, including non-vehicle classes`}</small></div><div className={`traffic-level level-${String(result.congestion_estimate || 'low').toLowerCase()}`}><span>{isSample ? 'Example level' : 'Preliminary level'}</span><b>{result.congestion_estimate}</b></div></div>
+          <div className={`traffic-result-mode ${isSample ? 'sample' : 'actual'}`}><span>{isSample ? <Sparkles size={15}/> : <CheckCircle2 size={15}/>}</span><div><b>{isSample ? 'Example preview' : 'YOLO11 analysis complete'}</b><small>{isSample ? 'Example values · not detected from your scene' : 'Model output · uploaded frame is not stored by this feature'}</small></div></div>
+          <div className="traffic-total-card"><div><span>Total vehicles detected</span><b>{total}</b><small>{isSample ? 'Example count' : `${result.total_detections} total objects detected, including other classes`}</small></div><div className={`traffic-level level-${String(result.congestion_estimate || 'low').toLowerCase()}`}><span>{isSample ? 'Example level' : 'Preliminary level'}</span><b>{result.congestion_estimate}</b></div></div>
           <div className="traffic-count-list">{Object.entries(VEHICLE_LABELS).map(([key, label]) => <div className="traffic-count-row" key={key}><span><i className={`vehicle-dot ${key}`}/>{label}</span><b>{result.counts?.[key] ?? 0}</b><div className="traffic-count-track"><i style={{ width: `${Math.min(100, ((result.counts?.[key] ?? 0) / Math.max(1, ...Object.values(result.counts || {}))) * 100)}%` }}/></div></div>)}</div>
           {result.congestion_note && <p className="traffic-result-note"><CircleHelp size={15}/>{result.congestion_note}</p>}
           {result.detections?.length > 0 && <div className="traffic-detection-footer">{result.detections.length} objects · {Math.round(confidence * 100)}% confidence threshold</div>}
+          {!isSample && <div className="traffic-signal-bridge"><label>Use this frame for a draft signal plan<select value={junctionId} onChange={(e) => setJunctionId(e.target.value)}><option value="">Select junction</option>{junctions.map((j) => <option key={j.id} value={j.id}>{j.name} · {j.id}</option>)}</select></label><button className="primary" onClick={useForSignalPlan} disabled={signalBusy || !junctionId}>{signalBusy ? 'Preparing plan…' : 'Create signal recommendation'}</button>{signalMessage && <p>{signalMessage}</p>}<small>Single image detections do not measure queue length, speed, or lane specific demand. Review the draft before simulation.</small><button className="traffic-secondary" onClick={() => navigate('/authority/signals')}>Open signal plans</button></div>}
         </> : <div className="traffic-results-empty"><div className="traffic-results-icon"><ScanLine size={25}/></div><b>Your results will appear here</b><p>Start the camera or upload a road image, then analyze a frame to see vehicle counts and detections.</p><div className="traffic-mini-steps"><span><i>01</i> Capture</span><ChevronRight size={14}/><span><i>02</i> Detect</span><ChevronRight size={14}/><span><i>03</i> Review</span></div></div>}
       </section>
     </div>
 
-    {result && <section className="panel traffic-annotated-panel"><div className="traffic-panel-heading"><div><span className="traffic-kicker">FRAME REVIEW</span><h3>{isSample ? 'Preview frame' : 'Annotated frame'}</h3><p>{isSample ? 'No real bounding boxes are generated in fallback mode.' : 'Boxes and labels are drawn by the supplied YOLO11 model.'}</p></div><span className="traffic-status-label">{isSample ? 'SAMPLE' : 'MODEL OUTPUT'}</span></div>
-      {imageToShow ? <div className="traffic-annotated-image"><img src={imageToShow} alt={isSample ? 'Sample preview frame, not model annotated' : 'Road image with YOLO11 detection boxes'}/>{isSample && <div className="traffic-sample-watermark">SAMPLE PREVIEW · NOT MODEL OUTPUT</div>}</div> : <div className="empty-state"><b>No frame preview available</b><p>Analyze a camera frame or upload an image to display the visual result.</p></div>}
+    {result && <section className="panel traffic-annotated-panel"><div className="traffic-panel-heading"><div><span className="traffic-kicker">FRAME REVIEW</span><h3>{isSample ? 'Preview frame' : 'Annotated frame'}</h3><p>{isSample ? 'This example has no model generated detection boxes.' : 'Boxes and labels are drawn by the supplied YOLO11 model.'}</p></div><span className="traffic-status-label">{isSample ? 'EXAMPLE' : 'MODEL OUTPUT'}</span></div>
+      {imageToShow ? <div className="traffic-annotated-image"><img src={imageToShow} alt={isSample ? 'Example preview frame, example image without model annotations' : 'Road image with YOLO11 detection boxes'}/>{isSample && <div className="traffic-sample-watermark">EXAMPLE PREVIEW</div>}</div> : <div className="empty-state"><b>No frame preview available</b><p>Analyze a camera frame or upload an image to display the visual result.</p></div>}
     </section>}
 
     <div className="traffic-bottom-grid">
-      <section className="panel traffic-how-panel"><div className="traffic-panel-heading"><div><span className="traffic-kicker">HOW IT WORKS</span><h3>From frame to insight</h3></div></div><div className="traffic-how-steps"><div><span>01</span><div><b>Capture a scene</b><p>Use a device camera or select a road image.</p></div></div><div><span>02</span><div><b>YOLO11 inference</b><p>The backend detects trained classes at a 640-pixel inference size.</p></div></div><div><span>03</span><div><b>Review counts</b><p>Cars, buses, motorbikes and bicycles are counted separately.</p></div></div></div></section>
-      <section className="panel traffic-limits-panel"><div className="traffic-panel-heading"><div><span className="traffic-kicker">TRANSPARENT BY DESIGN</span><h3>What this MVP can tell you</h3></div></div><div className="traffic-limit-row"><CheckCircle2 size={16}/><span><b>Vehicle detections</b><small>For the five classes in the supplied project: bicycle, bus, car, motorbike and person.</small></span></div><div className="traffic-limit-row"><AlertTriangle size={16}/><span><b>Not a live traffic-flow metric</b><small>Count-based Low / Medium / High thresholds are preliminary and vary with camera angle and road size.</small></span></div><div className="traffic-limit-row"><ShieldCheck size={16}/><span><b>Camera privacy</b><small>Camera stays in your browser; only a frame is sent when you analyze. No audio is requested.</small></span></div></section>
+      <section className="panel traffic-how-panel"><div className="traffic-panel-heading"><div><span className="traffic-kicker">HOW IT WORKS</span><h3>From frame to insight</h3></div></div><div className="traffic-how-steps"><div><span>01</span><div><b>Capture a scene</b><p>Use a device camera or select a road image.</p></div></div><div><span>02</span><div><b>YOLO11 inference</b><p>The backend detects trained classes at a 640 pixel inference size.</p></div></div><div><span>03</span><div><b>Review counts</b><p>Cars, buses, motorbikes and bicycles are counted separately.</p></div></div></div></section>
+      <section className="panel traffic-limits-panel"><div className="traffic-panel-heading"><div><span className="traffic-kicker">TRANSPARENT BY DESIGN</span><h3>What this MVP can tell you</h3></div></div><div className="traffic-limit-row"><CheckCircle2 size={16}/><span><b>Vehicle detections</b><small>For the five classes in the supplied project: bicycle, bus, car, motorbike and person.</small></span></div><div className="traffic-limit-row"><AlertTriangle size={16}/><span><b>Not a live traffic flow metric</b><small>Vehicle count thresholds for low, medium, or high congestion are preliminary and vary with camera angle and road size.</small></span></div><div className="traffic-limit-row"><ShieldCheck size={16}/><span><b>Camera privacy</b><small>Camera stays in your browser; only a frame is sent when you analyze. No audio is requested.</small></span></div></section>
     </div>
   </div>;
 }

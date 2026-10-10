@@ -19,6 +19,7 @@ def integration_status(db: Session = Depends(get_db), user=Depends(require_roles
         "generated_at": utc_now().isoformat(),
         "providers": {
             "openaq": {"configured": bool(settings.openaq_api_key), "mode": "pull" if settings.openaq_api_key else "not_configured", "api_version": "v3"},
+            "tomtom_traffic": {"configured": bool(settings.tomtom_api_key), "mode": "current road flow API" if settings.tomtom_api_key else "not_configured", "key_server_side_only": True},
             "cpcb": {"configured": any(s.source_type == "cpcb" and s.status not in {"not_configured", "offline"} for s in sources), "mode": "authorized source adapter / ingestion endpoint"},
             "gtfs_static": {"configured": bool(db.scalar(select(TransitRoute.id).limit(1))) and bool(db.scalar(select(TransitStop.id).limit(1))), "mode": "GTFS file import"},
             "routing": {"configured": bool(settings.osrm_base_url), "mode": "OSRM" if settings.osrm_base_url else "transparent heuristic fallback"},

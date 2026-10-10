@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
     osrm_base_url: str = ""
     openaq_api_key: str = ""
+    tomtom_api_key: str = ""
     model_path: str = ""
     gtfs_max_upload_mb: int = 30
     auto_refresh_forecasts: bool = True

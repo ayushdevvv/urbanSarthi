@@ -8,7 +8,7 @@ const links = [
   { to: '/citizen/plan', label: 'Plan a trip', icon: Route },
   { to: '/citizen/air-quality', label: 'Air quality', icon: Activity },
   { to: '/citizen/aqi-vision', label: 'AQI Vision', icon: Wind },
-  { to: '/citizen/traffic-vision', label: 'Traffic AI', icon: Camera },
+  { to: '/citizen/traffic', label: 'Traffic conditions', icon: Camera },
   { to: '/citizen/transit', label: 'Public transport', icon: Bus },
   { to: '/citizen/trips', label: 'My trips', icon: MapPin },
 ];
@@ -27,6 +27,6 @@ export default function CitizenLayout() {
       </div>
     </header>
     <main className="citizen-content"><Outlet /></main>
-    <footer className="citizen-footer"><span>UrbanSaarthi India · Multi-city platform</span><span>Aligned with India’s Smart Cities Mission</span><span>Emergency: 112</span></footer>
+    <footer className="citizen-footer"><span>UrbanSaarthi India · Multiple cities platform</span><span>Aligned with India’s Smart Cities Mission</span><span>Emergency: 112</span></footer>
   </div>;
 }
