@@ -5,29 +5,3 @@
 .aqiv-captured-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.aqiv-captured-card{display:flex;align-items:center;gap:9px;min-width:0;padding:8px;border:1px solid var(--border);border-radius:9px;background:var(--surface)}.aqiv-captured-card.filled{border-color:#c1d7ae}.dark .aqiv-captured-card.filled{border-color:#456148}.aqiv-captured-thumb{display:grid;place-items:center;width:62px;height:52px;flex-shrink:0;overflow:hidden;background:var(--surface2);border-radius:6px;color:var(--muted)}.aqiv-captured-thumb img{width:100%;height:100%;object-fit:cover}.aqiv-captured-details{min-width:0;display:grid;gap:4px}.aqiv-captured-details>b{font-size:9px;color:var(--text)}.aqiv-captured-details>small{font-size:8px;color:var(--muted)}.aqiv-captured-details>div{display:flex;flex-wrap:wrap;gap:8px}.aqiv-captured-details button{padding:0;border:0;background:transparent;color:#648843;font-size:8px;font-weight:800}.dark .aqiv-captured-details button{color:#bddb90}
 @media(max-width:560px){.aqiv-captured-grid{grid-template-columns:1fr}.aqiv-captured-thumb{width:72px;height:58px}}
 .aqiv-mode-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 13px}.aqiv-mode-switch button{display:flex;align-items:center;justify-content:center;gap:7px;min-height:39px;padding:9px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--muted);font-size:10px;font-weight:700}.aqiv-mode-switch button.active{border-color:#9fbe7c;background:var(--surface2);color:var(--text)}.aqiv-camera-fields{display:grid;gap:9px;padding:12px;margin:0 0 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface2)}.aqiv-camera-fields p,.aqiv-camera-fields small{margin:0;color:var(--muted);font-size:9px;line-height:1.5}.aqiv-camera-fields label{display:grid;gap:5px;font-size:10px;font-weight:700;color:var(--text)}.aqiv-camera-fields input[type=file]{width:100%;min-width:0;font-size:10px;color:var(--muted)}
-
-/* Location-driven prefill and readable AQI report typography */
-.aqiv-location-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px}
-.aqiv-location-actions .primary{min-height:44px;padding:11px 14px;font-size:13px!important}
-.aqiv-location-actions>span{color:var(--muted);font-size:12px;line-height:1.5;flex:1;min-width:180px}
-.aqiv-external-forecast{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:13px;margin-bottom:15px;border:1px solid var(--border);border-radius:11px;background:var(--surface2)}
-.aqiv-external-forecast>div{display:grid;gap:5px;min-width:0}
-.aqiv-external-forecast small{font-size:11px!important;letter-spacing:.4px;font-weight:850;color:var(--muted)}
-.aqiv-external-forecast b{font-size:17px;color:var(--text);overflow-wrap:anywhere}
-.aqiv-external-forecast p{grid-column:1/-1;margin:0;padding-top:8px;border-top:1px solid var(--border);font-size:12px!important;color:var(--muted);line-height:1.55}
-.aqi-vision-page .traffic-panel-heading h3{font-size:clamp(19px,1.4vw,23px)!important;line-height:1.3}
-.aqi-vision-page .traffic-panel-heading p{font-size:14px!important;line-height:1.65}
-.aqi-vision-page .traffic-kicker{font-size:12px!important;letter-spacing:.7px}
-.aqi-vision-page .aqiv-form-grid label,.aqi-vision-page .aqiv-camera-fields label{font-size:14px!important}
-.aqi-vision-page .aqiv-form-grid label>span,.aqi-vision-page .aqiv-form-grid label>span small{font-size:13px!important}
-.aqi-vision-page .aqiv-form-grid input,.aqi-vision-page .aqiv-form-grid select{min-height:45px;font-size:14px!important}
-.aqi-vision-page .aqiv-mode-switch button,.aqi-vision-page .traffic-secondary,.aqi-vision-page .aqiv-example-link{font-size:13px!important;min-height:44px}
-.aqi-vision-page .aqiv-inline-note,.aqi-vision-page .aqiv-result-disclaimer{font-size:13px!important;line-height:1.65}
-.aqi-vision-page .aqiv-result-empty>b{font-size:17px!important}
-.aqi-vision-page .aqiv-result-empty>p{font-size:14px!important;line-height:1.65}
-.aqi-vision-page .aqiv-result-main>span,.aqi-vision-page .aqiv-confidence>span,.aqi-vision-page .aqiv-prob-heading small,.aqi-vision-page .aqiv-prob-row>span,.aqi-vision-page .aqiv-prob-row>b{font-size:12px!important}
-.aqi-vision-page .aqiv-prob-heading b,.aqi-vision-page .aqiv-used-inputs> b{font-size:14px!important}
-.aqi-vision-page .aqiv-info-row b,.aqi-vision-page .aqiv-limit-line b{font-size:14px!important}
-.aqi-vision-page .aqiv-info-row small,.aqi-vision-page .aqiv-limit-line small{font-size:13px!important;line-height:1.6}
-.aqi-vision-page .traffic-model-pill{font-size:12px!important;padding:9px 12px}
-@media(max-width:560px){.aqiv-external-forecast{gap:8px;padding:10px}.aqiv-external-forecast b{font-size:15px}.aqiv-location-actions{align-items:stretch;flex-direction:column}.aqiv-location-actions>span{min-width:0}}

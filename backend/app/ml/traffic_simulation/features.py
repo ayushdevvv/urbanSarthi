@@ -71,7 +71,7 @@ def add_city_features(df):
     return df.merge(city, on=["run_id", "time_min"], how="left")
 
 
-def build_features(df, with_target, edge_mean):
+def build_features(df, with_target, edge_mean, horizon_min=None):
     """
     Turn raw rows into model features.
 
@@ -108,10 +108,13 @@ def build_features(df, with_target, edge_mean):
     df["edge_mean"] = df["edge_id"].map(edge_mean)
 
     if with_target:
-        # Negative shift looks into the FUTURE: the queue 30 min later
+        # Negative shift looks into the future. The 30-minute model keeps its
+        # historical default; training can request a distinct 60-minute target.
+        target_horizon = int(horizon_min or HORIZON_MIN)
         group = df.groupby(["run_id", "edge_id"])
-        df[TARGET_COLUMN] = group["halting"].shift(-HORIZON_MIN)
-        df = df.dropna(subset=FEATURE_COLUMNS + [TARGET_COLUMN])
+        target_name = f"target_halting_{target_horizon}min"
+        df[target_name] = group["halting"].shift(-target_horizon)
+        df = df.dropna(subset=FEATURE_COLUMNS + [target_name])
     else:
         df = df.dropna(subset=FEATURE_COLUMNS)
 

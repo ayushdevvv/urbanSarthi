@@ -41,8 +41,13 @@ def _congestion_penalty(db: Session) -> tuple[float, datetime | None]:
 
 
 def _estimation_route(mode: str, origin: tuple[float, float], dest: tuple[float, float], congestion: float) -> dict:
+    """Conservative estimate used only when every road-routing provider is unavailable.
+
+    Deliberately omits geometry: drawing a straight line as though it were a road route
+    would be misleading. The frontend can still show the origin and destination pins.
+    """
     direct = haversine_m(origin[0], origin[1], dest[0], dest[1])
-    multipliers = {"driving": 1.28, "walking": 1.10, "cycling": 1.16}
+    multipliers = {"driving": 1.28, "walking": 1.10, "cycling": 1.16, "transit": 1.3}
     road_distance = max(150.0, direct * multipliers.get(mode, 1.2))
     if mode == "driving":
         speed = max(7.0, 32.0 * (1.0 - 0.006 * congestion))
@@ -53,47 +58,72 @@ def _estimation_route(mode: str, origin: tuple[float, float], dest: tuple[float,
     else:
         speed, delay, co2 = 4.5, 0, 0.0
     duration = max(60, int(road_distance / 1000.0 / speed * 3600) + delay)
-    mode_label = {"driving": "Road route estimate", "walking": "Walking estimate", "cycling": "Cycling estimate"}[mode]
+    mode_label = {"driving": "Road route estimate", "walking": "Walking estimate", "cycling": "Cycling estimate", "transit": "Transit estimate"}[mode]
     return {
         "label": mode_label, "mode": mode, "duration_seconds": duration,
         "distance_meters": round(road_distance, 1), "traffic_delay_seconds": delay,
         "pollution_score": None, "estimated_aqi": None, "estimated_co2_grams": co2,
-        "transfers": 0, "provider": "straight-line-heuristic", "data_quality": "estimated",
-        "geometry": {"type": "LineString", "coordinates": [[origin[1], origin[0]], [dest[1], dest[0]]]},
-        "itinerary": {"note": "Not turn-by-turn navigation. Configure OSRM_BASE_URL or another routing provider for road-network geometry."},
-        "warnings": ["Fallback distance and time estimate; no road-network routing provider is configured."],
+        "transfers": 0, "provider": "distance-estimate", "data_quality": "estimated",
+        "geometry": {"type": "LineString", "coordinates": []},
+        "itinerary": {"note": "Estimated distance and time only. Turn-by-turn route geometry is unavailable until a road-routing provider responds."},
+        "warnings": ["Road route geometry is unavailable right now; this is a distance/time estimate, not turn-by-turn navigation."],
     }
 
 
-def _osrm_routes(mode: str, origin: tuple[float, float], dest: tuple[float, float]) -> list[dict] | None:
-    if mode != "driving" or not settings.osrm_base_url:
-        return None
-    base = settings.osrm_base_url.rstrip("/")
-    url = f"{base}/route/v1/driving/{origin[1]},{origin[0]};{dest[1]},{dest[0]}"
-    try:
-        response = httpx.get(url, params={"alternatives": "3", "overview": "full", "geometries": "geojson", "steps": "false"}, timeout=5.0)
-        response.raise_for_status()
-        payload = response.json()
-        if payload.get("code") != "Ok" or not payload.get("routes"):
-            return None
-        output = []
-        for i, route in enumerate(payload["routes"][:3]):
-            distance = float(route.get("distance", 0.0))
-            duration = int(float(route.get("duration", 0.0)))
-            output.append({
-                "label": ["Road route A", "Road route B", "Road route C"][i], "mode": "driving",
-                "duration_seconds": duration, "distance_meters": distance, "traffic_delay_seconds": 0,
-                "pollution_score": None, "estimated_aqi": None,
-                "estimated_co2_grams": round(distance / 1000 * 120, 1), "transfers": 0,
-                "provider": "osrm", "data_quality": "road-network-route",
-                "geometry": route.get("geometry") or {},
-                "itinerary": {"provider_summary": "OSRM route response; live traffic is not implied by a standard OSRM routing response."},
-                "warnings": ["OSRM supplies road-network routing; live traffic adjustments require a traffic-aware provider."],
-            })
-        return output
-    except (httpx.HTTPError, ValueError, TypeError, KeyError):
-        return None
+_ROUTING_BASES = {
+    "driving": "https://routing.openstreetmap.de/routed-car",
+    "walking": "https://routing.openstreetmap.de/routed-foot",
+    "cycling": "https://routing.openstreetmap.de/routed-bike",
+}
 
+
+def _osrm_routes(mode: str, origin: tuple[float, float], dest: tuple[float, float]) -> list[dict] | None:
+    if mode not in _ROUTING_BASES:
+        return None
+    # OpenStreetMap routing profiles support car, foot, and bike. If a custom
+    # endpoint is configured, respect it; otherwise try the profile-specific
+    # public router and a second OSRM instance for driving.
+    bases = [settings.osrm_base_url.rstrip("/")] if settings.osrm_base_url else [_ROUTING_BASES[mode]]
+    if not settings.osrm_base_url and mode == "driving":
+        bases.append("https://router.project-osrm.org")
+    for base in bases:
+        url = f"{base}/route/v1/driving/{origin[1]},{origin[0]};{dest[1]},{dest[0]}"
+        try:
+            response = httpx.get(
+                url,
+                params={"alternatives": "3", "overview": "full", "geometries": "geojson", "steps": "false"},
+                headers={"User-Agent": "UrbanSaarthi/1.0 (mobility route planner)"},
+                timeout=9.0,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if payload.get("code") != "Ok" or not payload.get("routes"):
+                continue
+            output = []
+            for i, route in enumerate(payload["routes"][:3]):
+                distance = float(route.get("distance", 0.0))
+                duration = int(float(route.get("duration", 0.0)))
+                geometry = route.get("geometry") or {}
+                coordinates = geometry.get("coordinates") or []
+                # A route without actual road-network coordinates must not be
+                # rendered as a navigable path.
+                if len(coordinates) < 2:
+                    continue
+                output.append({
+                    "label": f"{mode.title()} route {chr(65 + i)}", "mode": mode,
+                    "duration_seconds": duration, "distance_meters": distance, "traffic_delay_seconds": 0,
+                    "pollution_score": None, "estimated_aqi": None,
+                    "estimated_co2_grams": round(distance / 1000 * 120, 1) if mode == "driving" else 0.0, "transfers": 0,
+                    "provider": "OpenStreetMap routing", "data_quality": "road-network-route",
+                    "geometry": geometry,
+                    "itinerary": {"provider_summary": "Route geometry follows the provider's mapped road, footpath, or cycle network. Live traffic is not implied."},
+                    "warnings": ["Travel time is based on mapped network estimates; live traffic may not be included."],
+                })
+            if output:
+                return output
+        except (httpx.HTTPError, ValueError, TypeError, KeyError):
+            continue
+    return None
 
 def build_routes(db: Session, request, user_id: int | None = None) -> dict:
     origin = (request.origin_latitude, request.origin_longitude)
@@ -107,7 +137,8 @@ def build_routes(db: Session, request, user_id: int | None = None) -> dict:
         routes.extend(external if external else [_estimation_route("driving", origin, dest, congestion)])
     for mode in ("walking", "cycling"):
         if mode in request.modes:
-            routes.append(_estimation_route(mode, origin, dest, congestion))
+            external = _osrm_routes(mode, origin, dest)
+            routes.extend(external if external else [_estimation_route(mode, origin, dest, congestion)])
     transit_count_before = len(routes)
     if "transit" in request.modes:
         routes.extend(find_direct_transit_options(db, *origin, *dest, departure_at=request.departure_at))
@@ -123,7 +154,7 @@ def build_routes(db: Session, request, user_id: int | None = None) -> dict:
 
     # Pollution is only reported when recent station observations exist near route points.
     for route in routes:
-        coords = route.get("geometry", {}).get("coordinates") or []
+        coords = (route.get("geometry") or {}).get("coordinates") or []
         sample_points: list[tuple[float, float]] = [(origin[0], origin[1]), (dest[0], dest[1])]
         if len(coords) > 2:
             for index in (len(coords) // 3, 2 * len(coords) // 3):
@@ -196,7 +227,7 @@ def build_routes(db: Session, request, user_id: int | None = None) -> dict:
         "data_freshness": {
             "traffic_last_observed_at": latest_traffic_at.isoformat() if latest_traffic_at else None,
             "aqi_last_observed_at": latest_aqi_at.isoformat() if latest_aqi_at else None,
-            "routing_provider": "OSRM configured" if settings.osrm_base_url else "heuristic fallback for road/walk/cycle",
+            "routing_provider": "Configured OSRM-compatible router" if settings.osrm_base_url else "OpenStreetMap profile routers with estimate-only fallback",
             "aqi_max_age_minutes": 180,
         },
         "warnings": global_warnings,

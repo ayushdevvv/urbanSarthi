@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import httpx
 from math import ceil
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy import select
@@ -38,6 +39,72 @@ def list_stops(db: Session = Depends(get_db), search: str | None = None, latitud
         from app.services.common import haversine_m
         rows = sorted(rows, key=lambda s: haversine_m(latitude, longitude, s.latitude, s.longitude) if s.latitude is not None and s.longitude is not None else float("inf"))
     return rows
+
+
+@router.get("/nearby")
+def nearby_transit(latitude: float = Query(ge=-90, le=90), longitude: float = Query(ge=-180, le=180), radius_m: int = Query(default=2500, ge=250, le=10000), db: Session = Depends(get_db)):
+    """Find mapped stops nearby independently of imported GTFS data."""
+    query = f"[out:json][timeout:12];(node(around:{radius_m},{latitude},{longitude})[\"highway\"=\"bus_stop\"];node(around:{radius_m},{latitude},{longitude})[\"public_transport\"~\"platform|stop_position|station\"];node(around:{radius_m},{latitude},{longitude})[\"railway\"~\"station|halt|tram_stop|subway_entrance\"];way(around:{radius_m},{latitude},{longitude})[\"public_transport\"~\"platform|station\"];way(around:{radius_m},{latitude},{longitude})[\"railway\"~\"station|halt|tram_stop\"];);out center tags 100;"
+    for endpoint in ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"):
+        try:
+            response = httpx.post(endpoint, data={"data": query}, headers={"User-Agent": "UrbanSaarthi/1.0 (transit discovery)"}, timeout=14.0)
+            response.raise_for_status(); elements = response.json().get("elements", []); stops = []
+            from math import asin, cos, radians, sin, sqrt
+            for element in elements:
+                tags = element.get("tags") or {}; center = element.get("center") or {}
+                lat = element.get("lat", center.get("lat")); lon = element.get("lon", center.get("lon"))
+                if lat is None or lon is None: continue
+                lat=float(lat); lon=float(lon); dlat=radians(lat-latitude); dlon=radians(lon-longitude)
+                a=sin(dlat/2)**2+cos(radians(latitude))*cos(radians(lat))*sin(dlon/2)**2
+                distance=6371000*2*asin(sqrt(min(1,a))); railway=tags.get("railway") or ""
+                mode="metro" if "subway" in railway or tags.get("station")=="subway" else "rail" if railway in {"station","halt"} else "tram" if "tram" in railway else "bus"
+                name=tags.get("name") or tags.get("local_ref") or tags.get("ref") or ("Bus stop" if mode=="bus" else f"{mode.title()} stop")
+                stops.append({"id":f"osm-{element.get('type')}-{element.get('id')}","name":name,"mode":mode,"latitude":lat,"longitude":lon,"distance_meters":round(distance),"operator":tags.get("operator"),"network":tags.get("network"),"ref":tags.get("ref"),"wheelchair":tags.get("wheelchair"),"source":"OpenStreetMap","schedule_available":False})
+            stops.sort(key=lambda row: row["distance_meters"])
+            # OSM relations provide route names/modes where mapped; they do not
+            # contain a guaranteed timetable and should never be presented as arrivals.
+            mapped_routes = []
+            route_query = f'[out:json][timeout:12];relation(around:{radius_m},{latitude},{longitude})["type"="route"]["route"~"bus|train|subway|tram|trolleybus"];out tags center 100;'
+            try:
+                route_response = httpx.post(endpoint, data={"data": route_query}, headers={"User-Agent": "UrbanSaarthi/1.0 (transit discovery)"}, timeout=14.0)
+                route_response.raise_for_status()
+                for relation in route_response.json().get("elements", []):
+                    tags = relation.get("tags") or {}
+                    route_type = str(tags.get("route") or "").lower()
+                    if route_type not in {"bus", "train", "subway", "tram", "trolleybus"}:
+                        continue
+                    mapped_routes.append({
+                        "id": f'osm-route-{relation.get("id")}', "external_id": str(relation.get("id")),
+                        "short_name": tags.get("ref") or tags.get("route_ref") or tags.get("local_ref"),
+                        "long_name": tags.get("name") or tags.get("description") or f'{route_type.title()} route',
+                        "mode": "metro" if route_type == "subway" else "bus" if route_type in {"bus", "trolleybus"} else "tram" if route_type == "tram" else "rail",
+                        "agency_name": tags.get("operator") or tags.get("network"),
+                        "route_color": tags.get("colour") or tags.get("color"),
+                        "source": "OpenStreetMap", "schedule_available": False,
+                    })
+            except (httpx.HTTPError, ValueError, TypeError):
+                mapped_routes = []
+            # Relations are often mapped much less completely than stops. Keep only
+            # distinct route IDs so the list is useful without implying a timetable.
+            unique_routes = {route["id"]: route for route in mapped_routes}
+            mapped_routes = list(unique_routes.values())
+            if stops or mapped_routes:
+                note = "Mapped stop locations and route metadata are shown where available. Departure times are only available when an operator timetable or live feed is connected."
+                return {"status":"available","stops":stops[:100],"count":len(stops[:100]),"routes":mapped_routes[:100],"route_count":len(mapped_routes[:100]),"radius_m":radius_m,"provider":"OpenStreetMap","note":note}
+        except (httpx.HTTPError, ValueError, TypeError):
+            continue
+    # Retain imported GTFS stop locations if public map lookup is unavailable or empty.
+    db_stops = list(db.scalars(select(TransitStop).where(TransitStop.latitude.is_not(None), TransitStop.longitude.is_not(None)).limit(1000)))
+    from app.services.common import haversine_m
+    fallback_stops = []
+    for stop in db_stops:
+        distance = haversine_m(latitude, longitude, stop.latitude, stop.longitude)
+        if distance <= radius_m:
+            fallback_stops.append({"id": str(stop.external_id or stop.id), "name": stop.name, "mode": "transit", "latitude": stop.latitude, "longitude": stop.longitude, "distance_meters": round(distance), "operator": None, "network": None, "ref": stop.external_id, "wheelchair": None, "source": "Imported GTFS", "schedule_available": True})
+    fallback_stops.sort(key=lambda row: row["distance_meters"])
+    if fallback_stops:
+        return {"status":"available","stops":fallback_stops[:100],"count":len(fallback_stops[:100]),"radius_m":radius_m,"provider":"Imported GTFS","note":"Showing imported GTFS stop locations. Arrival estimates depend on the schedule or realtime feed included with that source."}
+    return {"status":"provider_unavailable","stops":[],"count":0,"radius_m":radius_m,"provider":None,"note":"No nearby stops were found from map lookup or imported timetable data for these coordinates."}
 
 
 @router.get("/stops/{stop_external_id}/arrivals")
