@@ -72,7 +72,7 @@ Set the Vercel project Root Directory to `frontend`. Set `VITE_API_URL` in Verce
 - Citizen home and map
 - Route planning with fastest / balanced / cleanest preferences
 - Air-quality stations and observations
-- AQI Vision: paired front/rear camera capture or upload, sensor inputs, six-class model prediction, confidence distribution, and labelled fallback
+- Location-based AQI outlook: current coordinates, Open-Meteo/CAMS AQI and pollutant forecasts, and map marker
 - Traffic Vision: camera snapshots or upload, YOLO11 vehicle counts, annotated image, and labelled fallback
 - Public transport routes, stops and service alerts
 - Saved trips, details, lifecycle actions and CSV export
@@ -85,7 +85,7 @@ Set the Vercel project Root Directory to `frontend`. Set `VITE_API_URL` in Verce
 
 The frontend calls documented API routes from `backend/openapi.json`. For example, command overview uses `/command-center/overview`, city analytics uses `/analytics/city-summary`, signal plans use `/signals/plans`, air quality uses `/aqi/observations`, routing uses `/routing/plan`, and trip history uses `/trips`.
 
-There is no invented weather API, fabricated transit schedule, seeded browser-side AQI, or fake live CCTV status. When an API is not configured, returns no records, or has no configured source, the corresponding page displays an empty/unavailable/error state. Route estimates and source caveats are shown as returned by the backend. The existing backend explicitly does not issue physical traffic signal writes or valid paid travel tickets.
+Location-based AQI uses Open-Meteo/CAMS without a paid key. Routing and mapped transit discovery use public OpenStreetMap-derived services. Timetable availability is not inferred from stop locations; schedules require an operator GTFS/live feed. If road geometry is unavailable, route estimates do not draw straight-line paths. Reference fallback scenarios are explicitly distinguished from provider observations. The existing backend explicitly does not issue physical traffic signal writes or valid paid travel tickets.
 
 ## Screenshots and design target
 
@@ -93,9 +93,7 @@ The interface uses the uploaded UrbanSaarthi references as the visual target: li
 
 ## AQI Vision (multimodal model)
 
-The AQI Vision page is available at `/citizen/aqi-vision`; the existing `/citizen/air-quality` station-observation view remains separate. The model uses two road images (front + rear) and six supplied values (`PM2.5`, `PM10`, temperature, humidity, season, and day/night). The trained model is loaded lazily from `backend/models/aqi/`. See `AQI_VISION_IMPLEMENTATION.md` for the architecture, status endpoint, input schema, validation, and deployment checks.
-
-The model predicts one of six categories (`Good`, `Moderate`, `Poor`, `Satisfactory`, `Severe`, `Very Poor`). It does not calculate a numeric AQI or fetch official station readings. The UI only shows the sample preview if the API/model service is unavailable; the sample is explicitly labelled and cannot be mistaken for a real prediction.
+The `/citizen/aqi-vision` page now asks for the visitor's location and retrieves a current + 24-hour AQI outlook from Open-Meteo/CAMS without a key. It shows US AQI, pollutant concentrations and hourly forecasts, and explicitly notes that these are atmospheric model forecasts rather than official ground-station readings. The legacy image-based AQI endpoint is retained for compatibility, but it is no longer the primary location-AQI workflow.
 
 ## Final quality check
 
@@ -103,6 +101,6 @@ See [`FINAL_QA.md`](./FINAL_QA.md) for the AQI page render fix, model inference 
 
 ## Traffic simulation forecast
 
-The supplied SUMO generated dataset and trained XGBoost model are included under `backend/app/ml/traffic_simulation`. The backend endpoint `GET /api/v1/traffic/simulation` predicts queue levels 30 minutes ahead for the 80 road segments. The citizen traffic page also includes a static snapshot for resilience if the backend is sleeping or unreachable. The snapshot is a simulation model result, not a live city sensor feed. Held out simulation evaluation reports 83.4% congestion level accuracy, MAE 1.84 vehicles, and R² 0.718.
+The included SUMO-generated dataset contains 518,400 records from 36 runs across 80 road edges. The XGBoost model and separate 60-minute horizon model are available through `GET /api/v1/traffic/simulation` and `GET /api/v1/traffic/simulation/scenario`. The client can play the 60-minute model timeline at five-minute forecast steps. The 60-minute held-out evaluation is shown separately (61.5% congestion-level accuracy, MAE 3.93 vehicles, R² 0.384); this is a stored-data model scenario, not a live SUMO/TraCI process or current road sensor feed.
 
 For production, set `VITE_API_URL=https://urbansarthi.onrender.com/api/v1` in Vercel and configure provider credentials only in the backend environment. The frontend has a production API fallback, but an explicit Vercel value is recommended.

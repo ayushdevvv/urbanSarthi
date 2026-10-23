@@ -1,0 +1,24 @@
+{
+  "horizon_minutes": 60,
+  "training_runs": 28,
+  "test_runs": [
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35
+  ],
+  "training_rows": 224000,
+  "test_rows": 64000,
+  "mae_vehicles": 3.9317753832523747,
+  "rmse_vehicles": 6.040634979075265,
+  "r2": 0.384221027741106,
+  "level_accuracy": 0.615046875,
+  "dataset_rows": 518400,
+  "road_edges": 80,
+  "simulation_runs": 36,
+  "minutes_per_run": 180
+}

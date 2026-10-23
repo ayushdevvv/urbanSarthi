@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useApp } from './context/AppContext.jsx';
+import { installSiteTranslation } from './context/translationRuntime.js';
 import PortalLanding from './pages/landing/PortalLanding.jsx';
 import AuthorityLayout from './components/layout/AuthorityLayout.jsx';
 import CitizenLayout from './components/layout/CitizenLayout.jsx';
@@ -19,7 +21,8 @@ import TrafficInfoPage from './pages/citizen/TrafficInfoPage.jsx';
 import Toast from './components/shared/Toast.jsx';
 
 export default function App() {
-  const { dark } = useApp();
+  const { dark, language } = useApp();
+  useEffect(() => installSiteTranslation(language), [language]);
   return <div className={dark ? 'theme-root dark-theme' : 'theme-root'}>
     <Routes>
       <Route path="/" element={<PortalLanding />} />

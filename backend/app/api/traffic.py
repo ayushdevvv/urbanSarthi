@@ -10,7 +10,7 @@ from app.models import Junction, TrafficObservation, CityCluster
 from app.schemas import JunctionCreateIn, JunctionOut, TrafficObservationIn, TrafficObservationOut
 from app.services.common import audit, utc_now
 from app.services.predictions import maybe_refresh_forecasts
-from app.services.traffic_simulation import get_simulation_snapshot
+from app.services.traffic_simulation import get_simulation_snapshot, get_simulation_scenario
 
 router = APIRouter(prefix="/traffic", tags=["Traffic intelligence"])
 
@@ -54,8 +54,14 @@ def current_traffic(latitude: float = Query(default=28.6139, ge=-90, le=90), lon
 
 @router.get("/simulation")
 def traffic_simulation():
-    """Forecast the next 30 minutes using the supplied SUMO dataset and trained model."""
+    """Forecast 30 minutes using the supplied SUMO dataset and trained model."""
     return get_simulation_snapshot()
+
+
+@router.get("/simulation/scenario")
+def traffic_simulation_scenario(minutes: int = Query(default=60, ge=15, le=60), step_minutes: int = Query(default=5, ge=1, le=15), scenario: str = Query(default="baseline", pattern="^(baseline|demand_surge|signal_priority)$")):
+    """Return a multi-step forecast timeline for interactive 60-minute playback."""
+    return get_simulation_scenario(minutes=minutes, step_minutes=step_minutes, scenario=scenario)
 
 
 @router.get("/junctions", response_model=list[JunctionOut])

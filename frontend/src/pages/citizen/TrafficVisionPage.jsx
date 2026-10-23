@@ -4,15 +4,15 @@ import { Activity, AlertTriangle, Camera, CheckCircle2, ChevronRight, CircleHelp
 import PageIntro from '../../components/shared/PageIntro.jsx';
 import { api } from '../../services/api/client.js';
 
-const DEMO_COUNTS = { car: 7, bus: 1, motorbike: 4, bicycle: 2 };
+const REFERENCE_COUNTS = { car: 7, bus: 1, motorbike: 4, bicycle: 2 };
 const VEHICLE_LABELS = { car: 'Cars', bus: 'Buses', motorbike: 'Motorbikes', bicycle: 'Bicycles' };
 
-function makeDemoResult() {
-  const total = Object.values(DEMO_COUNTS).reduce((sum, count) => sum + count, 0);
+function makeReferenceResult() {
+  const total = Object.values(REFERENCE_COUNTS).reduce((sum, count) => sum + count, 0);
   return {
-    mode: 'sample', model: 'Example preview', counts: DEMO_COUNTS, total_vehicles: total,
+    mode: 'reference', model: 'Reference scenario', counts: REFERENCE_COUNTS, total_vehicles: total,
     total_detections: total + 2, congestion_estimate: 'High',
-    congestion_note: 'Illustrative sample only. These counts were not detected from your image or camera.',
+    congestion_note: 'Reference scenario only. These counts were not detected from your image or camera.',
     detections: [],
   };
 }
@@ -135,8 +135,8 @@ export default function TrafficVisionPage() {
     } catch (e) {
       // A clearly labelled sample is a deliberate fallback; never present it as model output.
       const msg = e?.message || 'Traffic analysis is temporarily unavailable.';
-      setError(`${msg} Showing a sample preview instead.`);
-      setResult(makeDemoResult());
+      setError(`${msg} Showing an indicative reference scenario; these are not detections from the submitted frame.`);
+      setResult(makeReferenceResult());
       if (inputMode === 'camera' && videoRef.current?.videoWidth) {
         try {
           const snapshot = await makeCameraFile();
@@ -184,13 +184,13 @@ export default function TrafficVisionPage() {
 
   const clearResult = () => { setResult(null); setError(''); };
   const total = result?.total_vehicles ?? 0;
-  const isSample = result?.mode === 'sample';
+  const isSample = result?.mode === 'reference';
   const imageToShow = result?.annotated_image && !isSample ? `data:image/jpeg;base64,${result.annotated_image}` : preview;
 
   return <div className="traffic-vision-page">
-    <PageIntro eyebrow="COMPUTER VISION · MVP" title="Traffic vision" description="Use your camera or upload a road image. YOLO11 detects vehicles and returns counts by vehicle type with an annotated frame." action={<span className={`traffic-model-pill ${status?.ready ? 'ready' : 'pending'}`}><span />{status?.ready ? 'Model service ready' : 'Example preview ready'}</span>} />
+    <PageIntro eyebrow="COMPUTER VISION" title="Traffic vision" description="Use your camera or upload a road image. YOLO11 detects vehicles and returns counts by vehicle type with an annotated frame." action={<span className={`traffic-model-pill ${status?.ready ? 'ready' : 'pending'}`}><span />{status?.ready ? 'Model service ready' : 'Model service needs setup'}</span>} />
 
-    {!status?.ready && <div className="traffic-inline-note"><CloudOff size={16}/><span><b>Model service not confirmed.</b> You can still explore the flow; if inference is unavailable, a an example preview is available.</span></div>}
+    {!status?.ready && <div className="traffic-inline-note"><CloudOff size={16}/><span><b>Model service not confirmed.</b> Install the listed inference dependencies to enable image-based vehicle detection. Reference values remain clearly separated from model results.</span></div>}
 
     <div className="traffic-hero-grid">
       <section className="panel traffic-capture-panel">
@@ -225,8 +225,8 @@ export default function TrafficVisionPage() {
       <section className="panel traffic-results-panel" aria-live="polite">
         <div className="traffic-panel-heading"><div><span className="traffic-kicker">ANALYSIS OUTPUT</span><h3>Detection summary</h3><p>Vehicle counts are based on one analyzed frame.</p></div>{result && <button className="traffic-icon-button" onClick={clearResult} aria-label="Clear analysis"><RefreshCw size={16}/></button>}</div>
         {result ? <>
-          <div className={`traffic-result-mode ${isSample ? 'sample' : 'actual'}`}><span>{isSample ? <Sparkles size={15}/> : <CheckCircle2 size={15}/>}</span><div><b>{isSample ? 'Example preview' : 'YOLO11 analysis complete'}</b><small>{isSample ? 'Example values · not detected from your scene' : 'Model output · uploaded frame is not stored by this feature'}</small></div></div>
-          <div className="traffic-total-card"><div><span>Total vehicles detected</span><b>{total}</b><small>{isSample ? 'Example count' : `${result.total_detections} total objects detected, including other classes`}</small></div><div className={`traffic-level level-${String(result.congestion_estimate || 'low').toLowerCase()}`}><span>{isSample ? 'Example level' : 'Preliminary level'}</span><b>{result.congestion_estimate}</b></div></div>
+          <div className={`traffic-result-mode ${isSample ? 'sample' : 'actual'}`}><span>{isSample ? <Sparkles size={15}/> : <CheckCircle2 size={15}/>}</span><div><b>{isSample ? 'Reference scenario' : 'YOLO11 analysis complete'}</b><small>{isSample ? 'Indicative values · not detected from your scene' : 'Model output · uploaded frame is not stored by this feature'}</small></div></div>
+          <div className="traffic-total-card"><div><span>{isSample ? 'Vehicles in reference scenario' : 'Total vehicles detected'}</span><b>{total}</b><small>{isSample ? 'No detections were returned for this frame' : `${result.total_detections} total objects detected, including other classes`}</small></div><div className={`traffic-level level-${String(result.congestion_estimate || 'low').toLowerCase()}`}><span>{isSample ? 'Reference level' : 'Preliminary level'}</span><b>{result.congestion_estimate}</b></div></div>
           <div className="traffic-count-list">{Object.entries(VEHICLE_LABELS).map(([key, label]) => <div className="traffic-count-row" key={key}><span><i className={`vehicle-dot ${key}`}/>{label}</span><b>{result.counts?.[key] ?? 0}</b><div className="traffic-count-track"><i style={{ width: `${Math.min(100, ((result.counts?.[key] ?? 0) / Math.max(1, ...Object.values(result.counts || {}))) * 100)}%` }}/></div></div>)}</div>
           {result.congestion_note && <p className="traffic-result-note"><CircleHelp size={15}/>{result.congestion_note}</p>}
           {result.detections?.length > 0 && <div className="traffic-detection-footer">{result.detections.length} objects · {Math.round(confidence * 100)}% confidence threshold</div>}
@@ -235,8 +235,8 @@ export default function TrafficVisionPage() {
       </section>
     </div>
 
-    {result && <section className="panel traffic-annotated-panel"><div className="traffic-panel-heading"><div><span className="traffic-kicker">FRAME REVIEW</span><h3>{isSample ? 'Preview frame' : 'Annotated frame'}</h3><p>{isSample ? 'This example has no model generated detection boxes.' : 'Boxes and labels are drawn by the supplied YOLO11 model.'}</p></div><span className="traffic-status-label">{isSample ? 'EXAMPLE' : 'MODEL OUTPUT'}</span></div>
-      {imageToShow ? <div className="traffic-annotated-image"><img src={imageToShow} alt={isSample ? 'Example preview frame, example image without model annotations' : 'Road image with YOLO11 detection boxes'}/>{isSample && <div className="traffic-sample-watermark">EXAMPLE PREVIEW</div>}</div> : <div className="empty-state"><b>No frame preview available</b><p>Analyze a camera frame or upload an image to display the visual result.</p></div>}
+    {result && <section className="panel traffic-annotated-panel"><div className="traffic-panel-heading"><div><span className="traffic-kicker">FRAME REVIEW</span><h3>{isSample ? 'Reference frame' : 'Annotated frame'}</h3><p>{isSample ? 'This reference scenario has no model-generated detection boxes.' : 'Boxes and labels are drawn by the supplied YOLO11 model.'}</p></div><span className="traffic-status-label">{isSample ? 'REFERENCE' : 'MODEL OUTPUT'}</span></div>
+      {imageToShow ? <div className="traffic-annotated-image"><img src={imageToShow} alt={isSample ? 'Reference scenario frame, reference image without model annotations' : 'Road image with YOLO11 detection boxes'}/>{isSample && <div className="traffic-sample-watermark">REFERENCE SCENARIO</div>}</div> : <div className="empty-state"><b>No frame preview available</b><p>Analyze a camera frame or upload an image to display the visual result.</p></div>}
     </section>}
 
     <div className="traffic-bottom-grid">

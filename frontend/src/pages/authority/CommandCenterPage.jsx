@@ -20,20 +20,20 @@ export default function CommandCenterPage() {
   const [selected, setSelected] = useState(null);
   const [detailOpen, setDetailOpen] = useState(true);
 
-  const demo = {
+  const scenarioOverview = {
     traffic: { mean_congestion_score: 64, forecasted_junction_count: 42, junctions_high_congestion: [
-      { id: 'demo-hotspot-1', junction_id: 12, name: 'Ring Road and Central Avenue', vehicle_count: 186, queue_length_m: 142, congestion_score: 82, observed_at: new Date().toISOString() },
-      { id: 'demo-hotspot-2', junction_id: 8, name: 'Metro Gate Junction', vehicle_count: 124, queue_length_m: 86, congestion_score: 68, observed_at: new Date().toISOString() },
+      { id: 'scenario-hotspot-1', junction_id: 12, name: 'Representative corridor 01', vehicle_count: 186, queue_length_m: 142, congestion_score: 82, observed_at: null },
+      { id: 'scenario-hotspot-2', junction_id: 8, name: 'Representative corridor 02', vehicle_count: 124, queue_length_m: 86, congestion_score: 68, observed_at: null },
     ] },
     network: { junctions_online: 42, junctions_total: 48, clusters_online: 8, clusters_total: 9, junctions_with_recent_traffic_data: 39 },
     air_quality: { mean_aqi: 126, stations_with_recent_data: 12 },
     alerts: { active_count: 3, items: [
-      { id: 'demo-alert-1', severity: 'high', title: 'Heavy congestion near Central Avenue', category: 'Traffic', created_at: new Date().toISOString() },
-      { id: 'demo-alert-2', severity: 'medium', title: 'Air quality trending upward in the north zone', category: 'Air quality', created_at: new Date().toISOString() },
-      { id: 'demo-alert-3', severity: 'low', title: 'Signal coordination review suggested', category: 'Signals', created_at: new Date().toISOString() },
+      { id: 'scenario-alert-1', severity: 'high', title: 'Congestion risk elevated on representative corridor', category: 'Traffic', created_at: new Date().toISOString() },
+      { id: 'scenario-alert-2', severity: 'medium', title: 'Air-quality outlook requires review', category: 'Air quality', created_at: new Date().toISOString() },
+      { id: 'scenario-alert-3', severity: 'low', title: 'Signal coordination opportunity identified', category: 'Signals', created_at: new Date().toISOString() },
     ] },
   };
-  const overview = data || demo;
+  const overview = data || scenarioOverview;
   const displayData = overview;
   const hotSpots = overview?.traffic?.junctions_high_congestion || [];
   const markers = useMemo(() => (junctions || []).filter((j) => Number.isFinite(j.latitude) && Number.isFinite(j.longitude)).map((j) => ({
@@ -47,15 +47,15 @@ export default function CommandCenterPage() {
     <PageIntro eyebrow="INTEGRATED COMMAND & CONTROL CENTRE" title="Authority operations" description="Your integrated command centre for traffic, air quality, junctions and citywide mobility." action={<button className="live-pill" onClick={reload}><i/>{loading ? 'Refreshing…' : 'Refresh overview'} <RefreshCw size={13}/></button>} />
     <div className="notice scenario-notice"><Activity size={14}/>{data ? 'City operations overview' : 'City operations overview · Scenario view'}</div>
     <div className="kpi-grid">
-      <Kpi icon={Activity} label="Congestion index" value={display(displayData?.traffic?.mean_congestion_score)} caption="Mean score from recent observations" />
-      <Kpi icon={Navigation} label="Online junctions" value={display(displayData?.network?.junctions_online, ` / ${displayData?.network?.junctions_total ?? '—'}`)} caption="Reported junction status" />
-      <Kpi icon={AirVent} label="Average AQI" value={display(displayData?.air_quality?.mean_aqi)} caption="Recent station observations" />
-      <Kpi icon={Cloud} label="Active alerts" value={display(displayData?.alerts?.active_count)} caption="Alerts currently active" />
+      <Kpi icon={Activity} label="Congestion index" value={display(displayData?.traffic?.mean_congestion_score)} caption={data ? "Mean score from recent observations" : "Scenario estimate · no recent feed response"} />
+      <Kpi icon={Navigation} label="Online junctions" value={display(displayData?.network?.junctions_online, ` / ${displayData?.network?.junctions_total ?? '—'}`)} caption={data ? "Reported junction status" : "Reference network profile"} />
+      <Kpi icon={AirVent} label="Average AQI" value={display(displayData?.air_quality?.mean_aqi)} caption={data ? "Recent station observations" : "Scenario value · check local AQI forecast"} />
+      <Kpi icon={Cloud} label="Active alerts" value={display(displayData?.alerts?.active_count)} caption={data ? "Alerts currently active" : "Scenario notices · confirm with live feeds"} />
     </div>
     <div className="control-grid">
-      <section className="panel map-panel"><div className="panel-head"><div><div className="eyebrow">LIVE CITY MAP</div><h3>Congestion + AQI hotspots</h3></div><div className="legend"><span><i className="green-dot"/>Normal</span><span><i className="yellow-dot"/>Busy</span><span><i className="red-dot"/>Critical</span></div></div>
-        <CityMap markers={markers.length ? markers : [{ id: 'demo-map-1', lat: 28.6139, lng: 77.2090, title: 'Central Avenue', description: 'Scenario congestion hotspot', kind: 'critical' }, { id: 'demo-map-2', lat: 28.6280, lng: 77.2180, title: 'Metro Gate', description: 'Scenario traffic junction', kind: 'busy' }]} zoom={11} className="authority-map" />
-        <div className="map-foot"><span><Navigation size={13}/> Traffic junctions</span><span><AirVent size={13}/> AQI observations</span><small>Configured junction coordinates are plotted; seeded demo coordinates may be placeholders.</small></div>
+      <section className="panel map-panel"><div className="panel-head"><div><div className="eyebrow">CITY MAP</div><h3>Congestion + AQI hotspots</h3></div><div className="legend"><span><i className="green-dot"/>Normal</span><span><i className="yellow-dot"/>Busy</span><span><i className="red-dot"/>Critical</span></div></div>
+        <CityMap markers={markers.length ? markers : [{ id: 'scenario-map-1', lat: 28.6139, lng: 77.2090, title: 'Representative corridor 01', description: 'Scenario congestion hotspot', kind: 'critical' }, { id: 'scenario-map-2', lat: 28.6280, lng: 77.2180, title: 'Representative corridor 02', description: 'Scenario traffic junction', kind: 'busy' }]} zoom={11} className="authority-map" />
+        <div className="map-foot"><span><Navigation size={13}/> Traffic junctions</span><span><AirVent size={13}/> AQI observations</span><small>Fallback markers and scenario metrics are illustrative only; replace them with registered junctions and recent observations for operational use.</small></div>
       </section>
       <aside className="panel hotspot"><div className="hotspot-head"><span className={picked ? 'critical' : 'status-pill'}>{picked ? 'HIGH CONGESTION' : 'NO HOTSPOT DATA'}</span><button className="icon-btn" aria-label="Toggle selected hotspot" onClick={() => setDetailOpen(!detailOpen)}>{detailOpen ? <X size={16}/> : <MapPin size={16}/>}</button></div>
         {detailOpen && picked ? <><h3>{picked.name || `Junction ${picked.junction_id}`}</h3><p>Latest congestion observation</p><div className="hot-metrics"><div><small>Vehicles</small><b>{display(picked.vehicle_count)}</b></div><div><small>Queue length</small><b>{display(picked.queue_length_m, ' m')}</b></div><div><small>Congestion</small><b>{display(picked.congestion_score)}</b></div></div><div className="hotspot-detail-row"><span>Observed at</span><b>{picked.observed_at ? new Date(picked.observed_at).toLocaleString() : '—'}</b></div><button className="control-link" onClick={() => notify('Signal timing changes require a reviewed plan and an authorized operator account.')}>Signal control <b>Open signal plans <Navigation size={14}/></b></button></> : <EmptyState title="No recent traffic observations" description="The selected city has no highlighted hotspot in the current view."/>}

@@ -1,130 +1,120 @@
-import { useEffect, useState } from 'react';
-import { Activity, AlertTriangle, CheckCircle2, FlaskConical, LocateFixed, MapPin, RotateCcw, Sparkles, Wind } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { Activity, AlertTriangle, CheckCircle2, Clock3, LocateFixed, MapPin, RefreshCw, Wind } from 'lucide-react';
 import PageIntro from '../../components/shared/PageIntro.jsx';
+import CityMap from '../../components/maps/CityMap.jsx';
 import { api } from '../../services/api/client.js';
-import './aqi-vision.css';
+import './location-aqi.css';
 
-const DEFAULT_FORM = { city: '', latitude: '', longitude: '', pm25: '26.1', pm10: '41.0', temperature: '26.9', humidity: '43.5', season: 'Monsoon', day_or_night: 'Day' };
-const CATEGORIES = ['Good', 'Satisfactory', 'Moderate', 'Poor', 'Very Poor', 'Severe'];
+const fmt = (n, digits = 1) => n == null || !Number.isFinite(Number(n)) ? '—' : Number(n).toFixed(digits);
+const hour = (s) => { try { return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(s)); } catch { return s; } };
+const categoryClass = (name = '') => name.toLowerCase().replaceAll(' ', '-');
 
-function exampleResult(form) {
-  const pm = Number(form.pm25 || 26);
-  const category = pm <= 12 ? 'Good' : pm <= 35 ? 'Satisfactory' : pm <= 55 ? 'Moderate' : pm <= 150 ? 'Poor' : pm <= 250 ? 'Very Poor' : 'Severe';
-  const weights = CATEGORIES.map((name) => name === category ? 72 : 28 / 5);
-  return { mode: 'sample', predicted_category: category, confidence: 72, probabilities: CATEGORIES.map((category, i) => ({ category, probability: weights[i] })), note: 'Preview estimate based on the entered PM2.5 value. The model service was unavailable, so this is not a trained model prediction.' };
+function categoryForAqi(value) {
+  if (value == null || !Number.isFinite(Number(value))) return 'Unavailable';
+  const n = Number(value);
+  if (n <= 50) return 'Good';
+  if (n <= 100) return 'Moderate';
+  if (n <= 150) return 'Unhealthy for sensitive groups';
+  if (n <= 200) return 'Unhealthy';
+  if (n <= 300) return 'Very unhealthy';
+  return 'Hazardous';
+}
+
+async function fetchOpenMeteoDirect(latitude, longitude) {
+  const params = new URLSearchParams({
+    latitude: String(latitude), longitude: String(longitude), timezone: 'auto', forecast_hours: '24',
+    current: 'us_aqi,european_aqi,pm2_5,pm10,nitrogen_dioxide,ozone,carbon_monoxide,sulphur_dioxide',
+    hourly: 'us_aqi,european_aqi,pm2_5,pm10',
+  });
+  const response = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?${params}`, { headers: { Accept: 'application/json' } });
+  if (!response.ok) throw new Error(`Air quality provider returned ${response.status}`);
+  const payload = await response.json();
+  const current = payload.current || {};
+  const hourly = payload.hourly || {};
+  const times = hourly.time || [];
+  const values = hourly.us_aqi || [];
+  const pm25 = hourly.pm2_5 || [];
+  const pm10 = hourly.pm10 || [];
+  return {
+    status: current.us_aqi == null ? 'partial' : 'available', provider: 'Open-Meteo / CAMS',
+    latitude: payload.latitude ?? latitude, longitude: payload.longitude ?? longitude,
+    timezone: payload.timezone, updated_at: current.time,
+    current: { us_aqi: current.us_aqi ?? null, european_aqi: current.european_aqi ?? null,
+      category: categoryForAqi(current.us_aqi), pm25: current.pm2_5 ?? null, pm10: current.pm10 ?? null,
+      nitrogen_dioxide: current.nitrogen_dioxide ?? null, ozone: current.ozone ?? null,
+      carbon_monoxide: current.carbon_monoxide ?? null, sulphur_dioxide: current.sulphur_dioxide ?? null },
+    forecast: times.map((time, i) => ({ time, us_aqi: values[i] ?? null, category: categoryForAqi(values[i]), pm25: pm25[i] ?? null, pm10: pm10[i] ?? null })).slice(0, 24),
+    model: 'CAMS atmospheric composition forecast',
+    note: 'Location-based atmospheric model forecast, not an official ground-station measurement. Values depend on the provider update cycle.',
+  };
 }
 
 export default function AqiVisionPage() {
-  const [form, setForm] = useState(DEFAULT_FORM);
-  const [locationState, setLocationState] = useState('not-set');
+  const [location, setLocation] = useState(null);
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
-  const [notice, setNotice] = useState('');
-  const [modelAvailable, setModelAvailable] = useState(null);
-  const [predictionMode, setPredictionMode] = useState('location');
-  const [frontImage, setFrontImage] = useState(null);
-  const [rearImage, setRearImage] = useState(null);
+  const [error, setError] = useState('');
+  const [lastUpdated, setLastUpdated] = useState(null);
 
-  useEffect(() => { api.get('/aqi-vision/status').then((s) => setModelAvailable(Boolean(s?.ready))).catch(() => setModelAvailable(false)); }, []);
-
-  const setField = (key, value) => { setForm((old) => ({ ...old, [key]: value })); setResult(null); setNotice(''); };
-
-  const useLocation = () => {
-    if (!navigator.geolocation) { setLocationState('unavailable'); setNotice('Location is not supported in this browser. Enter your city manually.'); return; }
-    setLocating(true); setNotice('');
-    navigator.geolocation.getCurrentPosition(async (position) => {
-      const latitude = position.coords.latitude;
-      const longitude = position.coords.longitude;
-      setForm((old) => ({ ...old, latitude: latitude.toFixed(5), longitude: longitude.toFixed(5) }));
-      setLocationState('found');
-      try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`);
-        if (response.ok) {
-          const data = await response.json();
-          const address = data.address || {};
-          const city = address.city || address.town || address.city_district || address.village || address.county || address.state || '';
-          if (city) setForm((old) => ({ ...old, city }));
-          else setNotice('Coordinates captured. Enter your city name if you want it shown on the report.');
-        } else setNotice('Coordinates captured. City lookup is unavailable, so enter your city manually.');
-      } catch { setNotice('Coordinates captured. City lookup is unavailable, so enter your city manually.'); }
-      finally { setLocating(false); }
-    }, () => { setLocating(false); setLocationState('denied'); setNotice('Location permission was not granted. Enter your city manually or try location again.'); }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
-  };
-
-  const submit = async (event) => {
-    event.preventDefault(); if (busy) return;
-    if (predictionMode === 'camera' && (!frontImage || !rearImage)) { setNotice('Select both a front and rear road image to use camera prediction.'); return; }
-    setBusy(true); setNotice(''); setResult(null);
-    const payload = new FormData();
-    for (const key of ['pm25', 'pm10', 'temperature', 'humidity', 'season', 'day_or_night']) payload.append(key, form[key]);
-    payload.append('city', form.city || 'City not specified');
-    if (form.latitude) payload.append('latitude', form.latitude);
-    if (form.longitude) payload.append('longitude', form.longitude);
+  const loadForecast = useCallback(async (latitude, longitude, label) => {
+    setLoading(true); setError('');
     try {
       let data;
-      if (predictionMode === 'camera') {
-        if (!frontImage || !rearImage) throw new Error('Add both a front and rear road image, or switch to location and form prediction.');
-        payload.append('front_image', frontImage);
-        payload.append('rear_image', rearImage);
-        data = await api.postForm('/aqi-vision/analyze', payload);
-        data.location = { city: form.city || 'City not specified', latitude: form.latitude || null, longitude: form.longitude || null };
-      } else {
-        data = await api.postForm('/aqi-vision/predict-form', payload);
+      try { data = await api.get(`/aqi/location-forecast?latitude=${latitude}&longitude=${longitude}`); }
+      catch { data = null; }
+      // Open-Meteo supports browser CORS and does not require an API key, so the
+      // UI can still retrieve a real forecast when this backend is unreachable.
+      if (!data || data.status === 'unavailable' || data.current?.us_aqi == null) {
+        try { data = await fetchOpenMeteoDirect(latitude, longitude); }
+        catch (fallbackError) {
+          if (!data || data.current?.us_aqi == null) throw fallbackError;
+        }
       }
-      setResult(data);
-    } catch (error) {
-      setResult(exampleResult(form));
-      setNotice(error?.message || 'Showing a clearly marked preview because the model service could not be reached. Your entered values remain in the form.');
-    } finally { setBusy(false); }
-  };
+      setReport(data);
+      if (data.status === 'unavailable' || data.current?.us_aqi == null) setError(data.note || 'Air quality forecast is temporarily unavailable for this location.');
+      setLastUpdated(new Date().toISOString());
+      setLocation({ latitude, longitude, label: label || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` });
+    } catch (err) {
+      setReport({ status: 'unavailable', current: { us_aqi: null, category: 'Unavailable', pm25: null, pm10: null }, forecast: [], note: 'The air quality service could not be reached. Try again when connectivity returns; no unrelated value is substituted.' });
+      setError(err?.message || 'Could not retrieve an air-quality forecast.');
+    } finally { setLoading(false); }
+  }, []);
 
-  const isSample = result?.mode === 'sample';
-  return <div className="aqi-vision-page">
-    <PageIntro eyebrow="AIR QUALITY · MODEL PREDICTION" title="Predict AQI" description="Enter air and weather readings, detect your city, and generate an air quality category from the supplied model." action={<span className={`traffic-model-pill ${modelAvailable ? 'ready' : 'pending'}`}><span />{modelAvailable ? 'Model available' : 'Prediction ready'}</span>} />
-    <div className="aqiv-hero-grid" style={{ gridTemplateColumns: 'minmax(0, 1.1fr) minmax(320px, .9fr)' }}>
-      <section className="panel aqiv-input-panel">
-        <div className="traffic-panel-heading"><div><span className="traffic-kicker">STEP 01 · YOUR LOCATION</span><h3>Where are you?</h3><p>Use your device location to show the city on your report, or enter it manually.</p></div><MapPin size={22} className="aqiv-heading-icon" /></div>
-        <div className="aqiv-form-grid" style={{ marginBottom: 12 }}>
-          <label style={{ gridColumn: '1 / -1' }}><span>City or town</span><input value={form.city} onChange={(e) => setField('city', e.target.value)} placeholder="e.g. Lucknow" /></label>
-        </div>
-        <div className="aqiv-mode-switch" role="group" aria-label="Prediction method">
-          <button type="button" className={predictionMode === 'camera' ? 'active' : ''} onClick={() => { setPredictionMode('camera'); setResult(null); }}><Activity size={15}/> Camera and images</button>
-          <button type="button" className={predictionMode === 'location' ? 'active' : ''} onClick={() => { setPredictionMode('location'); setResult(null); }}><MapPin size={15}/> Location and form</button>
-        </div>
-        {predictionMode === 'camera' && <div className="aqiv-camera-fields">
-          <p>The trained model uses both front and rear road images along with your air and weather readings.</p>
-          <label><span>Front road image</span><input type="file" accept="image/*" capture="environment" onChange={(e) => setFrontImage(e.target.files?.[0] || null)} /></label>
-          <label><span>Rear road image</span><input type="file" accept="image/*" capture="environment" onChange={(e) => setRearImage(e.target.files?.[0] || null)} /></label>
-          <small>{frontImage ? `Front: ${frontImage.name}` : 'Front image not selected'} · {rearImage ? `Rear: ${rearImage.name}` : 'Rear image not selected'}</small>
-        </div>}
-        <button type="button" className="traffic-secondary" onClick={useLocation} disabled={locating}><LocateFixed size={16} />{locating ? 'Finding location…' : locationState === 'found' ? 'Refresh my location' : 'Use my current location'}</button>
-        {form.latitude && form.longitude && <p className="aqiv-private-note"><CheckCircle2 size={14}/> Location captured: {form.latitude}, {form.longitude}</p>}
-        <div className="traffic-panel-heading" style={{ marginTop: 28 }}><div><span className="traffic-kicker">STEP 02 · AIR AND WEATHER</span><h3>Enter conditions</h3><p>Use sensor readings where available. Location is recorded with the result but does not replace pollutant readings.</p></div><Wind size={22} className="aqiv-heading-icon" /></div>
-        <form onSubmit={submit}>
-          <div className="aqiv-form-grid">
-            <label><span>PM2.5 <small>µg/m³</small></span><input type="number" required min="0" max="2000" step="any" value={form.pm25} onChange={(e) => setField('pm25', e.target.value)} /></label>
-            <label><span>PM10 <small>µg/m³</small></span><input type="number" required min="0" max="2000" step="any" value={form.pm10} onChange={(e) => setField('pm10', e.target.value)} /></label>
-            <label><span>Temperature <small>°C</small></span><input type="number" required min="-50" max="70" step="any" value={form.temperature} onChange={(e) => setField('temperature', e.target.value)} /></label>
-            <label><span>Humidity <small>%</small></span><input type="number" required min="0" max="100" step="any" value={form.humidity} onChange={(e) => setField('humidity', e.target.value)} /></label>
-            <label><span>Season</span><select value={form.season} onChange={(e) => setField('season', e.target.value)}><option>Monsoon</option><option>Summer</option><option>Winter</option></select></label>
-            <label><span>Time of day</span><select value={form.day_or_night} onChange={(e) => setField('day_or_night', e.target.value)}><option>Day</option><option>Night</option></select></label>
-          </div>
-          <button type="button" className="aqiv-example-link" onClick={() => { setForm((old) => ({ ...old, ...DEFAULT_FORM })); setResult(null); setNotice(''); }}><FlaskConical size={14}/> Fill example readings <span>sample inputs</span></button>
-          <button type="submit" className="primary full aqiv-analyze-button" disabled={busy}>{busy ? 'Predicting category…' : <><Sparkles size={16}/> Predict AQI category <span>→</span></>}</button>
-        </form>
-        {notice && <div className="aqiv-inline-note"><AlertTriangle size={16}/><span>{notice}</span></div>}
-      </section>
-      <section className={`panel aqiv-result-panel ${result ? 'has-result' : ''}`}>
-        <div className="traffic-panel-heading"><div><span className="traffic-kicker">STEP 03 · PREDICTION</span><h3>Your AQI report</h3><p>{form.city || 'Your city'} · based on the values entered above</p></div>{result && <span className={`traffic-status-label ${isSample ? 'sample' : ''}`}>{isSample ? 'PREVIEW' : 'MODEL RESULT'}</span>}</div>
-        {!result ? <div className="aqiv-result-empty"><span><Wind size={24}/></span><b>Your report will appear here</b><p>Fill in your readings and select Predict AQI category.</p><div className="aqiv-result-steps"><i>1</i> Location <span>→</span> <i>2</i> Readings <span>→</span> <i>3</i> Prediction</div></div> : <>
-          <div className="aqiv-result-summary"><div className={`aqiv-category-orb category-${result.predicted_category.toLowerCase().replaceAll(' ', '-')}`}><span><Wind size={26}/></span></div><div className="aqiv-result-main"><span>{isSample ? 'PREVIEW CATEGORY' : 'PREDICTED CATEGORY'}</span><h2>{result.predicted_category}</h2><p>{result.location?.city || form.city || 'City not specified'}</p></div><div className="aqiv-confidence"><b>{Number(result.confidence).toFixed(1)}<small>%</small></b><span>{isSample ? 'PREVIEW SCORE' : 'MODEL CONFIDENCE'}</span></div></div>
-          <div className="aqiv-probabilities"><div className="aqiv-prob-heading"><b>Category probabilities</b><small>{isSample ? 'Illustrative values' : 'Model output'}</small></div>{(result.probabilities || []).map((item) => <div className="aqiv-prob-row" key={item.category}><span>{item.category}</span><div><i style={{ width: `${Math.min(100, Math.max(0, Number(item.probability) || 0))}%` }} /></div><b>{Number(item.probability).toFixed(1)}%</b></div>)}</div>
-          <div className={`aqiv-result-disclaimer ${isSample ? 'sample' : ''}`}><AlertTriangle size={15}/><span>{result.note || 'This is a model category estimate, not an official AQI reading.'}</span></div>
-          <button className="traffic-secondary aqiv-reset-result" onClick={() => { setResult(null); setNotice(''); }}><RotateCcw size={14}/> Clear report and try again</button>
-        </>}
-      </section>
-    </div>
-    <div className="aqiv-bottom-grid"><section className="panel aqiv-info-panel"><span className="traffic-kicker">HOW IT WORKS</span><h3>Location plus air readings</h3><div className="aqiv-info-row"><i>01</i><span><b>City tracking</b><small>Your browser can share approximate coordinates and a city name with permission.</small></span></div><div className="aqiv-info-row"><i>02</i><span><b>Form preprocessing</b><small>PM2.5, PM10, temperature, humidity, season and time are passed through the supplied preprocessor.</small></span></div><div className="aqiv-info-row"><i>03</i><span><b>Category prediction</b><small>The supplied model returns one of six categories. It does not return a numeric official AQI.</small></span></div></section><section className="panel aqiv-info-panel aqiv-limits-panel"><span className="traffic-kicker">IMPORTANT NOTE</span><h3>Understand the result</h3><div className="aqiv-limit-line"><CheckCircle2 size={15}/><span><b>Choose your method</b><small>Use front and rear road images for the full trained input, or use location and the form for a camera free estimate.</small></span></div><div className="aqiv-limit-line"><AlertTriangle size={15}/><span><b>Form only adaptation</b><small>Camera mode uses the original two image inputs. Location and form mode uses neutral image placeholders, so that result is an approximation.</small></span></div><div className="aqiv-limit-line"><Activity size={15}/><span><b>Not an official reading</b><small>For current measured AQI, use a trusted monitoring station. Location identifies the city but is not a trained model feature.</small></span></div></section></div>
+  const useCurrentLocation = useCallback(() => {
+    if (!navigator.geolocation) { setError('Location access is not available in this browser.'); return; }
+    setLocating(true); setError('');
+    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
+      const latitude = coords.latitude, longitude = coords.longitude;
+      let label = 'Your current location';
+      try { const place = await api.get(`/routing/reverse-geocode?latitude=${latitude}&longitude=${longitude}`); label = place.label || label; } catch { /* coordinates still identify the forecast location */ }
+      setLocating(false);
+      loadForecast(latitude, longitude, label);
+    }, (err) => {
+      setLocating(false);
+      setError(err.code === 1 ? 'Location permission was denied. Allow location access in your browser and try again.' : 'Could not get your location. Check device location services and retry.');
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+  }, [loadForecast]);
+
+  const current = report?.current || {};
+  const markers = location ? [{ id: 'aqi-location', lat: location.latitude, lng: location.longitude, title: location.label, description: current.us_aqi == null ? 'Air-quality forecast unavailable' : `Forecast US AQI ${Math.round(current.us_aqi)} · ${current.category}`, kind: current.us_aqi >= 151 ? 'critical' : current.us_aqi >= 101 ? 'busy' : 'normal' }] : [];
+  const visibleForecast = (report?.forecast || []).filter((item) => item.us_aqi != null).slice(0, 12);
+
+  return <div className="location-aqi-page">
+    <PageIntro eyebrow="PERSONALISED AIR OUTLOOK" title="Air quality where you are" description="Share your current location to get the nearby air-quality outlook and the next 24 hours of forecast conditions." action={<button className="utility" type="button" onClick={() => location && loadForecast(location.latitude, location.longitude, location.label)} disabled={!location || loading}><RefreshCw size={14}/>{loading ? 'Updating…' : 'Refresh forecast'}</button>} />
+    <section className="panel aqi-location-hero">
+      <div className="aqi-location-copy"><span className="aqi-location-icon"><LocateFixed size={20}/></span><div><span className="eyebrow">YOUR LOCATION</span><h2>{location?.label || 'Get your local air forecast'}</h2><p>{location ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}` : 'No address needed. Your browser shares coordinates only after you grant permission.'}</p></div></div>
+      <button className="primary aqi-location-button" type="button" onClick={useCurrentLocation} disabled={locating || loading}><LocateFixed size={16}/>{locating ? 'Finding your location…' : location ? 'Update my location' : 'Use my current location'}</button>
+    </section>
+    {error && <div className="aqi-location-notice"><AlertTriangle size={16}/><span>{error}</span><button type="button" onClick={() => location && loadForecast(location.latitude, location.longitude, location.label)}>Retry</button></div>}
+    {!report && <section className="panel aqi-location-empty"><span><Wind size={30}/></span><h3>Your local AQI outlook will appear here</h3><p>Tap “Use my current location” to load current modelled conditions and an hourly outlook.</p></section>}
+    {report && <>
+      <div className="aqi-current-grid">
+        <section className={`panel aqi-current-card aqi-category-${categoryClass(current.category)}`}><div className="aqi-current-heading"><div><span className="eyebrow">CURRENT LOCAL OUTLOOK</span><h3>{current.category || 'Unavailable'}</h3></div><span className="aqi-source-pill">{report.status === 'available' ? 'Forecast updated' : 'No current value'}</span></div><div className="aqi-current-value"><strong>{current.us_aqi == null ? '—' : Math.round(current.us_aqi)}</strong><span>US AQI</span></div><p>{current.us_aqi == null ? 'No current value was returned for this location.' : 'A location-based atmospheric model estimate, not a ground-station measurement.'}</p><div className="aqi-current-footer"><span><Clock3 size={13}/> Provider time: {report.updated_at ? hour(report.updated_at) : 'unavailable'}</span><span>{report.provider || 'Source unavailable'}</span></div></section>
+        <section className="panel aqi-pollutant-card"><div className="eyebrow">POLLUTANTS</div><h3>Air composition</h3><div className="aqi-pollutant-grid"><div><small>PM2.5</small><b>{fmt(current.pm25)} <small>µg/m³</small></b></div><div><small>PM10</small><b>{fmt(current.pm10)} <small>µg/m³</small></b></div><div><small>Ozone</small><b>{fmt(current.ozone)} <small>µg/m³</small></b></div><div><small>Nitrogen dioxide</small><b>{fmt(current.nitrogen_dioxide)} <small>µg/m³</small></b></div></div><p>Pollutant concentrations use the provider’s forecast grid for your coordinates.</p></section>
+      </div>
+      <section className="panel aqi-outlook-panel"><div className="panel-head"><div><div className="eyebrow">NEXT 12 HOURS</div><h3>Hourly AQI outlook</h3></div><span className="status-pill">{visibleForecast.length} forecast points</span></div>{visibleForecast.length ? <div className="aqi-hourly-grid">{visibleForecast.map((item) => <article className="aqi-hourly-item" key={item.time}><small>{hour(item.time)}</small><strong>{Math.round(item.us_aqi)}</strong><span className={`aqi-mini-category category-${categoryClass(item.category)}`}>{item.category}</span><div className="aqi-mini-bar"><i style={{ height: `${Math.max(7, Math.min(100, Number(item.us_aqi) / 3.5))}%` }}/></div></article>)}</div> : <div className="aqi-location-empty compact"><AlertTriangle size={20}/><b>Hourly forecast unavailable</b><p>The provider did not return forecast points. Refresh to try again.</p></div>}<p className="aqi-attribution-note">Source: <a href="https://open-meteo.com/en/docs/air-quality-api" target="_blank" rel="noreferrer">Open-Meteo Air Quality API</a> using CAMS atmospheric composition forecasts. {report.note}</p></section>
+      <div className="aqi-location-bottom"><section className="panel aqi-location-map-panel"><div className="panel-head"><div><div className="eyebrow">MAP</div><h3>Forecast location</h3></div><MapPin size={17}/></div><CityMap markers={markers} city="Delhi NCR" zoom={14}/></section><section className="panel aqi-location-explainer"><CheckCircle2 size={19}/><h3>How to read this result</h3><p>This page uses your coordinates to request a forecast grid cell. Values can differ from an air-quality monitoring station nearby, and a forecast is not a medical or regulatory measurement.</p><small>Last request: {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'Not updated'}</small></section></div>
+    </>}
   </div>;
 }

@@ -1,7 +1,0 @@
-eclipse-sumo
-traci
-sumolib
-xgboost
-pandas
-scikit-learn
-numpy

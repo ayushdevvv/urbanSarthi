@@ -34,4 +34,4 @@ async def analyze_traffic_image(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
         # Don't leak filesystem paths or implementation details to public clients.
-        raise HTTPException(status_code=503, detail="Traffic model inference failed. You can retry or use the sample preview.") from exc
+        raise HTTPException(status_code=503, detail="Traffic model inference is unavailable. Retry after confirming the model dependencies and weights are installed.") from exc
