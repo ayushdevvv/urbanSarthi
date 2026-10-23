@@ -47,7 +47,7 @@ def get_current_user(user: User = Depends(get_optional_user)) -> User:
 def require_roles(*allowed_roles: str) -> Callable:
     def _require_role(user: User = Depends(get_current_user)) -> User:
         if user.role not in allowed_roles:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This action is not available for the current workspace access level.")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This action is unavailable in demo mode")
         return user
     return _require_role
 

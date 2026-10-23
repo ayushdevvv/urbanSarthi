@@ -56,7 +56,7 @@ async def analyze_aqi(
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=503, detail="AQI model inference is unavailable. Retry after confirming the model dependencies and weights are installed.") from exc
+        raise HTTPException(status_code=503, detail="AQI model inference failed. Retry or inspect the sample preview.") from exc
     finally:
         await front_image.close()
         await rear_image.close()

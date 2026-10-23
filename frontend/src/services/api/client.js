@@ -28,7 +28,7 @@ export async function request(path, options = {}) {
   const payload = contentType.includes('application/json') ? await response.json().catch(() => null) : await response.text().catch(() => '');
   if (!response.ok) {
     const detail = typeof payload?.detail === 'string' ? payload.detail : Array.isArray(payload?.detail) ? payload.detail.map((item) => item.msg).join(', ') : response.statusText;
-    throw new ApiError(detail || 'This information could not be refreshed just now. Please try again shortly.', response.status, { detail, payload });
+    throw new ApiError('This information could not be refreshed just now. Please try again shortly.', response.status, { detail, payload });
   }
   return payload;
 }

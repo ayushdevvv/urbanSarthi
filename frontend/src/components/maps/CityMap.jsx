@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { MapContainer, Marker, Popup, TileLayer, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
@@ -13,45 +13,25 @@ const cityCenters = {
 export const getLocationCoordinates = (label) => cityCenters[label] || cityCenters['Delhi NCR'];
 
 const dotIcon = (kind = 'normal') => L.divIcon({
-  className: `map-pin map-pin-${kind}`, html: '<span></span>', iconSize: [18, 18], iconAnchor: [9, 9],
+  className: `map-pin map-pin-${kind}`,
+  html: '<span></span>', iconSize: [18, 18], iconAnchor: [9, 9],
 });
 
-function MapViewport({ points, fallbackCenter, zoom }) {
+function Recenter({ center, zoom }) {
   const map = useMap();
-  const key = points.map(([lat, lng]) => `${lat.toFixed(5)},${lng.toFixed(5)}`).join('|');
-  useEffect(() => {
-    if (points.length > 1) {
-      map.fitBounds(L.latLngBounds(points), { padding: [34, 34], maxZoom: 15, animate: true });
-    } else if (points.length === 1) {
-      map.setView(points[0], Math.max(zoom, 14), { animate: true });
-    } else {
-      map.setView(fallbackCenter, zoom, { animate: true });
-    }
-  }, [map, key, zoom, fallbackCenter[0], fallbackCenter[1]]); // key changes whenever locations or route geometry change
+  useEffect(() => { map.setView(center, zoom, { animate: false }); }, [map, center[0], center[1], zoom]);
   return null;
 }
 
-export default function CityMap({ city = 'Delhi NCR', markers = [], route = [], roadSegments = [], zoom = 12, className = '' }) {
-  const fallbackCenter = getLocationCoordinates(city);
-  const routeCoords = useMemo(() => (route || []).filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]), [route]);
-  const markerPositions = markers.filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]);
-  const viewportPoints = routeCoords.length > 1 ? routeCoords : markerPositions;
+export default function CityMap({ city = 'Delhi NCR', markers = [], route = [], zoom = 12, className = '' }) {
+  const center = getLocationCoordinates(city);
+  const routeCoords = (route || []).filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng)).map((point) => [point.lat, point.lng]);
   return <div className={`leaflet-map ${className}`}>
-    <MapContainer center={fallbackCenter} zoom={zoom} scrollWheelZoom className="leaflet-canvas">
-      <MapViewport points={viewportPoints} fallbackCenter={fallbackCenter} zoom={zoom} />
+    <MapContainer center={center} zoom={zoom} scrollWheelZoom className="leaflet-canvas">
+      <Recenter center={center} zoom={zoom} />
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-      {(roadSegments || []).filter((road) => !['heavy', 'moderate', 'light'].includes(road.traffic_status)).map((road) => {
-        const points = (road.geometry || []).filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]);
-        if (points.length < 2) return null;
-        return <Polyline key={road.id || road.name} positions={points} pathOptions={{ color: '#557e72', weight: 3, opacity: 0.62, lineCap: 'round', lineJoin: 'round' }} />;
-      })}
-      {routeCoords.length > 1 && <Polyline positions={routeCoords} pathOptions={{ color: '#8daa4c', weight: 6, opacity: 0.96 }} />}
-      {(roadSegments || []).filter((road) => ['heavy', 'moderate', 'light'].includes(road.traffic_status)).map((road) => {
-        const points = (road.geometry || []).filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]);
-        if (points.length < 2) return null;
-        return <Polyline key={road.id || road.name} positions={points} pathOptions={{ color: road.traffic_status === 'heavy' ? '#d7473f' : road.traffic_status === 'moderate' ? '#d69a2f' : '#36a36c', weight: 7, opacity: 0.97, lineCap: 'round', lineJoin: 'round' }} />;
-      })}
-      {markers.map((marker, index) => <Marker key={marker.id ?? `${marker.lat}-${marker.lng}-${index}`} position={[Number(marker.lat), Number(marker.lng)]} icon={dotIcon(marker.kind || 'normal')}><Popup><b>{marker.title || 'Location'}</b>{marker.description && <div>{marker.description}</div>}</Popup></Marker>)}
+      {routeCoords.length > 1 && <Polyline positions={routeCoords} pathOptions={{ color: '#8daa4c', weight: 5, opacity: 0.9 }} />}
+      {markers.map((marker, index) => <Marker key={marker.id ?? `${marker.lat}-${marker.lng}-${index}`} position={[marker.lat, marker.lng]} icon={dotIcon(marker.kind || 'normal')}><Popup><b>{marker.title || 'Location'}</b>{marker.description && <div>{marker.description}</div>}</Popup></Marker>)}
     </MapContainer>
     <span className="map-attribution">Leaflet | © OpenStreetMap</span>
   </div>;

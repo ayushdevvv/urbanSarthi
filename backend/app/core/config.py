@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore", case_sensitive=False)
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "UrbanSaarthi API"
     app_env: str = "development"
@@ -14,8 +14,6 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
     osrm_base_url: str = ""
     openaq_api_key: str = ""
-    # Server-side OpenWeather credential. Never expose this value in frontend env or responses.
-    weather_api_key: str = ""
     tomtom_api_key: str = ""
     model_path: str = ""
     gtfs_max_upload_mb: int = 30
