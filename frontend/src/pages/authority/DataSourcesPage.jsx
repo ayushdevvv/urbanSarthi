@@ -16,7 +16,7 @@ export default function DataSourcesPage() {
   const [saving, setSaving] = useState(false);
   const scenarioSources = [
     { external_id: 'scenario-traffic', name: 'Traffic flow model', source_type: 'sumo', provider: 'Local forecast model', status: 'unknown', age_seconds: null, freshness: 'model output' },
-    { external_id: 'scenario-aqi', name: 'Air quality forecast', source_type: 'cpcb', provider: 'Open-Meteo / CAMS', status: 'unknown', age_seconds: null, freshness: 'external forecast' },
+    { external_id: 'scenario-aqi', name: 'Air quality forecast', source_type: 'cpcb', provider: 'OpenWeather / Open-Meteo fallback', status: 'unknown', age_seconds: null, freshness: 'external forecast' },
     { external_id: 'scenario-transit', name: 'Nearby transit stops', source_type: 'transit', provider: 'OpenStreetMap / Overpass', status: 'unknown', age_seconds: null, freshness: 'stop locations only' },
     { external_id: 'scenario-routing', name: 'Road and footpath routing', source_type: 'osm', provider: 'OpenStreetMap routing', status: 'unknown', age_seconds: null, freshness: 'external service' },
     { external_id: 'scenario-signals', name: 'Signal timing analysis', source_type: 'atcs', provider: 'Local analysis engine', status: 'unknown', age_seconds: null, freshness: 'analytical only' },

@@ -13,3 +13,41 @@
 .traffic-user-summary{padding:22px}
 .traffic-user-summary .api-note{font-size:12px;line-height:1.6;color:var(--muted,#687465)}
 @media(max-width:900px){.traffic-place-form{grid-template-columns:1fr!important}.traffic-user-map{height:310px}}
+
+
+/* Animated authority-side road scene: keep the intersection, traffic lanes, cars,
+   pedestrian waiting zones and all signal heads visible during playback. */
+.traffic-sim-scene{padding:20px;overflow:hidden;display:grid;gap:14px}
+.traffic-sim-scene-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.traffic-sim-scene-head h3{margin:5px 0 4px;font-size:18px;letter-spacing:-.35px;color:var(--text,#193b31)}
+.traffic-sim-scene-head p{margin:0;font-size:12px;color:var(--muted,#647267);line-height:1.5}
+.traffic-sim-live{display:flex;align-items:center;gap:8px;white-space:nowrap;padding:9px 12px;border:1px solid var(--border,#dfe5da);border-radius:10px;background:var(--surface2,#f4f7ef);font-size:10px;font-weight:900;letter-spacing:.5px;color:var(--text,#193b31)}
+.traffic-sim-live i{width:8px;height:8px;border-radius:50%;background:#8d9990;box-shadow:0 0 0 3px #8d999022}
+.traffic-sim-scene.is-playing .traffic-sim-live i{background:#35a96c;box-shadow:0 0 0 4px #35a96c25;animation:traffic-sim-pulse 1.1s ease-in-out infinite}
+.traffic-sim-live b{border-left:1px solid var(--border,#dfe5da);padding-left:9px;color:#628540}
+.traffic-sim-scene-canvas{width:100%;border:1px solid #c4d0c1;border-radius:14px;overflow:hidden;background:#e3eadf;box-shadow:inset 0 0 0 1px #fff7}
+.traffic-sim-scene-canvas svg{width:100%;height:auto;display:block;min-height:310px}
+.traffic-sim-scene.is-playing .sim-car{animation:traffic-car-idle .65s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:center}
+.traffic-sim-scene.is-playing .sim-car-s{animation-name:traffic-car-s}
+.traffic-sim-scene.is-playing .sim-car-n{animation-name:traffic-car-n}
+.traffic-sim-scene.is-playing .sim-car-e{animation-name:traffic-car-e}
+.traffic-sim-scene.is-playing .sim-car-w{animation-name:traffic-car-w}
+@keyframes traffic-car-idle{from{translate:0 0}to{translate:0 -1.5px}}
+@keyframes traffic-car-s{from{translate:0 0}to{translate:0 6px}}
+@keyframes traffic-car-n{from{translate:0 0}to{translate:0 -6px}}
+@keyframes traffic-car-e{from{translate:0 0}to{translate:6px 0}}
+@keyframes traffic-car-w{from{translate:0 0}to{translate:-6px 0}}
+@keyframes traffic-sim-pulse{50%{box-shadow:0 0 0 7px #35a96c12}}
+.traffic-sim-scene-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.traffic-sim-signal-summary,.traffic-sim-road-key{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.traffic-sim-signal-summary>span{display:flex;align-items:center;gap:6px;border-radius:8px;padding:7px 9px;font-size:10px;font-weight:900;letter-spacing:.3px}
+.traffic-sim-signal-summary>span i{width:8px;height:8px;border-radius:50%;background:currentColor}
+.traffic-sim-signal-summary .go{color:#237448;background:#e2f4e6;border:1px solid #bce5c7}
+.traffic-sim-signal-summary .stop{color:#a34742;background:#f9e7e4;border:1px solid #f0ccc7}
+.traffic-sim-signal-summary small{font-size:10px;color:var(--muted,#657269)}
+.traffic-sim-road-key span{display:flex;align-items:center;gap:6px;color:var(--muted,#657269);font-size:10px;font-weight:700}
+.traffic-sim-road-key i{display:inline-block;width:14px;height:8px;border-radius:3px}
+.traffic-sim-road-key .light-road{background:#7e8984}.traffic-sim-road-key .light-car{background:#71b9ea;border:1px solid #eaf2ee}.traffic-sim-road-key .light-person{height:10px;width:10px;border-radius:50%;background:#35665b}
+.dark-theme .traffic-sim-scene-head h3{color:var(--text)}.dark-theme .traffic-sim-live{background:#263226;color:#d7e8d1;border-color:#435341}.dark-theme .traffic-sim-signal-summary .go{background:#203c2a;color:#a7e4b8;border-color:#375b41}.dark-theme .traffic-sim-signal-summary .stop{background:#442b2a;color:#f1aaa4;border-color:#66403d}
+@media(max-width:720px){.traffic-sim-scene{padding:13px}.traffic-sim-scene-head{align-items:flex-start;flex-direction:column}.traffic-sim-scene-canvas svg{min-height:230px}.traffic-sim-scene-footer{align-items:flex-start;flex-direction:column}}
+@media(prefers-reduced-motion:reduce){.traffic-sim-scene *{animation:none!important;transition:none!important}}
