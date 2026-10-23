@@ -25,6 +25,3 @@ torchvision==0.25.0+cpu
 
 # Supplied SUMO traffic forecast model
 xgboost>=2.1,<4
-
-# Video decoding for sampled YOLO traffic analysis
-opencv-python-headless>=4.10,<5

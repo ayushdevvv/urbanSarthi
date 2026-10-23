@@ -6,8 +6,7 @@ import PortalLanding from './pages/landing/PortalLanding.jsx';
 import AuthorityLayout from './components/layout/AuthorityLayout.jsx';
 import CitizenLayout from './components/layout/CitizenLayout.jsx';
 import CommandCenterPage from './pages/authority/CommandCenterPage.jsx';
-import TrafficLabPage from './pages/authority/TrafficLabPage.jsx';
-import TrafficVisionPage from './pages/citizen/TrafficVisionPage.jsx';
+import SignalPlansPage from './pages/authority/SignalPlansPage.jsx';
 import AnalyticsPage from './pages/authority/AnalyticsPage.jsx';
 import DataSourcesPage from './pages/authority/DataSourcesPage.jsx';
 import SettingsPage from './pages/authority/SettingsPage.jsx';
@@ -29,10 +28,8 @@ export default function App() {
       <Route path="/authority" element={<AuthorityLayout />}>
         <Route index element={<Navigate to="control" replace />} />
         <Route path="control" element={<CommandCenterPage />} />
-        <Route path="signals" element={<Navigate to="/authority/traffic-lab" replace />} />
-        <Route path="traffic-model" element={<Navigate to="/authority/traffic-lab" replace />} />
-        <Route path="traffic-lab" element={<TrafficLabPage />} />
-        <Route path="traffic-vision" element={<TrafficVisionPage />} />
+        <Route path="signals" element={<SignalPlansPage />} />
+        <Route path="traffic-model" element={<TrafficInfoPage adminMode />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="sources" element={<DataSourcesPage />} />
         <Route path="settings" element={<SettingsPage />} />
@@ -44,7 +41,7 @@ export default function App() {
         <Route path="aqi-vision" element={<AqiVisionPage />} />
         <Route path="transit" element={<TransitPage />} />
         <Route path="traffic" element={<TrafficInfoPage />} />
-        <Route path="traffic-vision" element={<Navigate to="/authority/traffic-vision" replace />} />
+        <Route path="traffic-vision" element={<Navigate to="/authority/traffic-model" replace />} />
         <Route path="trips" element={<TripsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

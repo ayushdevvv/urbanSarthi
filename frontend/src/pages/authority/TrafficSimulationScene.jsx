@@ -10,28 +10,23 @@ function SignalHead({ x, y, label, active, rotate = 0 }) {
   const go = (label === 'N' || label === 'S') ? ns : !ns;
   return <g transform={`translate(${x} ${y}) rotate(${rotate})`}>
     <rect x="-14" y="-33" width="28" height="66" rx="8" fill="#14211f" stroke="#58716a" strokeWidth="2"/>
-    <circle cx="0" cy="-20" r="7" fill={!go ? '#e44343' : '#743434'} stroke={!go ? '#ff8980' : '#512525'} strokeWidth="1.3"/>
-    <circle cx="0" cy="0" r="7" fill="#55451f" stroke="#8d793e" strokeWidth="1.2"/>
+    <circle cx="0" cy="-20" r="7" fill={go ? '#e44343' : '#743434'} stroke={go ? '#ff8980' : '#512525'} strokeWidth="1.3"/>
+    <circle cx="0" cy="0" r="7" fill={go ? '#6b5a25' : '#e7b83c'} stroke="#f5d16e" strokeWidth="1.2"/>
     <circle cx="0" cy="20" r="7" fill={go ? '#38db83' : '#245b43'} stroke={go ? '#a1ffd0' : '#183f30'} strokeWidth="1.3"/>
     <rect x="-24" y="-51" width="48" height="13" rx="5" fill="#f8fbf3" stroke="#b9c6b8"/>
     <text x="0" y="-42" textAnchor="middle" fontSize="8.5" fontWeight="900" fill="#19372d">{label} · {go ? 'GO' : 'STOP'}</text>
   </g>;
 }
 
-function Car({ x, y, index, moving = false, path = '', duration = 8, delay = 0 }) {
-  const colors = ['#f3c85b', '#71b9ea', '#f6f8f3', '#e27e62', '#9aadd4', '#7dd0a4', '#ed9dce', '#d8e2ef'];
-  return <g transform={`translate(${x} ${y})`} className={moving ? 'sim-car sim-car-in-motion' : 'sim-car'}>
-    <g>
-      {moving && path && <animateMotion path={path} dur={`${duration}s`} begin={`${delay}s`} repeatCount="indefinite" rotate="auto" calcMode="linear"/>}
-      <rect x="-15.7" y="-6.8" width="31.4" height="13.6" rx="4.5" fill="#1e2b29" opacity=".46" transform="translate(1.8 2.2)"/>
-      <rect x="-17" y="-6.5" width="5" height="4" rx="1.4" fill="#1b2928"/><rect x="12" y="-6.5" width="5" height="4" rx="1.4" fill="#1b2928"/>
-      <rect x="-17" y="2.5" width="5" height="4" rx="1.4" fill="#1b2928"/><rect x="12" y="2.5" width="5" height="4" rx="1.4" fill="#1b2928"/>
-      <path d="M-12 -8 L8 -8 Q14 -8 16 -3 L16 4 Q14 8 8 8 L-12 8 Q-16 7 -16 3 L-16 -3 Q-15 -7 -12 -8Z" fill={colors[index % colors.length]} stroke="#f6f8f2" strokeWidth="1.1"/>
-      <path d="M-7 -5.5 L6 -5.5 Q9 -5.5 11 -2.7 L11 2.8 Q9 5.3 6 5.3 L-7 5.3 Q-9 3 -9 -0.2 Q-9 -3 -7 -5.5Z" fill="#234650" stroke="#d8e8e4" strokeWidth=".65"/>
-      <path d="M-5 -5 L-5 5 M7 -4.6 L7 4.6" stroke="#d7e7e1" strokeWidth=".6" opacity=".7"/>
-      <rect x="-13" y="-5.5" width="3.4" height="2.3" rx=".7" fill="#fff0b2"/><rect x="12" y="-5.5" width="2.4" height="2.3" rx=".7" fill="#fff0b2"/>
-      <rect x="-13" y="3.4" width="3.8" height="2" rx=".6" fill="#ff7069"/><rect x="11.5" y="3.4" width="3.8" height="2" rx=".6" fill="#ff7069"/>
-    </g>
+function Car({ x, y, direction, index, moving }) {
+  const rotation = direction === 'N' ? 90 : direction === 'S' ? -90 : direction === 'W' ? 180 : 0;
+  const colors = ['#f3c85b', '#71b9ea', '#f6f8f3', '#e27e62', '#9aadd4', '#7dd0a4'];
+  return <g className={moving ? `sim-car sim-car-${direction.toLowerCase()}` : ''} transform={`translate(${x} ${y}) rotate(${rotation})`}>
+    <rect x="-15" y="-8" width="30" height="16" rx="4" fill="#243631" opacity=".5" transform="translate(1.5 2)"/>
+    <rect x="-15" y="-8" width="30" height="16" rx="4" fill={colors[index % colors.length]} stroke="#f6f8f2" strokeWidth="1"/>
+    <rect x="-6" y="-5" width="12" height="10" rx="2" fill="#244a55" opacity=".9"/>
+    <rect x="-12" y="-7" width="4" height="3" rx="1" fill="#fff2bd"/>
+    <rect x="8" y="-7" width="4" height="3" rx="1" fill="#fff2bd"/>
   </g>;
 }
 
@@ -42,7 +37,7 @@ function Person({ x, y, scale = 1 }) {
   </g>;
 }
 
-export default function TrafficSimulationScene({ roads = [], frame, scenario = 'baseline', playing = false, locationLabel = '', routeLabel = '', embeddedInForecast = false }) {
+export default function TrafficSimulationScene({ roads = [], frame, scenario = 'baseline', playing = false }) {
   const active = signalPhase(Number(frame?.minute || 0), scenario);
   const directions = useMemo(() => {
     const source = roads || [];
@@ -67,50 +62,13 @@ export default function TrafficSimulationScene({ roads = [], frame, scenario = '
   };
   const cars = [];
   const n = queueCars('N'), s = queueCars('S'), w = queueCars('W'), e = queueCars('E');
-  const nsMoving = playing && active === 'NS';
-  const ewMoving = playing && active === 'EW';
-  const turnNorth = 'M 0 0 L 0 300 C 0 345 35 385 88 385 L 520 385';
-  const turnSouth = 'M 0 0 L 0 -300 C 0 -345 -35 -385 -88 -385 L -520 -385';
-  const turnWest = 'M 0 0 L 300 0 C 345 0 385 -35 385 -88 L 385 -380';
-  const turnEast = 'M 0 0 L -300 0 C -345 0 -385 35 -385 88 L -385 380';
-  // Stop-line queues appear on red approaches; green approaches use continuous
-  // individual vehicle motion with varied headways and occasional turning paths.
-  if (!nsMoving) {
-    for (let i = 0; i < Math.min(n, 5); i++) cars.push(<Car key={`nq-${i}`} x={475 + (i % 2) * 24} y={36 + i * 22} index={i} />);
-    for (let i = 0; i < Math.min(s, 5); i++) cars.push(<Car key={`sq-${i}`} x={526 - (i % 2) * 24} y={474 - i * 22} index={i + 1} />);
-  }
-  if (!ewMoving) {
-    for (let i = 0; i < Math.min(w, 5); i++) cars.push(<Car key={`wq-${i}`} x={28 + i * 27} y={229 + (i % 2) * 30} index={i + 2} />);
-    for (let i = 0; i < Math.min(e, 5); i++) cars.push(<Car key={`eq-${i}`} x={952 - i * 27} y={269 - (i % 2) * 30} index={i + 3} />);
-  }
-  if (nsMoving) {
-    for (let i = 0; i < Math.min(5, Math.max(3, n)); i++) {
-      const laneX = i % 2 === 0 ? 475 : 500;
-      const startY = i === 3 ? -70 : -90 - i * 145;
-      cars.push(<Car key={`nm-${i}`} x={laneX} y={startY} index={i} moving path={i === 3 ? turnNorth : 'M 0 0 L 0 760'} duration={7.3 + (i % 3) * 1.8} delay={i * 1.37} />);
-    }
-    for (let i = 0; i < Math.min(5, Math.max(3, s)); i++) {
-      const laneX = i % 2 === 0 ? 526 : 550;
-      const startY = i === 3 ? 570 : 610 + i * 145;
-      cars.push(<Car key={`sm-${i}`} x={laneX} y={startY} index={i + 4} moving path={i === 3 ? turnSouth : 'M 0 0 L 0 -760'} duration={7.8 + (i % 3) * 1.6} delay={i * 1.61} />);
-    }
-  }
-  if (ewMoving) {
-    for (let i = 0; i < Math.min(5, Math.max(3, w)); i++) {
-      const laneY = i % 2 === 0 ? 229 : 253;
-      const startX = i === 3 ? 150 : -100 - i * 145;
-      cars.push(<Car key={`wm-${i}`} x={startX} y={laneY} index={i + 2} moving path={i === 3 ? turnWest : 'M 0 0 L 1120 0'} duration={7.4 + (i % 3) * 1.7} delay={i * 1.43} />);
-    }
-    for (let i = 0; i < Math.min(5, Math.max(3, e)); i++) {
-      const laneY = i % 2 === 0 ? 294 : 270;
-      const startX = i === 3 ? 830 : 1080 + i * 145;
-      cars.push(<Car key={`em-${i}`} x={startX} y={laneY} index={i + 5} moving path={i === 3 ? turnEast : 'M 0 0 L -1120 0'} duration={8.1 + (i % 3) * 1.4} delay={i * 1.73} />);
-    }
-  }
-
-  return <section className={`panel traffic-sim-scene ${embeddedInForecast ? 'traffic-admin-embedded-scene' : ''} ${playing ? 'is-playing' : ''}`} aria-label="Animated traffic intersection">
+  for (let i = 0; i < n; i++) cars.push(<Car key={`n-${i}`} x={475 + (i % 2) * 24} y={36 + i * 22} direction="S" index={i} moving={playing && active === 'NS'}/>);
+  for (let i = 0; i < s; i++) cars.push(<Car key={`s-${i}`} x={526 - (i % 2) * 24} y={474 - i * 22} direction="N" index={i + 1} moving={playing && active === 'NS'}/>);
+  for (let i = 0; i < w; i++) cars.push(<Car key={`w-${i}`} x={28 + i * 27} y={229 + (i % 2) * 30} direction="E" index={i + 2} moving={playing && active === 'EW'}/>);
+  for (let i = 0; i < e; i++) cars.push(<Car key={`e-${i}`} x={952 - i * 27} y={269 - (i % 2) * 30} direction="W" index={i + 3} moving={playing && active === 'EW'}/>);
+  return <section className={`panel traffic-sim-scene ${playing ? 'is-playing' : ''}`} aria-label="Animated traffic intersection">
     <div className="traffic-sim-scene-head">
-      <div><span className="eyebrow">LIVE PLAYBACK VIEW</span><h3>{routeLabel ? `Route simulation · ${routeLabel}` : locationLabel ? `Network near ${locationLabel}` : 'Intersection and road activity'}</h3><p>Vehicles flow through green phases, queues build at red signals, and selected turns use curved paths.</p></div>
+      <div><span className="eyebrow">LIVE PLAYBACK VIEW</span><h3>Intersection and road activity</h3><p>Visual state updates at every five-minute simulation step.</p></div>
       <div className="traffic-sim-live"><i/>{playing ? 'PLAYING' : 'PAUSED'} <b>MIN {frame?.minute ?? 0}</b></div>
     </div>
     <div className="traffic-sim-scene-canvas">
@@ -154,7 +112,7 @@ export default function TrafficSimulationScene({ roads = [], frame, scenario = '
         <g fill="#263b31"><rect x="21" y="30" width="190" height="25" rx="8" fill="#f8fbf5" stroke="#becbb9"/><text x="32" y="47" fontSize="10" fontWeight="800">PEDESTRIAN WAITING AREAS</text></g>
         {people.map((i) => {
           const groups = [[346,143],[620,143],[347,378],[624,378]]; const group = groups[i % groups.length]; const local = Math.floor(i / groups.length);
-          return <g key={`person-${i}`} className={playing && i % 3 === 0 ? 'sim-person-walk' : ''}><Person x={group[0] + (local % 4) * 10} y={group[1] + Math.floor(local / 4) * 11} scale={.78}/></g>;
+          return <Person key={`person-${i}`} x={group[0] + (local % 4) * 10} y={group[1] + Math.floor(local / 4) * 11} scale={.78}/>;
         })}
         <g><rect x="22" y="458" width="210" height="35" rx="9" fill="#f8fbf5" stroke="#bdcbb9"/><text x="35" y="472" fontSize="9" fill="#5a6d61">PEDESTRIANS WAITING</text><text x="35" y="486" fontSize="14" fontWeight="900" fill="#243e32">{pedestrianCount} people</text></g>
         <g><rect x="745" y="458" width="210" height="35" rx="9" fill="#f8fbf5" stroke="#bdcbb9"/><text x="758" y="472" fontSize="9" fill="#5a6d61">QUEUED VEHICLES</text><text x="758" y="486" fontSize="14" fontWeight="900" fill="#243e32">{Number(frame?.queue_total || 0).toLocaleString('en-IN')}</text></g>

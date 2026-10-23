@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from app.api import aqi as aqi_api
-from app.api import mobility as mobility_api
 from app.api import transit as transit_api
-from app.api import traffic as traffic_api
 from app.services import routing as routing_service
 
 
@@ -69,38 +67,3 @@ def test_60_minute_scenario_contains_13_frames_and_80_edges(client):
     assert len(payload["timeline"][0]["roads"]) == 80
     assert payload["training_data"]["records"] == 518400
     assert payload["models"]["horizon_60"]["level_accuracy_percent"] == 61.5
-
-
-def test_nearby_roads_return_geometry_not_claimed_live_traffic(client, monkeypatch):
-    def fake_post(url, data=None, **kwargs):
-        return FakeResponse({"elements": [{
-            "type": "way", "id": 77,
-            "tags": {"name": "Hazratganj Road", "highway": "primary", "lanes": "3"},
-            "center": {"lat": 26.8467, "lon": 80.9462},
-            "geometry": [{"lat": 26.8466, "lon": 80.9460}, {"lat": 26.8468, "lon": 80.9464}],
-        }]})
-    monkeypatch.setattr(mobility_api.httpx, "post", fake_post)
-    response = client.get("/api/v1/routing/nearby-roads?latitude=26.8467&longitude=80.9462&radius_m=1000")
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["roads"][0]["name"] == "Hazratganj Road"
-    assert len(payload["roads"][0]["geometry"]) == 2
-    assert payload["traffic_data_available"] is False
-    assert "Live speed" in payload["note"]
-
-
-def test_traffic_current_includes_live_segment_geometry(client, monkeypatch):
-    monkeypatch.setattr(traffic_api.settings, "tomtom_api_key", "test-key")
-    monkeypatch.setattr(traffic_api.httpx, "get", lambda *args, **kwargs: FakeResponse({"flowSegmentData": {
-        "currentSpeed": 24, "freeFlowSpeed": 60, "currentTravelTime": 40, "freeFlowTravelTime": 16,
-        "confidence": 0.91, "coordinates": {"coordinate": [
-            {"latitude": 26.8466, "longitude": 80.9460},
-            {"latitude": 26.8468, "longitude": 80.9464},
-        ]},
-    }}))
-    response = client.get("/api/v1/traffic/current?latitude=26.8467&longitude=80.9462")
-    assert response.status_code == 200
-    flow = response.json()["flow"]
-    assert flow["current_speed_kmph"] == 24
-    assert flow["geometry"][0] == {"lat": 26.8466, "lng": 80.946}
-    assert len(flow["geometry"]) == 2
