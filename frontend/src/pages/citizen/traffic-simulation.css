@@ -51,3 +51,55 @@
 .dark-theme .traffic-sim-scene-head h3{color:var(--text)}.dark-theme .traffic-sim-live{background:#263226;color:#d7e8d1;border-color:#435341}.dark-theme .traffic-sim-signal-summary .go{background:#203c2a;color:#a7e4b8;border-color:#375b41}.dark-theme .traffic-sim-signal-summary .stop{background:#442b2a;color:#f1aaa4;border-color:#66403d}
 @media(max-width:720px){.traffic-sim-scene{padding:13px}.traffic-sim-scene-head{align-items:flex-start;flex-direction:column}.traffic-sim-scene-canvas svg{min-height:230px}.traffic-sim-scene-footer{align-items:flex-start;flex-direction:column}}
 @media(prefers-reduced-motion:reduce){.traffic-sim-scene *{animation:none!important;transition:none!important}}
+
+
+/* Route-first traffic experience and an immersive authority scene. */
+.traffic-user-summary { display: none !important; }
+.traffic-location-map-first { order: 2; padding: 0; }
+.traffic-location-map-first .panel-head { align-items: flex-start; gap: 16px; padding: 19px 21px; }
+.traffic-location-map-first .panel-head p { margin: 6px 0 0; max-width: 740px; color: var(--muted); line-height: 1.5; }
+.traffic-user-map { height: clamp(390px, 48vh, 560px) !important; }
+.traffic-map-status { display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px; border: 1px solid var(--border); border-radius: 999px; font-size: 12px; font-weight: 750; white-space: nowrap; background: var(--surface2); color: var(--muted); }
+.traffic-map-status i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #87928b; }
+.traffic-map-status.is-live { color: #216b43; background: #e9f7eb; border-color: #bfe4ca; }
+.traffic-map-status.is-live i { background: #2aa460; box-shadow: 0 0 0 4px #2aa4601c; }
+.traffic-map-legend { display: flex; flex-wrap: wrap; gap: 12px 18px; padding: 13px 20px 4px; }
+.traffic-map-legend span { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.traffic-map-legend i { display: inline-block; width: 22px; height: 5px; border-radius: 99px; }
+.traffic-map-legend-road { background: #557e72; opacity: .8; }
+.traffic-map-legend-route { background: #8daa4c; height: 7px !important; }
+.traffic-map-legend-live { background: #d8a64a; }
+.traffic-location-map-first .map-foot { padding: 12px 20px 16px; }
+.traffic-nearby-road-list { padding: 22px; }
+.traffic-nearby-road-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.traffic-nearby-road-card { min-height: 88px; border-radius: 14px; padding: 14px; }
+.traffic-nearby-road-copy b { font-size: 15px; line-height: 1.35; }
+.traffic-nearby-road-copy small { font-size: 12px; line-height: 1.5; }
+.traffic-map-route-summary { font-size: 14px; }
+.traffic-admin-forecast-card { display: grid; gap: 20px; padding: clamp(20px, 2.2vw, 30px); }
+.traffic-admin-location-picker { border: 1px solid var(--border); border-radius: 17px; padding: 18px; background: color-mix(in srgb, var(--surface2) 46%, transparent); }
+.traffic-admin-current-area { margin-top: 13px; }
+.traffic-admin-current-area b { font-size: 15px; }
+.traffic-admin-current-area small { font-size: 12px; }
+.traffic-admin-embedded-scene { margin-top: 2px; padding: 17px; border-radius: 16px; border-color: #b5c7b5; background: #f7faf4; box-shadow: 0 15px 40px #122b2410; }
+.traffic-admin-embedded-scene .traffic-sim-scene-canvas { border-radius: 18px; border-color: #abbcad; box-shadow: 0 10px 26px #183f301c; }
+.traffic-admin-embedded-scene .traffic-sim-scene-canvas svg { min-height: 390px; }
+.traffic-admin-embedded-scene .traffic-sim-scene-head h3 { font-size: clamp(20px, 1.5vw, 26px); }
+.traffic-admin-embedded-scene .traffic-sim-scene-head p { font-size: 14px; }
+.traffic-admin-simulation-page .traffic-playback { border-top: 1px solid var(--border); }
+.traffic-admin-simulation-page .traffic-road-list { margin-top: 0; }
+@media(max-width: 900px) {
+  .traffic-nearby-road-grid { grid-template-columns: 1fr; }
+  .traffic-user-map { height: 390px !important; }
+  .traffic-location-map-first .panel-head { flex-wrap: wrap; }
+}
+@media(max-width: 580px) {
+  .traffic-location-map-first .panel-head { padding: 15px; }
+  .traffic-user-map { height: 320px !important; }
+  .traffic-map-legend { padding: 10px 15px 4px; }
+  .traffic-location-map-first .map-foot { padding: 10px 15px 14px; }
+  .traffic-nearby-road-list { padding: 15px; }
+  .traffic-admin-location-picker { padding: 12px; }
+  .traffic-admin-embedded-scene { padding: 10px; }
+  .traffic-admin-embedded-scene .traffic-sim-scene-canvas svg { min-height: 220px; }
+}

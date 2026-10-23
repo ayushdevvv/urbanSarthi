@@ -31,7 +31,7 @@ function MapViewport({ points, fallbackCenter, zoom }) {
   return null;
 }
 
-export default function CityMap({ city = 'Delhi NCR', markers = [], route = [], zoom = 12, className = '' }) {
+export default function CityMap({ city = 'Delhi NCR', markers = [], route = [], roadSegments = [], zoom = 12, className = '' }) {
   const fallbackCenter = getLocationCoordinates(city);
   const routeCoords = useMemo(() => (route || []).filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]), [route]);
   const markerPositions = markers.filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]);
@@ -40,7 +40,17 @@ export default function CityMap({ city = 'Delhi NCR', markers = [], route = [], 
     <MapContainer center={fallbackCenter} zoom={zoom} scrollWheelZoom className="leaflet-canvas">
       <MapViewport points={viewportPoints} fallbackCenter={fallbackCenter} zoom={zoom} />
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-      {routeCoords.length > 1 && <Polyline positions={routeCoords} pathOptions={{ color: '#8daa4c', weight: 5, opacity: 0.9 }} />}
+      {(roadSegments || []).filter((road) => !['heavy', 'moderate', 'light'].includes(road.traffic_status)).map((road) => {
+        const points = (road.geometry || []).filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]);
+        if (points.length < 2) return null;
+        return <Polyline key={road.id || road.name} positions={points} pathOptions={{ color: '#557e72', weight: 3, opacity: 0.62, lineCap: 'round', lineJoin: 'round' }} />;
+      })}
+      {routeCoords.length > 1 && <Polyline positions={routeCoords} pathOptions={{ color: '#8daa4c', weight: 6, opacity: 0.96 }} />}
+      {(roadSegments || []).filter((road) => ['heavy', 'moderate', 'light'].includes(road.traffic_status)).map((road) => {
+        const points = (road.geometry || []).filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]);
+        if (points.length < 2) return null;
+        return <Polyline key={road.id || road.name} positions={points} pathOptions={{ color: road.traffic_status === 'heavy' ? '#d7473f' : road.traffic_status === 'moderate' ? '#d69a2f' : '#36a36c', weight: 7, opacity: 0.97, lineCap: 'round', lineJoin: 'round' }} />;
+      })}
       {markers.map((marker, index) => <Marker key={marker.id ?? `${marker.lat}-${marker.lng}-${index}`} position={[Number(marker.lat), Number(marker.lng)]} icon={dotIcon(marker.kind || 'normal')}><Popup><b>{marker.title || 'Location'}</b>{marker.description && <div>{marker.description}</div>}</Popup></Marker>)}
     </MapContainer>
     <span className="map-attribution">Leaflet | © OpenStreetMap</span>
