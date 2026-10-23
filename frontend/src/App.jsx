@@ -16,7 +16,6 @@ import AirQualityPage from './pages/citizen/AirQualityPage.jsx';
 import AqiVisionPage from './pages/citizen/AqiVisionPage.jsx';
 import TransitPage from './pages/citizen/TransitPage.jsx';
 import TripsPage from './pages/citizen/TripsPage.jsx';
-import TrafficVisionPage from './pages/citizen/TrafficVisionPage.jsx';
 import TrafficInfoPage from './pages/citizen/TrafficInfoPage.jsx';
 import Toast from './components/shared/Toast.jsx';
 
@@ -30,14 +29,14 @@ export default function App() {
         <Route index element={<Navigate to="control" replace />} />
         <Route path="control" element={<CommandCenterPage />} />
         <Route path="signals" element={<SignalPlansPage />} />
-        <Route path="traffic-model" element={<TrafficVisionPage />} />
+        <Route path="traffic-model" element={<TrafficInfoPage adminMode />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="sources" element={<DataSourcesPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route path="/citizen" element={<CitizenLayout />}>
         <Route index element={<CitizenHomePage />} />
-        <Route path="plan" element={<RoutePlannerPage />} />
+        <Route path="plan" element={<Navigate to="/citizen" replace />} />
         <Route path="air-quality" element={<AirQualityPage />} />
         <Route path="aqi-vision" element={<AqiVisionPage />} />
         <Route path="transit" element={<TransitPage />} />

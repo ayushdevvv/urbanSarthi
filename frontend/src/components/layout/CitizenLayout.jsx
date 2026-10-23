@@ -5,7 +5,6 @@ import BrandMark from '../shared/BrandMark.jsx';
 
 const links = [
   { to: '/citizen', label: 'Home', icon: House, end: true },
-  { to: '/citizen/plan', label: 'Plan a trip', icon: Route },
   { to: '/citizen/air-quality', label: 'Air quality', icon: Activity },
   { to: '/citizen/aqi-vision', label: 'Predict AQI', icon: Wind },
   { to: '/citizen/traffic', label: 'Traffic conditions', icon: Camera },

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Check, ChevronRight, Play, Plus, RefreshCw, SlidersHorizontal, Zap } from 'lucide-react';
 import PageIntro from '../../components/shared/PageIntro.jsx';
 import { EmptyState, ErrorNotice } from '../../components/shared/Toast.jsx';
@@ -9,6 +10,7 @@ import { useApp } from '../../context/AppContext.jsx';
 const seconds = (n) => Number.isFinite(n) ? `${n}s` : '—';
 export default function SignalPlansPage() {
   const { notify } = useApp();
+  const navigate = useNavigate();
   const { data: plans, loading, error, reload } = useApiResource(() => api.get(endpoints.signalPlans), []);
   const { data: junctions } = useApiResource(() => api.get(endpoints.junctions), []);
   const [selectedId, setSelectedId] = useState(null);
@@ -26,19 +28,30 @@ export default function SignalPlansPage() {
   const selected = list.find((plan) => plan.id === selectedId) || list[0] || null;
   const phases = useMemo(() => selected?.phases || [], [selected]);
 
+  function publishPlanImpact(plan) {
+    const type = String(plan?.plan_type || '').toLowerCase();
+    const scenario = type.includes('transit') || type.includes('priority') || type.includes('adaptive') ? 'signal_priority' : 'baseline';
+    const label = scenario === 'signal_priority' ? 'Signal-priority sensitivity' : scenario === 'baseline' ? 'Baseline traffic' : 'Higher demand';
+    try { localStorage.setItem('urbansarthi.activeTrafficScenario', scenario); } catch { /* scenario will still be announced in this session */ }
+    window.dispatchEvent(new CustomEvent('urbansarthi:traffic-scenario', { detail: { scenario, label } }));
+    return label;
+  }
+
   async function simulateSelected() {
     if (!selected) return notify('Select an existing plan first.');
     setBusy(true); setNotice('');
     try {
       if (typeof selected.id === 'string' && selected.id.startsWith('scenario-plan-')) {
         const green = (selected.phases || []).reduce((sum, phase) => sum + Number(phase.green_seconds || 0), 0);
-        setNotice(`Reference timing analysis completed for a ${selected.cycle_seconds}s cycle with ${green}s of green phases. Save a real plan against a registered junction to run backend analysis; no physical controller is contacted.`);
-        notify('Reference timing analysis completed');
+        const scenarioLabel = publishPlanImpact(selected);
+        setNotice(`Reference timing analysis completed for a ${selected.cycle_seconds}s cycle with ${green}s of green phases. Citizen road activity now follows the ${scenarioLabel.toLowerCase()} scenario. No physical controller is contacted.`);
+        notify(`Scenario published · ${scenarioLabel}`);
         return;
       }
       const result = await api.post(`/signals/plans/${selected.id}/simulate`, {});
-      setNotice('Analytical simulation completed. Review the results before approval; no command was sent to physical traffic lights.');
-      notify(result?.engine ? `Simulation complete · ${result.engine}` : 'Simulation completed');
+      const scenarioLabel = publishPlanImpact(selected);
+      setNotice(`Analytical simulation completed. Citizen road activity now follows the ${scenarioLabel.toLowerCase()} scenario. Review the results before approval; no command was sent to physical traffic lights.`);
+      notify(result?.engine ? `Simulation complete · ${result.engine}` : `Scenario published · ${scenarioLabel}`);
       reload();
     } catch (err) { notify(err.message); }
     finally { setBusy(false); }
@@ -58,7 +71,7 @@ export default function SignalPlansPage() {
   }
 
   return <>
-    <PageIntro eyebrow="ADAPTIVE CONTROL" title="Signal plans" description="Review predicted impact, test timing changes and deploy a coordinated plan." action={<><button className="utility" onClick={reload}><RefreshCw size={14}/> Refresh</button><button className="primary" onClick={simulateSelected} disabled={busy || !selected}><Play size={15}/>{busy ? 'Working…' : 'Apply selected plan'}</button></>} />
+    <PageIntro eyebrow="ADAPTIVE CONTROL" title="Signal plans" description="Review signal timing strategies and open a 60-minute what-if forecast for the selected network." action={<><button className="utility" onClick={() => navigate('/authority/traffic-model')}><Play size={14}/> Traffic Simulation</button><button className="utility" onClick={reload}><RefreshCw size={14}/> Refresh</button><button className="primary" onClick={simulateSelected} disabled={busy || !selected}><Play size={15}/>{busy ? 'Working…' : 'Apply selected plan'}</button></>} />
     <div className="notice scenario-notice"><Zap size={14}/>{plans?.length ? 'Signal plan overview' : 'Signal plan overview · Reference timing plans available'}</div>{notice && <div className="notice"><Check size={15}/>{notice}</div>}
     <div className="signals-grid">
       <section className="panel plan-list"><div className="panel-head"><div><div className="eyebrow">AVAILABLE PLANS</div><h3>Timing strategies</h3></div><button className="icon-btn" onClick={reload} aria-label="Refresh plans"><SlidersHorizontal size={16}/></button></div>

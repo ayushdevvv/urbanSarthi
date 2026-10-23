@@ -10,19 +10,31 @@ import { useApp } from '../../context/AppContext.jsx';
 const formatDuration = (seconds) => seconds == null ? '—' : seconds >= 3600 ? `${Math.floor(seconds / 3600)} hr ${Math.round((seconds % 3600) / 60)} min` : `${Math.max(1, Math.round(seconds / 60))} min`;
 const formatDistance = (meters) => meters == null ? '—' : meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
 function initialPoint(label) { const [lat, lon] = getLocationCoordinates(label); const known = ['New Delhi Railway Station', 'India Gate', 'Delhi NCR', 'New Delhi', 'Rajiv Chowk', 'Akshardham', 'Connaught Place', 'ITO Crossing', 'Mumbai', 'Bengaluru', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Lucknow', 'Ahmedabad', 'Jaipur'].includes(label); return { label, latitude: lat, longitude: lon, resolved: known }; }
-export default function RoutePlannerPage() {
+export default function RoutePlannerPage({ embedded = false }) {
   const { notify } = useApp(); const location = useLocation(); const navigate = useNavigate();
   const [origin, setOrigin] = useState(() => initialPoint(location.state?.from || 'New Delhi Railway Station'));
   const [destination, setDestination] = useState(() => initialPoint(location.state?.to || 'India Gate'));
   const [placeSuggestions, setPlaceSuggestions] = useState({ origin: [], destination: [] });
   const [nearbyPlaces, setNearbyPlaces] = useState([]); const [nearbyBusy, setNearbyBusy] = useState(false); const [nearbyKind, setNearbyKind] = useState('all');
   const [resolving, setResolving] = useState(''); const [currentLocationBusy, setCurrentLocationBusy] = useState(false);
-  const autoPlanTimer = useRef(null); const lastAutoKey = useRef('');
+  const autoPlanTimer = useRef(null); const suggestTimer = useRef(null); const lastAutoKey = useRef('');
   useEffect(() => { if (!origin.resolved) resolveLocation('origin'); if (!destination.resolved) resolveLocation('destination'); }, []);
   const [preference, setPreference] = useState('balanced'); const [mode, setMode] = useState('driving');
   const [result, setResult] = useState(null); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [showCoords, setShowCoords] = useState(false);
   const markers = [{ id: 'origin', lat: origin.latitude, lng: origin.longitude, title: origin.label, kind: 'normal' }, { id: 'destination', lat: destination.latitude, lng: destination.longitude, title: destination.label, kind: 'critical' }];
-  const updatePoint = (key, field, value) => { (key === 'origin' ? setOrigin : setDestination)((point) => ({ ...point, [field]: value, ...(field === 'label' ? { resolved: false } : {}) })); setResult(null); setError(''); };
+  const updatePoint = (key, field, value) => {
+    (key === 'origin' ? setOrigin : setDestination)((point) => ({ ...point, [field]: value, ...(field === 'label' ? { resolved: false } : {}) }));
+    setResult(null); setError('');
+    if (field === 'label') {
+      window.clearTimeout(suggestTimer.current);
+      if (value.trim().length >= 2) suggestTimer.current = window.setTimeout(async () => {
+        try {
+          const response = await api.get(`/routing/geocode?q=${encodeURIComponent(value.trim())}&limit=5`);
+          setPlaceSuggestions((old) => ({ ...old, [key]: response.results || [] }));
+        } catch { /* typing remains available when the geocoder is offline */ }
+      }, 300);
+    }
+  };
   const swap = () => { setOrigin(destination); setDestination(origin); setResult(null); setError(''); };
   async function resolveLocation(key, queryOverride) {
     const point = key === 'origin' ? origin : destination; const query = (queryOverride ?? point.label).trim();
@@ -85,7 +97,7 @@ export default function RoutePlannerPage() {
     catch (err) { notify(err.message); }
   }
   return <>
-    <PageIntro eyebrow="LIVE JOURNEY PLANNER" title="Plan a trip" description="Compare routes using the connected routing service and review its data quality notes." />
+    <PageIntro eyebrow={embedded ? 'CITY TRAVEL' : 'LIVE JOURNEY PLANNER'} title={embedded ? 'Where are you headed today?' : 'Plan a trip'} description="Search a place, choose from location suggestions, and compare routes with a road map and nearby recommendations." />
     <ErrorNotice message={error} onRetry={plan}/>
     <div className="planner-layout"><section className="panel planner-form"><div className="panel-head"><div><div className="eyebrow">YOUR JOURNEY</div><h3>Where to?</h3></div><button className="icon-btn" title="Swap origin and destination" onClick={swap}><ArrowLeftRight size={16}/></button></div>
       <label className="location-input"><span className="route-origin-dot"/><span><small>Starting from</small><input list="origin-place-suggestions" value={origin.label} onChange={(e) => updatePoint('origin', 'label', e.target.value)} onBlur={() => resolveLocation('origin')} aria-label="Starting location" placeholder="Search a place or address"/><datalist id="origin-place-suggestions">{placeSuggestions.origin.map((p) => <option key={p.place_id} value={p.label}/>)}</datalist></span></label>

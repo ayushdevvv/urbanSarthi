@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, Bell, ChevronRight, HelpCircle, Database, House, Map, Menu, Camera, Moon, Settings, Sun, Wind, Zap } from 'lucide-react';
+import { Activity, BarChart3, Bell, ChevronRight, HelpCircle, Database, House, Map, Menu, Moon, Settings, Sun, Wind, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 
@@ -8,7 +8,7 @@ const navGroups = [
   { label: 'WORKSPACE', items: [
     { label: 'Live control centre', to: '/authority/control', icon: Map, code: 'ICCC' },
     { label: 'Signal plans', to: '/authority/signals', icon: Zap },
-    { label: 'Traffic model lab', to: '/authority/traffic-model', icon: Camera },
+    { label: 'Traffic Simulation', to: '/authority/traffic-model', icon: Activity },
     { label: 'Analytics', to: '/authority/analytics', icon: BarChart3 },
   ]},
   { label: 'MANAGE', items: [
@@ -19,7 +19,7 @@ const navGroups = [
 const meta = {
   '/authority/control': ['Delhi ICCC', 'Live authority control centre'],
   '/authority/signals': ['Network control', 'Signal plans'],
-  '/authority/traffic-model': ['Computer vision', 'Traffic model lab'],
+  '/authority/traffic-model': ['Network operations', 'Traffic Simulation'],
   '/authority/analytics': ['Performance', 'City analytics'],
   '/authority/sources': ['Manage', 'Data sources'],
   '/authority/settings': ['Manage', 'Settings'],

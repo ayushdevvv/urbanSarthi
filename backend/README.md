@@ -33,7 +33,7 @@ pip install -r requirements.txt
 Copy `.env.example` to `.env`. For a quick local run, SQLite is the default:
 
 ```bash
-alembic upgrade head
+alembic upgrade heads
 python scripts/seed_demo.py
 uvicorn app.main:app --reload
 ```
@@ -67,7 +67,7 @@ This explicitly creates `synthetic-demo` observations to let the frontend displa
 docker compose up --build -d
 ```
 
-The API container waits for PostgreSQL, runs `alembic upgrade head`, then starts Uvicorn on port `8000`. View logs with `docker compose logs -f api`. Seed the database with `docker compose exec api python scripts/seed_demo.py`.
+The API container waits for PostgreSQL, runs `alembic upgrade heads`, then starts Uvicorn on port `8000`. View logs with `docker compose logs -f api`. Seed the database with `docker compose exec api python scripts/seed_demo.py`.
 
 The default values in `docker-compose.yml` are for local development only. Do not expose them on a public server. When `APP_ENV=production`, configuration validation rejects wildcard/empty CORS origins and SQLite. Use PostgreSQL and explicitly set the frontend origin(s).
 
@@ -83,7 +83,7 @@ alembic current
 alembic revision --autogenerate -m "describe the schema change"
 
 # inspect the generated file before applying it
-alembic upgrade head
+alembic upgrade heads
 
 # compare model metadata with the current database
 alembic check
