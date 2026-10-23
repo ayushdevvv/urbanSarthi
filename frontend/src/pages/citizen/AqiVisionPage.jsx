@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Activity, AlertTriangle, CheckCircle2, Clock3, LocateFixed, MapPin, RefreshCw, Wind } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, Clock3, LocateFixed, MapPin, RefreshCw, Search, Wind } from 'lucide-react';
 import PageIntro from '../../components/shared/PageIntro.jsx';
 import CityMap from '../../components/maps/CityMap.jsx';
 import { api } from '../../services/api/client.js';
@@ -53,6 +53,7 @@ async function fetchOpenMeteoDirect(latitude, longitude) {
 
 export default function AqiVisionPage() {
   const [location, setLocation] = useState(null);
+  const [query, setQuery] = useState('Lucknow, Uttar Pradesh');
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(false);
@@ -90,6 +91,7 @@ export default function AqiVisionPage() {
       const latitude = coords.latitude, longitude = coords.longitude;
       let label = 'Your current location';
       try { const place = await api.get(`/routing/reverse-geocode?latitude=${latitude}&longitude=${longitude}`); label = place.label || label; } catch { /* coordinates still identify the forecast location */ }
+      setQuery(label);
       setLocating(false);
       loadForecast(latitude, longitude, label);
     }, (err) => {
@@ -98,6 +100,20 @@ export default function AqiVisionPage() {
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
   }, [loadForecast]);
 
+  const searchLocation = useCallback(async (event) => {
+    event?.preventDefault?.();
+    const text = query.trim();
+    if (!text) { setError('Enter a city, neighbourhood, or address.'); return; }
+    setLoading(true); setError('');
+    try {
+      const response = await api.get(`/routing/geocode?q=${encodeURIComponent(text)}&limit=5`);
+      const place = response?.results?.[0];
+      if (!place) throw new Error(`No mapped location found for “${text}”. Try a landmark or nearby area.`);
+      setQuery(place.label || text);
+      await loadForecast(Number(place.latitude), Number(place.longitude), place.label || text);
+    } catch (err) { setError(err?.message || 'Could not find that location.'); setLoading(false); }
+  }, [query, loadForecast]);
+
   const current = report?.current || {};
   const shownCurrentIndex = indexValue(current);
   const isOpenWeatherScale = current.openweather_index != null;
@@ -105,16 +121,17 @@ export default function AqiVisionPage() {
   const visibleForecast = (report?.forecast || []).filter((item) => indexValue(item) != null).slice(0, 12);
 
   return <div className="location-aqi-page">
-    <PageIntro eyebrow="PERSONALISED AIR OUTLOOK" title="Air quality where you are" description="Share your current location to get the nearby air-quality outlook and the next 24 hours of forecast conditions." action={<button className="utility" type="button" onClick={() => location && loadForecast(location.latitude, location.longitude, location.label)} disabled={!location || loading}><RefreshCw size={14}/>{loading ? 'Updating…' : 'Refresh forecast'}</button>} />
-    <section className="panel aqi-location-hero">
-      <div className="aqi-location-copy"><span className="aqi-location-icon"><LocateFixed size={20}/></span><div><span className="eyebrow">YOUR LOCATION</span><h2>{location?.label || 'Get your local air forecast'}</h2><p>{location ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}` : 'No address needed. Your browser shares coordinates only after you grant permission.'}</p></div></div>
-      <button className="primary aqi-location-button" type="button" onClick={useCurrentLocation} disabled={locating || loading}><LocateFixed size={16}/>{locating ? 'Finding your location…' : location ? 'Update my location' : 'Use my current location'}</button>
+    <PageIntro eyebrow="AQI FORECAST" title="Predict AQI" description="Search a location or use your current position to view its AQI index and hourly outlook." action={<button className="utility" type="button" onClick={() => location && loadForecast(location.latitude, location.longitude, location.label)} disabled={!location || loading}><RefreshCw size={14}/>{loading ? 'Updating…' : 'Refresh forecast'}</button>} />
+    <section className="panel aqi-location-hero aqi-search-hero">
+      <form className="aqi-place-search" onSubmit={searchLocation}><label htmlFor="aqi-place-query"><span className="eyebrow">ENTER A LOCATION</span><input id="aqi-place-query" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="City, neighbourhood, or address" autoComplete="off" /></label><button className="primary" type="submit" disabled={loading}><Search size={15}/>{loading ? 'Checking…' : 'Predict AQI'}</button></form>
+      <div className="aqi-location-copy"><span className="aqi-location-icon"><LocateFixed size={20}/></span><div><span className="eyebrow">SELECTED LOCATION</span><h2>{location?.label || 'Choose an area'}</h2><p>{location ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}` : 'Enter a location above or use your browser location.'}</p></div></div>
+      <button className="secondary aqi-location-button" type="button" onClick={useCurrentLocation} disabled={locating || loading}><LocateFixed size={16}/>{locating ? 'Finding your location…' : 'Use my location'}</button>
     </section>
     {error && <div className="aqi-location-notice"><AlertTriangle size={16}/><span>{error}</span><button type="button" onClick={() => location && loadForecast(location.latitude, location.longitude, location.label)}>Retry</button></div>}
-    {!report && <section className="panel aqi-location-empty"><span><Wind size={30}/></span><h3>Your local AQI outlook will appear here</h3><p>Tap “Use my current location” to load current modelled conditions and an hourly outlook.</p></section>}
+    {!report && <section className="panel aqi-location-empty"><span><Wind size={30}/></span><h3>Your local AQI outlook will appear here</h3><p>Enter a city or use your current location to load the AQI index, pollutant readings, and hourly outlook.</p></section>}
     {report && <>
       <div className="aqi-current-grid">
-        <section className={`panel aqi-current-card aqi-category-${categoryClass(current.category)}`}><div className="aqi-current-heading"><div><span className="eyebrow">CURRENT LOCAL OUTLOOK</span><h3>{current.category || 'Unavailable'}</h3></div><span className="aqi-source-pill">{hasCurrentIndex(report) ? 'Forecast updated' : 'No current value'}</span></div><div className="aqi-current-value"><strong>{shownCurrentIndex == null ? '—' : Math.round(shownCurrentIndex)}</strong><span>{isOpenWeatherScale ? 'OPENWEATHER INDEX · 1–5' : 'US AQI · 0–500'}</span></div><p>{shownCurrentIndex == null ? 'No current value was returned for this location.' : isOpenWeatherScale ? 'OpenWeather’s own 1–5 air-quality index. It is not equivalent to the US AQI scale.' : 'A location-based atmospheric model estimate, not a ground-station measurement.'}</p><div className="aqi-current-footer"><span><Clock3 size={13}/> Provider time: {report.updated_at ? hour(report.updated_at) : 'unavailable'}</span><span>{report.provider || 'Source unavailable'}</span></div></section>
+        <section className={`panel aqi-current-card aqi-category-${categoryClass(current.category)}`}><div className="aqi-current-heading"><div><span className="eyebrow">CURRENT LOCAL OUTLOOK</span><h3>{current.category || 'Unavailable'}</h3></div><span className="aqi-source-pill">{hasCurrentIndex(report) ? 'Forecast updated' : 'No current value'}</span></div><div className="aqi-current-value"><strong>{shownCurrentIndex == null ? '—' : Math.round(shownCurrentIndex)}</strong><span>{isOpenWeatherScale ? 'OPENWEATHER INDEX · 1–5' : 'US AQI · 0–500'}</span></div><p>{shownCurrentIndex == null ? 'No current value was returned for this location.' : isOpenWeatherScale ? 'OpenWeather’s own 1–5 air-quality index. It is not equivalent to the US AQI scale.' : 'A location-based atmospheric model estimate, not a ground-station measurement.'}</p><div className="aqi-index-dual"><div><small>OpenWeather index</small><b>{current.openweather_index == null ? '—' : current.openweather_index}<i>/ 5</i></b></div><div><small>US AQI</small><b>{current.us_aqi == null ? '—' : Math.round(current.us_aqi)}<i>/ 500</i></b></div></div><div className="aqi-current-footer"><span><Clock3 size={13}/> Provider time: {report.updated_at ? hour(report.updated_at) : 'unavailable'}</span><span>{report.provider || 'Source unavailable'}</span></div></section>
         <section className="panel aqi-pollutant-card"><div className="eyebrow">POLLUTANTS</div><h3>Air composition</h3><div className="aqi-pollutant-grid"><div><small>PM2.5</small><b>{fmt(current.pm25)} <small>µg/m³</small></b></div><div><small>PM10</small><b>{fmt(current.pm10)} <small>µg/m³</small></b></div><div><small>Ozone</small><b>{fmt(current.ozone)} <small>µg/m³</small></b></div><div><small>Nitrogen dioxide</small><b>{fmt(current.nitrogen_dioxide)} <small>µg/m³</small></b></div></div><p>Pollutant concentrations use the provider’s forecast grid for your coordinates.</p></section>
       </div>
       <section className="panel aqi-outlook-panel"><div className="panel-head"><div><div className="eyebrow">NEXT 12 HOURS</div><h3>Hourly AQI outlook</h3></div><span className="status-pill">{visibleForecast.length} forecast points</span></div>{visibleForecast.length ? <div className="aqi-hourly-grid">{visibleForecast.map((item) => <article className="aqi-hourly-item" key={item.time}><small>{hour(item.time)}</small><strong>{Math.round(indexValue(item))}</strong><span className={`aqi-mini-category category-${categoryClass(item.category)}`}>{item.category}</span><div className="aqi-mini-bar"><i style={{ height: `${Math.max(7, Math.min(100, Number(indexValue(item)) / (item.openweather_index != null ? 5 : 3.5) * (item.openweather_index != null ? 100 : 1)))}%` }}/></div></article>)}</div> : <div className="aqi-location-empty compact"><AlertTriangle size={20}/><b>Hourly forecast unavailable</b><p>The provider did not return forecast points. Refresh to try again.</p></div>}<p className="aqi-attribution-note">Source: {report.provider === 'OpenWeather Air Pollution API' ? <a href="https://openweathermap.org/api/air-pollution" target="_blank" rel="noreferrer">OpenWeather Air Pollution API</a> : <a href="https://open-meteo.com/en/docs/air-quality-api" target="_blank" rel="noreferrer">Open-Meteo Air Quality API</a>}. {report.note}</p></section>

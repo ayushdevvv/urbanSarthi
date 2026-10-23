@@ -31,16 +31,18 @@ function MapViewport({ points, fallbackCenter, zoom }) {
   return null;
 }
 
-export default function CityMap({ city = 'Delhi NCR', markers = [], route = [], zoom = 12, className = '' }) {
+export default function CityMap({ city = 'Delhi NCR', markers = [], route = [], routeOptions = [], zoom = 12, className = '' }) {
   const fallbackCenter = getLocationCoordinates(city);
   const routeCoords = useMemo(() => (route || []).filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]), [route]);
   const markerPositions = markers.filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]);
-  const viewportPoints = routeCoords.length > 1 ? routeCoords : markerPositions;
+  const alternativeCoords = (routeOptions || []).flatMap((item) => (item.coordinates || []).filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]));
+  const viewportPoints = routeCoords.length > 1 ? routeCoords : alternativeCoords.length ? alternativeCoords : markerPositions;
   return <div className={`leaflet-map ${className}`}>
     <MapContainer center={fallbackCenter} zoom={zoom} scrollWheelZoom className="leaflet-canvas">
       <MapViewport points={viewportPoints} fallbackCenter={fallbackCenter} zoom={zoom} />
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-      {routeCoords.length > 1 && <Polyline positions={routeCoords} pathOptions={{ color: '#8daa4c', weight: 5, opacity: 0.9 }} />}
+      {(routeOptions || []).filter((item) => !item.selected && Array.isArray(item.coordinates) && item.coordinates.length > 1).map((item, index) => <Polyline key={item.id ?? `alt-route-${index}`} positions={item.coordinates.filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)])} pathOptions={{ color: item.color || '#5d91c7', weight: item.weight || 4, opacity: 0.62, dashArray: '8 7' }} />)}
+      {routeCoords.length > 1 && <Polyline positions={routeCoords} pathOptions={{ color: '#82a94f', weight: 6, opacity: 0.98 }} />}
       {markers.map((marker, index) => <Marker key={marker.id ?? `${marker.lat}-${marker.lng}-${index}`} position={[Number(marker.lat), Number(marker.lng)]} icon={dotIcon(marker.kind || 'normal')}><Popup><b>{marker.title || 'Location'}</b>{marker.description && <div>{marker.description}</div>}</Popup></Marker>)}
     </MapContainer>
     <span className="map-attribution">Leaflet | © OpenStreetMap</span>

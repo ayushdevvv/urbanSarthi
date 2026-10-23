@@ -10,3 +10,22 @@
 @media(max-width:800px){.sidebar-scrim{display:block;position:fixed;inset:0;border:0;background:#00140f66;z-index:4}.sidebar{z-index:5}.sidebar.show{box-shadow:0 12px 35px #00140f33}}
 
 .scenario-notice{display:flex;align-items:center;gap:8px;margin:0 0 16px;padding:10px 13px;border-radius:10px;font-size:12px;color:var(--muted);background:var(--surface2);border:1px solid var(--border)}
+
+/* Signal plan changes should visibly alter the animated network preview. */
+.signal-network-preview{background:#dce8dc;border:1px solid #bdcdbd;isolation:isolate}
+.signal-network-preview .road-h,.signal-network-preview .road-v{background:#586662;box-shadow:inset 0 0 0 2px #6d7873}
+.signal-network-preview .center-line{border-color:#e9df9d}
+.signal-network-preview .network-lane-label{position:absolute;z-index:2;background:#f5f8f2;border:1px solid #d0dbcd;color:#41564c;border-radius:5px;padding:4px 6px;font-size:8px;font-weight:900;letter-spacing:.5px}
+.signal-network-preview .label-n{top:7px;left:58%}.signal-network-preview .label-s{bottom:7px;left:58%}.signal-network-preview .label-w{left:7px;top:42%}.signal-network-preview .label-e{right:7px;top:42%}
+.signal-stack{position:absolute;z-index:3;display:flex;gap:3px;background:#172a25;border:1px solid #8ea397;border-radius:6px;padding:5px;box-shadow:0 4px 9px #0002}
+.signal-stack i{width:8px;height:8px;border-radius:50%;background:#353c35}.signal-stack .lamp-red{background:#da4542}.signal-stack .lamp-amber{background:#7d682c}.signal-stack .lamp-green{background:#32764e}
+.network-priority .signal-stack-ns .lamp-green{background:#4bea88;box-shadow:0 0 0 3px #4bea8830}.network-priority .signal-stack-ew .lamp-red{background:#f24b47;box-shadow:0 0 0 3px #f24b4725}.network-heavy .signal-stack-ns .lamp-amber,.network-heavy .signal-stack-ew .lamp-amber{background:#ffcb4a;box-shadow:0 0 0 3px #ffcb4a26}.network-heavy .signal-stack-ns .lamp-red{background:#f24b47}.network-balanced .signal-stack-ew .lamp-green{background:#4bea88}.network-balanced .signal-stack-ns .lamp-red{background:#f24b47}
+.signal-stack-ns{left:59%;top:20%}.signal-stack-ew{left:37%;top:62%}
+.signal-network-preview .network-car{display:block;position:absolute;z-index:4;width:18px;height:9px;border-radius:4px;background:#d8bd68;border:1px solid #fff8;box-shadow:0 2px 3px #1d282822;animation:plan-car-drive 1.8s ease-in-out infinite alternate}
+.signal-network-preview .car-n1{left:48%;top:6%;background:#70b5e9;animation-name:plan-car-north}.signal-network-preview .car-n2{left:52%;top:20%;background:#e8e9e1;animation-name:plan-car-north;animation-delay:.45s}.signal-network-preview .car-e1{left:64%;top:51%;animation-name:plan-car-east}.signal-network-preview .car-w1{left:23%;top:45%;background:#e38e70;animation-name:plan-car-west}
+.signal-network-preview.network-heavy .network-car{animation-duration:2.8s}.signal-network-preview.network-priority .network-car{animation-duration:1.15s}
+.network-plan-chip{position:absolute;right:8px;bottom:8px;z-index:5;background:#ffffffed;border:1px solid #cbd7c8;border-radius:999px;padding:5px 8px;font-size:8px;font-weight:900;letter-spacing:.5px;color:#365044}
+@keyframes plan-car-east{from{transform:translateX(-10px)}to{transform:translateX(24px)}}@keyframes plan-car-west{from{transform:translateX(10px)}to{transform:translateX(-24px)}}@keyframes plan-car-north{from{transform:translateY(5px)}to{transform:translateY(-23px)}}
+.network-priority .network-plan-chip{background:#e4f5de;color:#2d7343}.network-heavy .network-plan-chip{background:#f9e8dd;color:#a35a30}
+.dark .signal-network-preview{filter:brightness(.8) saturate(.85)}
+@media(max-width:700px){.signal-network-preview .network-lane-label{font-size:7px;padding:3px}.signal-network-preview .network-plan-chip{font-size:7px}.signal-network-preview .signal-stack i{width:7px;height:7px}}

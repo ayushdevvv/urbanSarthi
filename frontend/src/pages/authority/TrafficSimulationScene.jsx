@@ -10,8 +10,8 @@ function SignalHead({ x, y, label, active, rotate = 0 }) {
   const go = (label === 'N' || label === 'S') ? ns : !ns;
   return <g transform={`translate(${x} ${y}) rotate(${rotate})`}>
     <rect x="-14" y="-33" width="28" height="66" rx="8" fill="#14211f" stroke="#58716a" strokeWidth="2"/>
-    <circle cx="0" cy="-20" r="7" fill={go ? '#e44343' : '#743434'} stroke={go ? '#ff8980' : '#512525'} strokeWidth="1.3"/>
-    <circle cx="0" cy="0" r="7" fill={go ? '#6b5a25' : '#e7b83c'} stroke="#f5d16e" strokeWidth="1.2"/>
+    <circle cx="0" cy="-20" r="7" fill={!go ? '#e44343' : '#743434'} stroke={!go ? '#ff8980' : '#512525'} strokeWidth="1.3"/>
+    <circle cx="0" cy="0" r="7" fill="#594923" stroke="#a48b43" strokeWidth="1.2"/>
     <circle cx="0" cy="20" r="7" fill={go ? '#38db83' : '#245b43'} stroke={go ? '#a1ffd0' : '#183f30'} strokeWidth="1.3"/>
     <rect x="-24" y="-51" width="48" height="13" rx="5" fill="#f8fbf3" stroke="#b9c6b8"/>
     <text x="0" y="-42" textAnchor="middle" fontSize="8.5" fontWeight="900" fill="#19372d">{label} · {go ? 'GO' : 'STOP'}</text>
@@ -21,7 +21,7 @@ function SignalHead({ x, y, label, active, rotate = 0 }) {
 function Car({ x, y, direction, index, moving }) {
   const rotation = direction === 'N' ? 90 : direction === 'S' ? -90 : direction === 'W' ? 180 : 0;
   const colors = ['#f3c85b', '#71b9ea', '#f6f8f3', '#e27e62', '#9aadd4', '#7dd0a4'];
-  return <g className={moving ? `sim-car sim-car-${direction.toLowerCase()}` : ''} transform={`translate(${x} ${y}) rotate(${rotation})`}>
+  return <g className={moving ? `sim-car sim-car-${direction.toLowerCase()}` : ''} style={moving ? { animationDelay: `${(index % 5) * 0.14}s` } : undefined} transform={`translate(${x} ${y}) rotate(${rotation})`}>
     <rect x="-15" y="-8" width="30" height="16" rx="4" fill="#243631" opacity=".5" transform="translate(1.5 2)"/>
     <rect x="-15" y="-8" width="30" height="16" rx="4" fill={colors[index % colors.length]} stroke="#f6f8f2" strokeWidth="1"/>
     <rect x="-6" y="-5" width="12" height="10" rx="2" fill="#244a55" opacity=".9"/>
@@ -37,7 +37,7 @@ function Person({ x, y, scale = 1 }) {
   </g>;
 }
 
-export default function TrafficSimulationScene({ roads = [], frame, scenario = 'baseline', playing = false }) {
+export default function TrafficSimulationScene({ roads = [], frame, scenario = 'baseline', playing = false, areaName = 'Selected area' }) {
   const active = signalPhase(Number(frame?.minute || 0), scenario);
   const directions = useMemo(() => {
     const source = roads || [];
@@ -68,7 +68,7 @@ export default function TrafficSimulationScene({ roads = [], frame, scenario = '
   for (let i = 0; i < e; i++) cars.push(<Car key={`e-${i}`} x={952 - i * 27} y={269 - (i % 2) * 30} direction="W" index={i + 3} moving={playing && active === 'EW'}/>);
   return <section className={`panel traffic-sim-scene ${playing ? 'is-playing' : ''}`} aria-label="Animated traffic intersection">
     <div className="traffic-sim-scene-head">
-      <div><span className="eyebrow">LIVE PLAYBACK VIEW</span><h3>Intersection and road activity</h3><p>Visual state updates at every five-minute simulation step.</p></div>
+      <div><span className="eyebrow">TRAFFIC NETWORK PLAYBACK</span><h3>{areaName} · Intersection activity</h3><p>Vehicle movement, queues and signal phases update during playback.</p></div>
       <div className="traffic-sim-live"><i/>{playing ? 'PLAYING' : 'PAUSED'} <b>MIN {frame?.minute ?? 0}</b></div>
     </div>
     <div className="traffic-sim-scene-canvas">

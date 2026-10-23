@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, AlertTriangle, Camera, CheckCircle2, ChevronRight, CircleHelp, CloudOff, ImagePlus, LoaderCircle, RefreshCw, ScanLine, ShieldCheck, Sparkles, Upload, Video, VideoOff, X } from 'lucide-react';
+import { Activity, AlertTriangle, Camera, CheckCircle2, ChevronRight, CircleHelp, CloudOff, Download, ImagePlus, LoaderCircle, RefreshCw, ScanLine, ShieldCheck, Sparkles, Upload, Video, VideoOff, X } from 'lucide-react';
 import PageIntro from '../../components/shared/PageIntro.jsx';
 import { api } from '../../services/api/client.js';
 
@@ -17,7 +17,7 @@ function makeReferenceResult() {
   };
 }
 
-export default function TrafficVisionPage() {
+export default function TrafficVisionPage({ authorityLab = false } = {}) {
   const [inputMode, setInputMode] = useState('camera');
   const [cameraActive, setCameraActive] = useState(false);
   const [liveScan, setLiveScan] = useState(false);
@@ -183,12 +183,30 @@ export default function TrafficVisionPage() {
   };
 
   const clearResult = () => { setResult(null); setError(''); };
+  const downloadReport = () => {
+    if (!result) return;
+    const reportPayload = {
+      project: 'UrbanSaarthi Traffic Lab', generated_at: new Date().toISOString(),
+      input: inputMode === 'camera' ? 'Device camera frame' : (file?.name || 'Uploaded road image'),
+      result_mode: result.mode || 'unknown', model: result.model || null,
+      total_vehicles: result.total_vehicles ?? null, total_detections: result.total_detections ?? null,
+      counts: result.counts || {}, congestion_estimate: result.congestion_estimate || null,
+      confidence_threshold: result.confidence_threshold ?? confidence,
+      note: result.congestion_note || (result.mode === 'reference' ? 'Reference values only; no detections from the supplied scene.' : 'Single-frame vision result; not a lane-level traffic flow measurement.'),
+    };
+    const blob = new Blob([JSON.stringify(reportPayload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob); const anchor = document.createElement('a');
+    anchor.href = url; anchor.download = `urbansaarthi-traffic-report-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
+  };
   const total = result?.total_vehicles ?? 0;
   const isSample = result?.mode === 'reference';
   const imageToShow = result?.annotated_image && !isSample ? `data:image/jpeg;base64,${result.annotated_image}` : preview;
 
   return <div className="traffic-vision-page">
-    <PageIntro eyebrow="COMPUTER VISION" title="Traffic vision" description="Use your camera or upload a road image. YOLO11 detects vehicles and returns counts by vehicle type with an annotated frame." action={<span className={`traffic-model-pill ${status?.ready ? 'ready' : 'pending'}`}><span />{status?.ready ? 'Model service ready' : 'Model service needs setup'}</span>} />
+    <PageIntro eyebrow={authorityLab ? 'CCTV & COMPUTER VISION' : 'COMPUTER VISION'} title={authorityLab ? 'Traffic Lab' : 'Traffic vision'} description={authorityLab ? 'Review an authorised CCTV snapshot or device-camera frame, detect vehicles, and export an incident report.' : 'Use your camera or upload a road image. YOLO11 detects vehicles and returns counts by vehicle type with an annotated frame.'} action={<span className={`traffic-model-pill ${status?.ready ? 'ready' : 'pending'}`}><span />{status?.ready ? 'Model service ready' : 'Model service needs setup'}</span>} />
+
+    {authorityLab && <div className="traffic-inline-note"><Camera size={16}/><span><b>Camera source</b> Use an authorised CCTV export, uploaded road image, or this device’s browser camera. A municipal live CCTV network is not connected in this build.</span></div>}
 
     {!status?.ready && <div className="traffic-inline-note"><CloudOff size={16}/><span><b>Model service not confirmed.</b> Install the listed inference dependencies to enable image-based vehicle detection. Reference values remain clearly separated from model results.</span></div>}
 
@@ -223,7 +241,7 @@ export default function TrafficVisionPage() {
       </section>
 
       <section className="panel traffic-results-panel" aria-live="polite">
-        <div className="traffic-panel-heading"><div><span className="traffic-kicker">ANALYSIS OUTPUT</span><h3>Detection summary</h3><p>Vehicle counts are based on one analyzed frame.</p></div>{result && <button className="traffic-icon-button" onClick={clearResult} aria-label="Clear analysis"><RefreshCw size={16}/></button>}</div>
+        <div className="traffic-panel-heading"><div><span className="traffic-kicker">ANALYSIS OUTPUT</span><h3>Detection summary</h3><p>Vehicle counts are based on one analyzed frame.</p></div>{result && <div className="traffic-report-actions"><button className="traffic-secondary" onClick={downloadReport}><Download size={14}/> Download report</button><button className="traffic-icon-button" onClick={clearResult} aria-label="Clear analysis"><RefreshCw size={16}/></button></div>}</div>
         {result ? <>
           <div className={`traffic-result-mode ${isSample ? 'sample' : 'actual'}`}><span>{isSample ? <Sparkles size={15}/> : <CheckCircle2 size={15}/>}</span><div><b>{isSample ? 'Reference scenario' : 'YOLO11 analysis complete'}</b><small>{isSample ? 'Indicative values · not detected from your scene' : 'Model output · uploaded frame is not stored by this feature'}</small></div></div>
           <div className="traffic-total-card"><div><span>{isSample ? 'Vehicles in reference scenario' : 'Total vehicles detected'}</span><b>{total}</b><small>{isSample ? 'No detections were returned for this frame' : `${result.total_detections} total objects detected, including other classes`}</small></div><div className={`traffic-level level-${String(result.congestion_estimate || 'low').toLowerCase()}`}><span>{isSample ? 'Reference level' : 'Preliminary level'}</span><b>{result.congestion_estimate}</b></div></div>

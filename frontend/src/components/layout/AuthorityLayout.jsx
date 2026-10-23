@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Activity, BarChart3, Bell, ChevronRight, HelpCircle, Database, House, Map, Menu, Moon, Settings, Sun, Wind, Zap } from 'lucide-react';
+import { Activity, BarChart3, Bell, Camera, ChevronRight, HelpCircle, Database, House, Map, Menu, Moon, Settings, Sun, Wind, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 
@@ -9,9 +9,11 @@ const navGroups = [
     { label: 'Live control centre', to: '/authority/control', icon: Map, code: 'ICCC' },
     { label: 'Signal plans', to: '/authority/signals', icon: Zap },
     { label: 'Traffic Simulation', to: '/authority/traffic-model', icon: Activity },
+    { label: 'Traffic Lab', to: '/authority/traffic-lab', icon: Camera },
     { label: 'Analytics', to: '/authority/analytics', icon: BarChart3 },
   ]},
   { label: 'MANAGE', items: [
+    { label: 'Air quality', to: '/authority/aqi', icon: Wind },
     { label: 'Data sources', to: '/authority/sources', icon: Database },
     { label: 'Settings', to: '/authority/settings', icon: Settings },
   ]},
@@ -20,6 +22,8 @@ const meta = {
   '/authority/control': ['Delhi ICCC', 'Live authority control centre'],
   '/authority/signals': ['Network control', 'Signal plans'],
   '/authority/traffic-model': ['Network operations', 'Traffic Simulation'],
+  '/authority/traffic-lab': ['Network operations', 'Traffic Lab'],
+  '/authority/aqi': ['Air & sensors', 'Air quality'],
   '/authority/analytics': ['Performance', 'City analytics'],
   '/authority/sources': ['Manage', 'Data sources'],
   '/authority/settings': ['Manage', 'Settings'],

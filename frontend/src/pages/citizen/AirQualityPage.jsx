@@ -1,44 +1,83 @@
-import { useMemo } from 'react';
-import { Activity, Bell, Clock, Wind } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { Activity, AlertTriangle, Clock3, LocateFixed, MapPin, RefreshCw, Search, Wind } from 'lucide-react';
 import PageIntro from '../../components/shared/PageIntro.jsx';
 import CityMap from '../../components/maps/CityMap.jsx';
-import { EmptyState, ErrorNotice } from '../../components/shared/Toast.jsx';
-import useApiResource from '../../hooks/useApiResource.js';
-import { api, endpoints } from '../../services/api/client.js';
-import { useApp } from '../../context/AppContext.jsx';
+import { api } from '../../services/api/client.js';
+import './location-aqi.css';
 
-const value = (n, unit = '') => n == null ? '—' : `${n}${unit}`;
-function age(date, reference = false) { if (reference) return 'Reference estimate · not live'; if (!date) return 'Time unavailable'; const mins = Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 60000)); return mins < 1 ? 'Updated just now' : mins < 60 ? `Updated ${mins} min ago` : `Updated ${Math.floor(mins / 60)} hr ago`; }
-const REFERENCE_STATIONS = [
-  { id: 'ref-delhi', station_name: 'Delhi city reference', latitude: 28.6139, longitude: 77.2090, aqi: 164, pm25: 78, pm10: 142, no2: 31, o3: 22, category: 'Unhealthy for sensitive groups', source: 'City reference estimate', observed_at: null },
-  { id: 'ref-lucknow', station_name: 'Lucknow city reference', latitude: 26.8467, longitude: 80.9462, aqi: 118, pm25: 43, pm10: 91, no2: 24, o3: 19, category: 'Sensitive groups should take care', source: 'City reference estimate', observed_at: null },
-  { id: 'ref-mumbai', station_name: 'Mumbai city reference', latitude: 19.0760, longitude: 72.8777, aqi: 92, pm25: 32, pm10: 64, no2: 18, o3: 27, category: 'Moderate', source: 'City reference estimate', observed_at: null },
-  { id: 'ref-bengaluru', station_name: 'Bengaluru city reference', latitude: 12.9716, longitude: 77.5946, aqi: 74, pm25: 25, pm10: 51, no2: 16, o3: 24, category: 'Moderate', source: 'City reference estimate', observed_at: null },
-  { id: 'ref-kolkata', station_name: 'Kolkata city reference', latitude: 22.5726, longitude: 88.3639, aqi: 131, pm25: 49, pm10: 106, no2: 28, o3: 21, category: 'Sensitive groups should take care', source: 'City reference estimate', observed_at: null },
-  { id: 'ref-chennai', station_name: 'Chennai city reference', latitude: 13.0827, longitude: 80.2707, aqi: 68, pm25: 21, pm10: 46, no2: 14, o3: 25, category: 'Moderate', source: 'City reference estimate', observed_at: null },
-];
-export default function AirQualityPage() {
-  const { notify } = useApp();
-  const { data, loading, error, reload } = useApiResource(() => api.get(endpoints.aqi()), []);
-  const { data: localOutlook, loading: outlookLoading, reload: reloadOutlook } = useApiResource(() => api.get('/aqi/location-forecast?latitude=28.6139&longitude=77.2090'), []);
-  const refreshAll = () => { void reload(); void reloadOutlook(); };
-  const usingFallback = !Array.isArray(data) || data.length === 0;
-  const stations = (usingFallback ? REFERENCE_STATIONS : [...data]).sort((a,b) => (b.aqi ?? -1) - (a.aqi ?? -1));
-  const markers = useMemo(() => stations.filter((x) => Number.isFinite(x.latitude) && Number.isFinite(x.longitude)).map((x) => ({ id: x.id, lat: x.latitude, lng: x.longitude, title: x.station_name, description: `AQI ${x.aqi ?? 'not supplied'} · ${x.source}`, kind: x.aqi >= 200 ? 'critical' : x.aqi >= 100 ? 'busy' : 'normal' })), [data]);
-  const validAqi = stations.filter((s) => s.aqi != null);
-  const average = validAqi.length ? Math.round(validAqi.reduce((sum, s) => sum + s.aqi, 0) / validAqi.length) : null;
-  const primary = stations.find((s) => s.aqi != null) || stations[0];
-  const outlookCurrent = localOutlook?.current || {};
-  const outlookHasLiveData = localOutlook?.status !== 'unavailable' && (outlookCurrent.openweather_index != null || outlookCurrent.us_aqi != null);
-  return <>
-    <PageIntro eyebrow="CPCB / CONFIGURED STATION OBSERVATIONS" title="Know the air before you go" description="Review recent station readings and pollutant measurements reported by connected sources." action={<button className="utility" onClick={refreshAll}><Activity size={15}/> Refresh readings</button>} />
-    {usingFallback && <div className="notice aqi-reference-banner"><Activity size={15}/><span><b>City reference estimates are shown.</b> Live station readings could not be confirmed, so these values are illustrative and are not official or live measurements.</span><button className="utility" onClick={refreshAll}>Retry live feed</button></div>}
-    <ErrorNotice message={error} onRetry={reload}/>
-    <div className="aqi-top-grid"><section className="panel aqi-map-panel"><div className="panel-head"><div><div className="eyebrow">STATION MAP</div><h3>Available observations</h3></div><span className="status-pill">{stations.length} stations</span></div><CityMap markers={markers} zoom={11} className="aqi-map"/><div className="map-foot"><span><Wind size={13}/> Station locations</span><small>Only configured coordinates are shown</small></div></section>
-      <aside className="panel aqi-feature"><div className="aqi-gauge"><div><b>{average ?? '—'}</b><small>AVG AQI</small></div></div><h3>{average == null ? 'AQI unavailable' : primary?.category || 'AQI reported by source'}</h3><p>{primary ? `${primary.station_name} · ${age(primary.observed_at, usingFallback)}` : 'No recent station observations were returned for this area.'}</p><div className="pollutant-block"><small>Primary pollutant · PM2.5</small><b>{value(primary?.pm25, ' µg/m³')}</b></div><button className="secondary full" onClick={() => notify('AQI notifications are not supported by the current API; no subscription was created.')}><Bell size={14}/>Notify me when AQI improves</button><p className="api-note">{usingFallback ? 'This reference view keeps the map and city-level indicators useful during a feed outage. Values are illustrative, not live.' : 'Pollutant concentrations and AQI values are displayed as supplied by the source. An AQI may be absent even when pollutant measurements exist.'}</p></aside></div>
-    <section className="panel aqi-weather-outlook"><div className="panel-head"><div><div className="eyebrow">LOCATION FORECAST</div><h3>Delhi local air-quality outlook</h3></div><span className="status-pill">{outlookLoading ? 'Updating…' : localOutlook?.provider || 'Provider unavailable'}</span></div>
-      {outlookHasLiveData ? <><div className="aqi-weather-metrics"><div><small>{outlookCurrent.openweather_index != null ? 'OpenWeather index · 1–5' : 'US AQI · 0–500'}</small><b>{value(outlookCurrent.openweather_index ?? outlookCurrent.us_aqi)}</b><span>{outlookCurrent.category || 'Category unavailable'}</span></div><div><small>PM2.5</small><b>{value(outlookCurrent.pm25, ' µg/m³')}</b><span>Airborne fine particles</span></div><div><small>PM10</small><b>{value(outlookCurrent.pm10, ' µg/m³')}</b><span>Coarse particles</span></div><div><small>Ozone</small><b>{value(outlookCurrent.ozone, ' µg/m³')}</b><span>Ground-level ozone</span></div><div><small>Nitrogen dioxide</small><b>{value(outlookCurrent.nitrogen_dioxide, ' µg/m³')}</b><span>NO₂ concentration</span></div></div><p className="aqi-weather-note">{localOutlook.note || 'Location-based provider outlook. Values may differ from official ground stations.'} {localOutlook.updated_at ? `Provider time: ${localOutlook.updated_at}.` : ''}</p></> : <><div className="aqi-weather-metrics"><div><small>City reference AQI</small><b>{value(primary?.aqi)}</b><span>{primary?.category || 'Reference category'}</span></div><div><small>PM2.5 reference</small><b>{value(primary?.pm25, ' µg/m³')}</b><span>Reference pollutant value</span></div><div><small>PM10 reference</small><b>{value(primary?.pm10, ' µg/m³')}</b><span>Reference pollutant value</span></div><div><small>Ozone reference</small><b>{value(primary?.o3, ' µg/m³')}</b><span>Reference pollutant value</span></div><div><small>NO₂ reference</small><b>{value(primary?.no2, ' µg/m³')}</b><span>Reference pollutant value</span></div></div><p className="aqi-weather-note">{outlookLoading ? 'Loading live location forecast…' : 'Live provider readings are unavailable for this request. The values above are from the labelled city reference card and are not live readings.'} <button className="text-action" onClick={reloadOutlook}>Retry forecast</button></p></>}
+const show = (value, unit = '') => value == null || !Number.isFinite(Number(value)) ? '—' : `${Math.round(Number(value) * 10) / 10}${unit}`;
+const currentIndex = (current) => current?.openweather_index ?? current?.us_aqi ?? null;
+const indexLabel = (current) => current?.openweather_index != null ? 'OpenWeather index · 1–5' : current?.us_aqi != null ? 'US AQI · 0–500' : 'AQI unavailable';
+
+export default function AirQualityPage({ authorityMode = false } = {}) {
+  const [query, setQuery] = useState('Lucknow, Uttar Pradesh');
+  const [location, setLocation] = useState(null);
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async (latitude, longitude, label) => {
+    setLoading(true); setError('');
+    try {
+      const data = await api.get(`/aqi/location-forecast?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}`);
+      setLocation({ latitude: Number(latitude), longitude: Number(longitude), label: label || `${Number(latitude).toFixed(4)}, ${Number(longitude).toFixed(4)}` });
+      setReport(data);
+      if (data?.status === 'unavailable' || currentIndex(data?.current) == null) setError(data?.note || 'No AQI index was returned for this location. Try another nearby area.');
+    } catch (err) {
+      setReport(null); setError(err?.message || 'Could not load air quality for this location.');
+    } finally { setLoading(false); }
+  }, []);
+
+  const search = async (event) => {
+    event?.preventDefault?.();
+    const text = query.trim();
+    if (!text) { setError('Enter a city, neighbourhood, or address.'); return; }
+    setLoading(true); setError('');
+    try {
+      const response = await api.get(`/routing/geocode?q=${encodeURIComponent(text)}&limit=5`);
+      const place = response?.results?.[0];
+      if (!place) throw new Error(`No mapped place found for “${text}”. Try a nearby landmark or city name.`);
+      setQuery(place.label || text);
+      await load(place.latitude, place.longitude, place.label || text);
+    } catch (err) { setError(err?.message || 'Could not find that location.'); setLoading(false); }
+  };
+
+  const useLocation = () => {
+    if (!navigator.geolocation) { setError('Location access is not available in this browser.'); return; }
+    setLocating(true); setError('');
+    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
+      let label = 'Your current location';
+      try { const place = await api.get(`/routing/reverse-geocode?latitude=${coords.latitude}&longitude=${coords.longitude}`); label = place.label || label; } catch { /* coordinates remain usable */ }
+      setQuery(label); setLocating(false); load(coords.latitude, coords.longitude, label);
+    }, (geoError) => { setLocating(false); setError(geoError.code === 1 ? 'Location permission was denied. You can search for a city instead.' : 'Could not retrieve your location. Check device location services and retry.'); }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+  };
+
+  const current = report?.current || {};
+  const index = currentIndex(current);
+  const openWeatherScale = current.openweather_index != null;
+  const forecast = (report?.forecast || []).filter((item) => currentIndex(item) != null).slice(0, 8);
+  const category = current.category || 'AQI unavailable';
+  const markers = location ? [{ id: 'air-quality-location', lat: location.latitude, lng: location.longitude, title: location.label, description: `${indexLabel(current)}: ${index == null ? '—' : Math.round(index)}`, kind: openWeatherScale ? (index >= 4 ? 'critical' : index >= 3 ? 'busy' : 'normal') : (index >= 151 ? 'critical' : index >= 101 ? 'busy' : 'normal') }] : [];
+
+  return <div className="location-aqi-page air-quality-dashboard">
+    <PageIntro eyebrow={authorityMode ? "CITY ENVIRONMENT" : "LOCAL CONDITIONS"} title={authorityMode ? "Air quality monitoring" : "Air quality"} description={authorityMode ? "Review the current provider AQI, pollutant readings and hourly outlook for a selected area." : "Check the AQI and pollutant readings for any location before heading out."} action={<button className="utility" type="button" onClick={() => location && load(location.latitude, location.longitude, location.label)} disabled={!location || loading}><RefreshCw size={14}/>{loading ? 'Updating…' : 'Refresh'}</button>} />
+    <section className="panel air-search-panel">
+      <form className="air-location-form" onSubmit={search}>
+        <label htmlFor="air-location-query"><span className="eyebrow">SEARCH AREA</span><span className="air-location-input"><MapPin size={17}/><input id="air-location-query" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Enter city, neighbourhood, or address" autoComplete="off" /></span></label>
+        <button className="primary" type="submit" disabled={loading}><Search size={15}/>{loading ? 'Checking…' : 'Check air quality'}</button>
+        <button className="secondary" type="button" onClick={useLocation} disabled={locating || loading}><LocateFixed size={15}/>{locating ? 'Locating…' : 'Use my location'}</button>
+      </form>
     </section>
-    <div className="station-grid">{stations.map((station) => <article className="panel station-card" key={station.id}><div className="station-card-top"><span>{station.source}</span><b className={station.aqi == null ? '' : station.aqi >= 200 ? 'aqi-critical' : station.aqi >= 100 ? 'aqi-warning' : 'aqi-normal'}>{station.aqi ?? '—'}</b></div><h3>{station.station_name}</h3><small>{age(station.observed_at, usingFallback)}</small><div className="pollutant-grid"><div><small>PM2.5</small><b>{value(station.pm25)}</b></div><div><small>PM10</small><b>{value(station.pm10)}</b></div><div><small>NO₂</small><b>{value(station.no2)}</b></div><div><small>O₃</small><b>{value(station.o3)}</b></div></div><div className="station-card-footer"><span>{station.category || 'Category not supplied'}</span><span>{station.latitude.toFixed(3)}, {station.longitude.toFixed(3)}</span></div></article>)}</div>
-  </>;
+    {error && <div className="aqi-location-notice"><AlertTriangle size={16}/><span>{error}</span><button type="button" onClick={() => location && load(location.latitude, location.longitude, location.label)}>Retry</button></div>}
+    {report && <>
+      <div className="air-quality-summary-grid">
+        <section className="panel air-aqi-card"><div className="air-card-top"><span className="air-card-symbol"><Wind size={19}/></span><span className="air-status-pill">{report?.provider || 'AQI provider'}</span></div><div className="eyebrow">{indexLabel(current)}</div><strong className={`air-big-index ${index == null ? 'unavailable' : openWeatherScale ? index >= 4 ? 'high' : index >= 3 ? 'mid' : 'good' : index >= 151 ? 'high' : index >= 101 ? 'mid' : 'good'}`}>{index == null ? '—' : Math.round(index)}</strong><h3>{category}</h3><p>{location?.label}</p><div className="air-index-duo"><div><small>OpenWeather index</small><b>{current.openweather_index == null ? '—' : current.openweather_index}<i>/ 5</i></b></div><div><small>US AQI</small><b>{current.us_aqi == null ? '—' : Math.round(current.us_aqi)}<i>/ 500</i></b></div></div><div className="air-aqi-foot"><span><Clock3 size={13}/>{report?.updated_at ? new Date(report.updated_at).toLocaleString() : 'Provider time unavailable'}</span><span>{openWeatherScale ? 'Provider scale' : 'Forecast scale'}</span></div></section>
+        <section className="panel air-pollutants-card"><div className="panel-head"><div><div className="eyebrow">POLLUTANT LEVELS</div><h3>What is in the air</h3></div><Activity size={18}/></div><div className="air-pollutants-grid"><div><small>PM2.5</small><b>{show(current.pm25, ' µg/m³')}</b><span>Fine particles</span></div><div><small>PM10</small><b>{show(current.pm10, ' µg/m³')}</b><span>Coarse particles</span></div><div><small>Ozone</small><b>{show(current.ozone, ' µg/m³')}</b><span>Ground-level O₃</span></div><div><small>Nitrogen dioxide</small><b>{show(current.nitrogen_dioxide, ' µg/m³')}</b><span>NO₂ concentration</span></div></div><div className="air-provider-note">{report?.note || 'Readings reflect the selected provider and forecast grid cell.'}</div></section>
+      </div>
+      <div className="air-quality-lower-grid"><section className="panel air-map-card"><div className="panel-head"><div><div className="eyebrow">LOCATION</div><h3>{location?.label || 'Selected area'}</h3></div><MapPin size={17}/></div><CityMap markers={markers} zoom={13} className="air-quality-map" /></section>
+        <section className="panel air-hourly-card"><div className="panel-head"><div><div className="eyebrow">FORECAST</div><h3>Next hours</h3></div><span className="status-pill">{forecast.length} points</span></div>{forecast.length ? <div className="air-hourly-list">{forecast.map((item) => { const aqi = currentIndex(item); return <article key={item.time}><div><small>{new Date(item.time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</small><b>{item.category || 'AQI'}</b></div><strong>{Math.round(aqi)}</strong><span className={`air-index-track ${openWeatherScale ? 'scale-openweather' : ''}`}><i style={{ width: `${Math.max(5, Math.min(100, Number(aqi) / (openWeatherScale ? 5 : 300) * 100))}%` }} /></span></article>; })}</div> : <div className="air-hourly-empty">No hourly points returned for this location.</div>}<small className="air-source-foot">{report?.provider || 'Source unavailable'} · The forecast index scale is shown above each reading.</small></section></div>
+    </>}
+    {!report && !loading && <section className="panel air-empty-state"><span><Wind size={28}/></span><h3>Search a location to see its air quality</h3><p>Use a city or address, or share your location to load an available provider forecast.</p></section>}
+  </div>;
 }
