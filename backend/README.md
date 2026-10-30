@@ -150,7 +150,7 @@ Set `MODEL_PATH=models/queue_length.joblib` and restart the API. The script emit
 
 ### SUMO / signal control
 
-The API records signal phase plans and runs a deterministic **analytical what-if baseline**. The `engine` and caveat fields are explicit. SUMO execution is not turned on merely by adding a data-source record; a calibrated network, demand/routes, traffic-light IDs and a dedicated simulation runner must be integrated and validated.
+`/api/v1/traffic-detection/ops-workflow` runs a 60-minute scenario after evidence inspection and a draft signal plan. If the SUMO CLI is installed and available as `sumo` on PATH (or configured as `SUMO_BINARY`), the workflow runs paired 3,600-second baseline/intervention simulations on the bundled synthetic grid with generated flows. Otherwise, the supplied trained XGBoost 60-minute scenario is used and labelled accordingly. The output includes the engine and caveats. Camera video is not map-matched to grid edges, so clip-derived density only scales generated demand in native SUMO mode; it is not a calibrated site forecast.
 
 Signal plans progress through `draft`, `simulated`, `approved`, `rejected`. `/dispatch-preview` only emits a JSON preview after approval. It never transmits a command to physical traffic lights. Do not remove that guard without an authorized ATCS integration, engineering safety analysis, interlocks, fail-safe design, operator controls and field validation.
 
@@ -214,3 +214,8 @@ The `aqi-vision` API adds an image + sensor category prediction flow using the s
 Allowed season values are `Monsoon`, `Summer`, `Winter`; time-of-day values are `Day`, `Night`. Numeric validation uses PM2.5/PM10 0–2000 µg/m³, temperature −50–70 °C, and humidity 0–100%. The fitted preprocessor must output the expected nine features; the model checkpoint is loaded with strict state-dict matching. Model output is a six-class category probability distribution. It is not an official measured numeric AQI.
 
 The supplied notebook reports test accuracy 82.09% and macro F1 0.7226. Those are notebook-reported metrics, not independent validation by this service. PyTorch and torchvision are pinned to CPU-only wheels in `requirements.txt`; inference is lazy-loaded and cached per process. Confirm memory headroom if Traffic Vision and AQI Vision are both used on the same small Render instance.
+
+
+### Traffic video and operations workflow
+
+`GET /api/v1/traffic-detection/video-status` reports OpenCV, YOLO weights, forecast-artifact, optional native SUMO, and optional Groq/LangGraph readiness. `POST /api/v1/traffic-detection/analyze-video` accepts video for OpenCV sampling and YOLO tracking; `POST /api/v1/traffic-detection/ops-workflow` persists measured class counts and unknown queue length, creates a reviewable signal-plan draft, and saves a 60-minute scenario. `GROQ_API_KEY` is optional: it enables LangGraph tool-calling through Groq; bounded deterministic tools remain available with no key. Groq quota/pricing depends on your account; check current terms before relying on hosted calls as free. Read [`../TRAFFIC_LAB_SETUP.md`](../TRAFFIC_LAB_SETUP.md) for installation and exact scope.

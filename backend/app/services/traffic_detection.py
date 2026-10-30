@@ -23,7 +23,13 @@ VEHICLE_ALIASES = {
 
 
 def model_path() -> Path:
-    return Path(os.getenv("TRAFFIC_MODEL_PATH", str(DEFAULT_MODEL_PATH))).expanduser()
+    env_override = os.getenv("TRAFFIC_MODEL_PATH", "").strip()
+    try:
+        from app.core.config import settings
+        configured = settings.traffic_model_path.strip()
+    except Exception:
+        configured = ""
+    return Path(env_override or configured or str(DEFAULT_MODEL_PATH)).expanduser()
 
 
 @lru_cache(maxsize=1)

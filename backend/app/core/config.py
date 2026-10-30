@@ -18,6 +18,15 @@ class Settings(BaseSettings):
     weather_api_key: str = ""
     tomtom_api_key: str = ""
     model_path: str = ""
+    # Optional LLM API keys for agentic tool-calling; rule-based fallback active when omitted
+    gemini_api_key: str = ""
+    openai_api_key: str = ""
+    # Optional Groq key for LangGraph native tool-calling in the Traffic Lab.
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-120b"
+    # Optional override for the bundled YOLO traffic checkpoint.
+    traffic_model_path: str = ""
+    sumo_binary: str = ""
     gtfs_max_upload_mb: int = 30
     auto_refresh_forecasts: bool = True
     forecast_refresh_min_interval_seconds: int = 300

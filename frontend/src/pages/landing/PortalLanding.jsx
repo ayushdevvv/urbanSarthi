@@ -1,4 +1,4 @@
-import { ArrowRight, Building2, Cloud, Leaf, MapPin, Navigation, ShieldCheck, Wind, Activity, TrendingUp, CarFront } from 'lucide-react';
+import { ArrowRight, Bot, Building2, Cloud, Leaf, MapPin, Navigation, ShieldCheck, Wind, Activity, TrendingUp, CarFront } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../../components/shared/BrandMark.jsx';
@@ -24,7 +24,12 @@ export default function PortalLanding() {
           <button className="portal-choice citizen-choice" onClick={() => navigate('/citizen')}><span className="choice-icon"><Navigation size={21}/></span><span><small>FOR EVERYDAY JOURNEYS</small><b>Citizen portal</b></span><ArrowRight size={18}/></button>
           <button className="portal-choice authority-choice" onClick={() => navigate('/authority/control')}><span className="choice-icon"><Building2 size={20}/></span><span><small>FOR CITY OPERATIONS</small><b>Authority portal</b></span><ArrowRight size={18}/></button>
         </div>
-        <div className="landing-assurances"><span><ShieldCheck size={14}/> Easy access</span><span><MapPin size={14}/> City mobility tools</span><span><Wind size={14}/> Air quality insights</span></div>
+        <div className="landing-assurances">
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--brand, #0d9488)', fontWeight: 600 }}><Bot size={14}/> AI Mobility Assistant Active</span>
+          <span><ShieldCheck size={14}/> Easy access</span>
+          <span><MapPin size={14}/> Multi-city mobility</span>
+          <span><Wind size={14}/> Air quality insights</span>
+        </div>
       </section>
       <section className="landing-visual" aria-label="City mobility overview">
         <div className="city-glow city-glow-one"/><div className="city-glow city-glow-two"/>

@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { Activity, Bus, Camera, House, MapPin, Moon, Route, Sun, Wind } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
+import FloatingAgentWidget from '../shared/FloatingAgentWidget.jsx';
 
 const links = [
   { to: '/citizen', label: 'Home', icon: House, end: true },
@@ -27,5 +28,6 @@ export default function CitizenLayout() {
     </header>
     <main className="citizen-content"><Outlet /></main>
     <footer className="citizen-footer"><span>UrbanSaarthi India · Multiple cities platform</span><span>Aligned with India’s Smart Cities Mission</span><span>Emergency: 112</span></footer>
+    <FloatingAgentWidget mode="citizen" />
   </div>;
 }

@@ -1,0 +1,4 @@
+# Optional LangGraph + Groq tool-calling agent. API key required only for LLM reasoning.
+langgraph>=0.2,<2
+langchain-core>=0.3,<2
+langchain-groq>=0.2,<2

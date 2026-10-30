@@ -1,0 +1,11 @@
+# Optional: YOLO traffic detection + multimodal AQI checkpoint (large downloads, ~1-2 GB).
+# The original requirements.txt pins "torch==2.10.0+cpu", a suffix that only exists on the PyTorch
+# CPU index for Linux/Windows. macOS wheels have no "+cpu" suffix, so pick by platform.
+# Versions are copied from the original pins; they could not be verified offline.
+ultralytics>=8.3,<9
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.10.0+cpu ; sys_platform != "darwin"
+torchvision==0.25.0+cpu ; sys_platform != "darwin"
+torch==2.10.0 ; sys_platform == "darwin"
+torchvision==0.25.0 ; sys_platform == "darwin"
+opencv-python-headless>=4.10,<5

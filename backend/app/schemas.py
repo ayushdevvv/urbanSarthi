@@ -124,7 +124,7 @@ class TrafficObservationOut(ORMModel):
     source: str
     observed_at: datetime
     vehicle_count: int
-    queue_length_m: float
+    queue_length_m: float | None
     average_speed_kmph: float | None
     average_wait_seconds: float | None
     lane_density: float | None

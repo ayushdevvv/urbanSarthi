@@ -74,7 +74,7 @@ def simulate_signal_plan(db: Session, junction: Junction, name: str, phases: lis
         "demand_green_alignment_score": round(alignment, 4),
         "equal_split_alignment_baseline": round(equal_baseline, 4),
         "estimated_relative_change": round(alignment_delta, 4),
-        "queue_length_m": round(max(0.0, obs.queue_length_m * (1 - alignment_delta)), 2) if obs else None,
+        "queue_length_m": round(max(0.0, obs.queue_length_m * (1 - alignment_delta)), 2) if obs and obs.queue_length_m is not None else None,
         "average_wait_seconds": round(max(0.0, obs.average_wait_seconds * (1 - alignment_delta)), 2) if obs and obs.average_wait_seconds is not None else None,
         "throughput_vehicle_count": round(obs.vehicle_count * (1 + max(-0.1, alignment_delta * 0.6))) if obs else None,
         "traffic_metrics_available": bool(obs),

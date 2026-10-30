@@ -1,0 +1,23 @@
+# Everything needed to run the API + agent locally, WITHOUT the heavy vision stack.
+# (Traffic Vision / AQI Vision endpoints then report "inference unavailable" instead of crashing.)
+# Install the vision extras separately with requirements-vision.txt.
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.34,<1.0
+SQLAlchemy>=2.0.40,<2.1
+alembic>=1.15,<2.0
+psycopg[binary]>=3.2,<4.0
+pydantic>=2.10,<3.0
+pydantic-settings>=2.8,<3.0
+email-validator>=2.2,<3.0
+argon2-cffi>=23.1,<26.0
+httpx>=0.28,<1.0
+python-multipart>=0.0.20,<1.0
+joblib>=1.4,<2.0
+pytest>=8.3,<10.0
+scikit-learn==1.7.2
+pandas>=2.2,<4.0
+Pillow>=10.0,<13
+
+# SUMO-trained traffic forecast model (used by the agent's traffic tool).
+# On macOS, if importing xgboost fails with a libomp error: brew install libomp
+xgboost>=2.1,<4

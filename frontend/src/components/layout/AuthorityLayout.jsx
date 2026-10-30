@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Activity, BarChart3, Bell, Camera, ChevronRight, HelpCircle, Database, House, Map, Menu, Moon, Settings, Sun, Wind, Zap } from 'lucide-react';
+import { Activity, BarChart3, Bell, Bot, Camera, ChevronRight, HelpCircle, Database, House, Map, Menu, Moon, Settings, Sun, Wind, Zap, CloudSun } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
+import FloatingAgentWidget from '../shared/FloatingAgentWidget.jsx';
 
 const navGroups = [
   { label: 'WORKSPACE', items: [
@@ -10,6 +11,7 @@ const navGroups = [
     { label: 'Signal plans', to: '/authority/signals', icon: Zap },
     { label: 'Traffic Simulation', to: '/authority/traffic-model', icon: Activity },
     { label: 'Traffic Lab', to: '/authority/traffic-lab', icon: Camera },
+    { label: 'Air Intelligence', to: '/authority/air-intelligence', icon: CloudSun },
     { label: 'Analytics', to: '/authority/analytics', icon: BarChart3 },
   ]},
   { label: 'MANAGE', items: [
@@ -23,6 +25,7 @@ const meta = {
   '/authority/signals': ['Network control', 'Signal plans'],
   '/authority/traffic-model': ['Network operations', 'Traffic Simulation'],
   '/authority/traffic-lab': ['Network operations', 'Traffic Lab'],
+  '/authority/air-intelligence': ['Air & emissions', 'Air intelligence'],
   '/authority/aqi': ['Air & sensors', 'Air quality'],
   '/authority/analytics': ['Performance', 'City analytics'],
   '/authority/sources': ['Manage', 'Data sources'],
@@ -60,5 +63,6 @@ export default function AuthorityLayout() {
         <button className="icon-btn" aria-label="Alerts" onClick={() => navigate('/authority/control')}><Bell size={18}/></button>
       </div>
     </header><div className="content"><Outlet /></div></main>
+    <FloatingAgentWidget mode="authority" />
   </div>;
 }

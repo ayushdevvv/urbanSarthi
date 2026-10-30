@@ -1,268 +1,387 @@
-"""Optional, real SUMO/TraCI runner for the bundled 4x4 demo network.
+"""Optional native SUMO runner for the bundled synthetic grid network.
 
-This is deliberately separate from the trained SUMO-data forecasting model: it runs
-SUMO from the supplied network only when the SUMO binaries and TraCI tools are installed.
-It never sends commands to physical traffic signals.
+When the SUMO CLI is installed, run a real 3,600-second traffic simulation using
+explicit synthetic flows on the supplied grid network. The uploaded video does not
+geospatially identify edges, so the report controls scenario context, not map matching.
 """
 from __future__ import annotations
 
 import os
-import random
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 import xml.etree.ElementTree as ET
+from collections import deque
 from pathlib import Path
 from typing import Any
+from app.services.emissions import emissions_for_vehicle_km, normalize_vehicle_counts
 
-from app.core.config import settings
-
-BACKEND_DIR = Path(__file__).resolve().parents[2]
-TRAFFIC_ARTIFACTS = BACKEND_DIR / "models" / "traffic_forecast"
-NETWORK_FILE = TRAFFIC_ARTIFACTS / "grid.net.xml"
-
-
-def _sumo_home() -> str | None:
-    configured = settings.sumo_home.strip() or os.getenv("SUMO_HOME")
-    if configured and Path(configured).expanduser().is_dir():
-        return str(Path(configured).expanduser())
-    # `pip install eclipse-sumo` exposes its bundle's root through this module.
-    # Discover it automatically so users do not always need to manually set SUMO_HOME.
-    try:
-        import sumo  # type: ignore
-        bundle_home = getattr(sumo, "SUMO_HOME", None)
-        if bundle_home and Path(str(bundle_home)).is_dir():
-            return str(bundle_home)
-    except ImportError:
-        pass
-    return None
+BASE = Path(__file__).resolve().parents[1] / "ml" / "traffic_simulation"
+NETWORK = BASE / "data" / "grid.net.xml"
+DURATION_SECONDS = 3600
+STEP_SECONDS = 300
 
 
-def _find_binary(name: str) -> str | None:
-    setting_name = "sumo_binary" if name == "sumo" else "duarouter_binary"
-    direct = getattr(settings, setting_name).strip() or os.getenv(f"{name.upper()}_BINARY")
-    if direct:
-        path = Path(direct).expanduser()
-        if path.is_file():
-            return str(path)
-    sumo_home = _sumo_home()
-    if sumo_home:
-        for path in (Path(sumo_home) / "bin" / name, Path(sumo_home) / "bin" / f"{name}.exe"):
-            if path.is_file():
-                return str(path)
-    return shutil.which(name) or shutil.which(f"{name}.exe")
+def sumo_binary() -> str | None:
+    configured = os.getenv("SUMO_BINARY", "").strip()
+    if not configured:
+        try:
+            from app.core.config import settings
+            configured = settings.sumo_binary.strip()
+        except Exception:
+            configured = ""
+    if configured and Path(configured).exists():
+        return configured
+    return shutil.which("sumo") or shutil.which("sumo.exe")
 
 
-def _load_traci() -> tuple[Any | None, str | None]:
-    sumo_home = _sumo_home()
-    if sumo_home:
-        tools_dir = Path(sumo_home) / "tools"
-        if tools_dir.is_dir() and str(tools_dir) not in sys.path:
-            sys.path.insert(0, str(tools_dir))
-    try:
-        import traci  # type: ignore
-        return traci, None
-    except ImportError as exc:
-        # Support Python packages that expose TraCI separately from the SUMO tools folder.
-        return None, f"TraCI Python module is not available: {exc}"
+def _routes_from_network(network_root: ET.Element, wanted: int = 8) -> list[list[str]]:
+    edges = {edge.get("id"): edge for edge in network_root.findall("edge") if edge.get("function") != "internal" and edge.get("id")}
+    # The supplied network names its perimeter connectors left*, right*, top* and bottom*.
+    def outer(node: str | None) -> bool:
+        value = (node or "").lower()
+        return value.startswith(("left", "right", "top", "bottom"))
+
+    entries = [eid for eid, edge in edges.items() if outer(edge.get("from")) and not outer(edge.get("to"))]
+    exits = {eid for eid, edge in edges.items() if not outer(edge.get("from")) and outer(edge.get("to"))}
+    transitions: dict[str, list[str]] = {eid: [] for eid in edges}
+    for conn in network_root.findall("connection"):
+        source, target = conn.get("from"), conn.get("to")
+        if source in edges and target in edges:
+            transitions[source].append(target)
+
+    found: list[list[str]] = []
+    used_exits: set[str] = set()
+    for entry in sorted(entries):
+        start_boundary = edges[entry].get("from")
+        queue = deque([(entry, [entry])])
+        seen = {entry}
+        best = None
+        while queue:
+            current, route = queue.popleft()
+            if current in exits and len(route) >= 4 and current not in used_exits and edges[current].get("to") != start_boundary:
+                best = route
+                break
+            for next_edge in transitions.get(current, []):
+                if next_edge in seen:
+                    continue
+                seen.add(next_edge)
+                queue.append((next_edge, route + [next_edge]))
+        if best:
+            found.append(best)
+            used_exits.add(best[-1])
+            if len(found) >= wanted:
+                break
+    # Guarantee route diversity by allowing exit reuse only if necessary.
+    if len(found) < 4:
+        for entry in sorted(entries):
+            queue = deque([(entry, [entry])]); seen = {entry}; best = None
+            while queue:
+                current, route = queue.popleft()
+                if current in exits and len(route) >= 4:
+                    best = route; break
+                for nxt in transitions.get(current, []):
+                    if nxt not in seen:
+                        seen.add(nxt); queue.append((nxt, route + [nxt]))
+            if best and best not in found:
+                found.append(best)
+            if len(found) >= wanted: break
+    if len(found) < 4:
+        raise RuntimeError("The bundled SUMO grid did not yield enough valid through routes")
+    return found
 
 
-def runtime_status() -> dict[str, Any]:
-    sumo = _find_binary("sumo")
-    duarouter = _find_binary("duarouter")
-    traci, traci_error = _load_traci()
-    ready = bool(sumo and duarouter and traci and NETWORK_FILE.is_file())
-    missing = []
-    if not sumo:
-        missing.append("sumo binary")
-    if not duarouter:
-        missing.append("duarouter binary")
-    if not traci:
-        missing.append("TraCI Python tools")
-    if not NETWORK_FILE.is_file():
-        missing.append("bundled grid.net.xml network")
+def _patch_signal_cycles(source: Path, destination: Path, proposed_phases: list[dict[str, Any]] | None) -> None:
+    tree = ET.parse(source)
+    root = tree.getroot()
+    phases = proposed_phases or []
+    if len(phases) >= 4:
+        ns_weight = max(1, int(phases[0].get("green_seconds", 19)) + int(phases[2].get("green_seconds", 19)))
+        ew_weight = max(1, int(phases[1].get("green_seconds", 18)) + int(phases[3].get("green_seconds", 18)))
+        target_cycle = sum(int(item.get("green_seconds", 18)) + int(item.get("yellow_seconds", 3)) + int(item.get("all_red_seconds", 1)) for item in phases)
+    elif len(phases) >= 2:
+        ns_weight = max(1, int(phases[0].get("green_seconds", 42)))
+        ew_weight = max(1, int(phases[1].get("green_seconds", 42)))
+        target_cycle = ns_weight + ew_weight + int(phases[0].get("yellow_seconds", 3)) + int(phases[1].get("yellow_seconds", 3)) + int(phases[0].get("all_red_seconds", 1)) + int(phases[1].get("all_red_seconds", 1))
+    else:
+        ns_weight = ew_weight = 1
+        target_cycle = 90
+    yellow_ns = max(3, int(phases[0].get("yellow_seconds", 3))) if phases else 3
+    yellow_ew = max(3, int(phases[1].get("yellow_seconds", 3))) if len(phases) > 1 else 3
+    all_red_ns = max(1, int(phases[0].get("all_red_seconds", 1))) if phases else 1
+    all_red_ew = max(1, int(phases[1].get("all_red_seconds", 1))) if len(phases) > 1 else 1
+    green_budget = max(16, target_cycle - yellow_ns - yellow_ew - all_red_ns - all_red_ew)
+    weight_sum = ns_weight + ew_weight
+    green_ns = max(8, round(green_budget * ns_weight / weight_sum))
+    green_ew = max(8, green_budget - green_ns)
+    # The supplied network exposes two axis-wide stages (north/south, east/west),
+    # not four calibrated turning groups. Aggregate the UI draft by axis and explicitly
+    # insert all-red clearance between opposing green stages. The cycle still sums to the
+    # proposed cycle duration; phase-level turn separation is not claimed.
+    for logic in root.findall("tlLogic"):
+        current = logic.findall("phase")
+        if len(current) < 4:
+            continue
+        ns_green_state = current[0].get("state", "")
+        ns_yellow_state = current[1].get("state", "")
+        ew_green_state = current[2].get("state", "")
+        ew_yellow_state = current[3].get("state", "")
+        state_size = max(len(ns_green_state), len(ns_yellow_state), len(ew_green_state), len(ew_yellow_state))
+        all_red_state = "r" * state_size
+        for phase in current:
+            logic.remove(phase)
+        for duration, state in (
+            (green_ns, ns_green_state), (yellow_ns, ns_yellow_state), (all_red_ns, all_red_state),
+            (green_ew, ew_green_state), (yellow_ew, ew_yellow_state), (all_red_ew, all_red_state),
+        ):
+            ET.SubElement(logic, "phase", {"duration": str(duration), "state": state})
+    tree.write(destination, encoding="utf-8", xml_declaration=True)
+
+
+def _vehicle_mix_from_report(report: dict[str, Any] | None) -> dict[str, float]:
+    counts = normalize_vehicle_counts((report or {}).get("counts") or {})
+    total = sum(counts.values())
+    if total <= 0:
+        return {"car": 1.0}
+    return {key: value / total for key, value in counts.items() if value > 0}
+
+
+def _write_routes(route_path: Path, routes: list[list[str]], demand_multiplier: float, report: dict[str, Any] | None = None) -> dict[str, float]:
+    """Create deterministic multi-class demand from measured YOLO class proportions."""
+    root = ET.Element("routes")
+    type_specs = {
+        "car": {"vClass": "passenger", "length": "5.0", "minGap": "2.5", "maxSpeed": "13.9", "accel": "2.6", "decel": "4.5"},
+        "motorbike": {"vClass": "motorcycle", "length": "2.2", "minGap": "1.0", "maxSpeed": "16.7", "accel": "3.0", "decel": "4.5"},
+        "bus": {"vClass": "bus", "length": "12.0", "minGap": "2.5", "maxSpeed": "11.1", "accel": "1.2", "decel": "4.0"},
+        "truck": {"vClass": "truck", "length": "9.0", "minGap": "2.5", "maxSpeed": "11.1", "accel": "1.3", "decel": "4.0"},
+        "bicycle": {"vClass": "bicycle", "length": "1.8", "minGap": "0.5", "maxSpeed": "5.5", "accel": "1.0", "decel": "2.0"},
+    }
+    mix = _vehicle_mix_from_report(report)
+    active_mix = {key: mix.get(key, 0.0) for key in type_specs if mix.get(key, 0.0) > 0}
+    if not active_mix:
+        active_mix = {"car": 1.0}
+    for vehicle_type in active_mix:
+        ET.SubElement(root, "vType", {"id": vehicle_type, "sigma": "0.0", "speedFactor": "1.0", **type_specs[vehicle_type]})
+    total_vehicles_per_hour = max(180, int(900 * max(0.5, min(2.0, demand_multiplier))))
+    route_rate = total_vehicles_per_hour / max(len(routes), 1)
+    for index, edges in enumerate(routes):
+        route_id = f"grid_route_{index}"
+        ET.SubElement(root, "route", {"id": route_id, "edges": " ".join(edges)})
+        for vehicle_type, share in active_mix.items():
+            rate = route_rate * share
+            if rate < 0.01:
+                continue
+            ET.SubElement(root, "flow", {
+                "id": f"grid_flow_{index}_{vehicle_type}", "type": vehicle_type, "route": route_id,
+                "begin": "0", "end": str(DURATION_SECONDS), "vehsPerHour": f"{rate:.4f}",
+                "departLane": "best", "departSpeed": "max",
+            })
+    ET.ElementTree(root).write(route_path, encoding="utf-8", xml_declaration=True)
+    return active_mix
+
+
+def _write_edge_data(additional_path: Path, data_path: Path) -> None:
+    root = ET.Element("additional")
+    ET.SubElement(root, "edgeData", {
+        "id": "urban_edge_data", "file": str(data_path), "begin": "0",
+        "end": str(DURATION_SECONDS), "freq": str(STEP_SECONDS), "excludeEmpty": "false",
+    })
+    ET.ElementTree(root).write(additional_path, encoding="utf-8", xml_declaration=True)
+
+
+def _run_one(binary: str, network_source: Path, route_path: Path, work_dir: Path, tag: str) -> dict[str, Any]:
+    network_path = work_dir / f"{tag}.net.xml"
+    if network_source != network_path:
+        shutil.copy2(network_source, network_path)
+    additional_path = work_dir / f"{tag}.add.xml"
+    edge_data_path = work_dir / f"{tag}.edge-data.xml"
+    summary_path = work_dir / f"{tag}.summary.xml"
+    tripinfo_path = work_dir / f"{tag}.tripinfo.xml"
+    _write_edge_data(additional_path, edge_data_path)
+    command = [
+        binary, "-n", str(network_path), "-r", str(route_path), "-a", str(additional_path),
+        "--begin", "0", "--end", str(DURATION_SECONDS), "--step-length", "1",
+        "--summary-output", str(summary_path), "--summary-output.period", str(STEP_SECONDS),
+        "--tripinfo-output", str(tripinfo_path), "--tripinfo-output.write-unfinished", "true",
+        "--seed", "42", "--time-to-teleport", "-1",
+        "--no-step-log", "true", "--duration-log.disable", "true", "--ignore-route-errors", "false",
+    ]
+    started = time.monotonic()
+    completed = subprocess.run(command, capture_output=True, text=True, timeout=240, check=False)
+    if completed.returncode != 0 or not summary_path.exists():
+        detail = (completed.stderr or completed.stdout or "SUMO exited without producing summary data").strip()
+        raise RuntimeError(f"SUMO execution failed: {detail[-900:]}")
+    summary_root = ET.parse(summary_path).getroot()
+    steps = []
+    for item in summary_root.findall("step"):
+        try: second = int(float(item.get("time", "0")))
+        except ValueError: continue
+        steps.append({
+            "second": second,
+            "halting": int(float(item.get("halting", "0"))),
+            "running": int(float(item.get("running", "0"))),
+            "loaded": int(float(item.get("loaded", "0"))),
+            "inserted": int(float(item.get("inserted", "0"))),
+            "ended": int(float(item.get("ended", "0"))),
+            "mean_speed_mps": float(item.get("meanSpeed", "0")),
+            "waiting": float(item.get("waiting", "0")),
+        })
+    if not steps:
+        raise RuntimeError("SUMO completed but no summary time steps were written")
+
+    edge_by_second: dict[int, list[dict[str, float]]] = {}
+    if edge_data_path.exists():
+        edge_root = ET.parse(edge_data_path).getroot()
+        for interval in edge_root.findall("interval"):
+            try: second = int(float(interval.get("end", interval.get("begin", "0"))))
+            except ValueError: continue
+            values = []
+            for edge in interval.findall("edge"):
+                try:
+                    density = float(edge.get("density", "0"))
+                    occupancy = float(edge.get("occupancy", "0"))
+                    speed = float(edge.get("speed", "0"))
+                    values.append({"density": density, "occupancy": occupancy, "speed": speed})
+                except ValueError: pass
+            edge_by_second[second] = values
+
+    timeline = []
+    for target_second in range(0, DURATION_SECONDS + 1, STEP_SECONDS):
+        snap = min(steps, key=lambda item: abs(item["second"] - target_second))
+        edge_values = edge_by_second.get(target_second, [])
+        if not edge_values and edge_by_second:
+            nearest = min(edge_by_second, key=lambda second: abs(second - target_second))
+            edge_values = edge_by_second[nearest]
+        heavy = sum(1 for item in edge_values if item["density"] >= 20 or item["occupancy"] >= 35)
+        moderate = sum(1 for item in edge_values if 7 <= item["density"] < 20 or 15 <= item["occupancy"] < 35)
+        timeline.append({
+            "minute": round(target_second / 60), "queue_total": snap["halting"],
+            "vehicles": snap["running"], "heavy_roads": heavy,
+            "moderate_roads": moderate, "free_roads": max(0, len(edge_values) - heavy - moderate),
+            "mean_speed_kmph": round(snap["mean_speed_mps"] * 3.6, 2),
+            "waiting_vehicle_seconds": round(snap["waiting"], 2),
+            "vehicles_inserted": snap["inserted"], "vehicles_completed": snap["ended"],
+        })
+
+    trips = []
+    if tripinfo_path.exists():
+        try:
+            for trip in ET.parse(tripinfo_path).getroot().findall("tripinfo"):
+                try:
+                    trips.append({
+                        "type": str(trip.get("type") or "car"),
+                        "duration": float(trip.get("duration", "0")),
+                        "waiting": float(trip.get("waitingTime", "0")),
+                        "time_loss": float(trip.get("timeLoss", "0")),
+                        "route_length_km": max(0.0, float(trip.get("routeLength", "0"))) / 1000.0,
+                    })
+                except ValueError:
+                    continue
+        except ET.ParseError:
+            trips = []
+    km_by_class: dict[str, float] = {"car": 0.0, "motorbike": 0.0, "bus": 0.0, "truck": 0.0, "bicycle": 0.0}
+    trip_type_aliases = {"car": "car", "motorbike": "motorbike", "bus": "bus", "truck": "truck", "bicycle": "bicycle"}
+    for trip in trips:
+        class_name = trip_type_aliases.get(trip["type"], "car")
+        km_by_class[class_name] += trip["route_length_km"]
+    trip_emissions = emissions_for_vehicle_km(km_by_class) if trips else None
     return {
-        "available": ready,
-        "sumo_binary": sumo,
-        "duarouter_binary": duarouter,
-        "traci_available": traci is not None,
-        "network_available": NETWORK_FILE.is_file(),
-        "missing": missing,
-        "note": "Real SUMO simulation can run with SUMO, duarouter and TraCI installed." if ready else "SUMO executable runtime is unavailable; signal-plan requests use a clearly labelled analytical fallback. The separate bundled XGBoost model still forecasts from historical SUMO-generated data.",
+        "timeline": timeline,
+        "summary": {
+            "queue_start": timeline[0]["queue_total"], "queue_end": timeline[-1]["queue_total"],
+            "queue_change_percent": round((timeline[-1]["queue_total"] - timeline[0]["queue_total"]) / max(timeline[0]["queue_total"], 1) * 100, 1),
+            "road_count": len(edge_by_second.get(DURATION_SECONDS, [])) or 80,
+            "heavy_roads_start": timeline[0]["heavy_roads"], "heavy_roads_end": timeline[-1]["heavy_roads"],
+            "vehicles_inserted": timeline[-1]["vehicles_inserted"], "vehicles_completed": timeline[-1]["vehicles_completed"],
+            "mean_speed_kmph_final": timeline[-1]["mean_speed_kmph"],
+            "avg_trip_duration_seconds": round(sum(t["duration"] for t in trips) / len(trips), 2) if trips else None,
+            "avg_trip_waiting_seconds": round(sum(t["waiting"] for t in trips) / len(trips), 2) if trips else None,
+            "avg_trip_time_loss_seconds": round(sum(t["time_loss"] for t in trips) / len(trips), 2) if trips else None,
+            "mean_trip_distance_km": round(sum(t["route_length_km"] for t in trips) / len(trips), 3) if trips else None,
+            "total_vehicle_km": round(sum(km_by_class.values()), 3) if trips else None,
+            "trip_emissions": trip_emissions,
+            "trip_records_including_unfinished": len(trips),
+            "runtime_seconds": round(time.monotonic() - started, 2),
+        },
     }
 
 
-def _axis_green_weights(phases: list[dict]) -> tuple[float, float]:
-    north_south = 0.0
-    east_west = 0.0
-    for phase in phases:
-        movement = f"{phase.get('movement', '')} {phase.get('name', '')}".lower().replace("–", "-")
-        seconds = max(0.0, float(phase.get("green_seconds", 0) or 0))
-        if "north" in movement or "south" in movement or "n/s" in movement:
-            north_south += seconds
-        elif "east" in movement or "west" in movement or "e/w" in movement:
-            east_west += seconds
-    if north_south <= 0 or east_west <= 0:
-        return 0.5, 0.5
-    total = north_south + east_west
-    return north_south / total, east_west / total
+def _percent_delta(base: float | None, proposed: float | None) -> float | None:
+    if base is None or proposed is None or abs(base) < 1e-9:
+        return None
+    return round((proposed - base) / abs(base) * 100.0, 2)
 
 
-def _write_adaptive_network(source: Path, target: Path, phases: list[dict]) -> dict[str, int]:
-    tree = ET.parse(source)
-    root = tree.getroot()
-    ns_share, ew_share = _axis_green_weights(phases)
-    modified = 0
-    retained = 0
-    for logic in root.findall("tlLogic"):
-        greens = [phase for phase in logic.findall("phase") if ("G" in (phase.get("state") or "") or "g" in (phase.get("state") or "")) and not any(letter in (phase.get("state") or "") for letter in "yY")]
-        if len(greens) < 2:
-            # Boundary signals in this network have a green + yellow + red program.
-            retained += 1
-            continue
-        original = [max(1, int(float(phase.get("duration", "1")))) for phase in greens]
-        budget = sum(original)
-        # The included grid uses two axis phases. Preserve the total green budget while
-        # applying the operator proposal's N/S vs E/W split; avoid unsafe tiny greens.
-        ns_seconds = max(8, min(budget - 8, round(budget * ns_share)))
-        ew_seconds = budget - ns_seconds
-        green_values = [ns_seconds, ew_seconds]
-        if len(greens) > 2:
-            shares = [ns_share if index % 2 == 0 else ew_share for index in range(len(greens))]
-            total_shares = sum(shares)
-            green_values = [max(4, round(budget * share / total_shares)) for share in shares]
-            # Correct rounding while conserving the total, without dropping below 4 s.
-            diff = budget - sum(green_values)
-            green_values[0] += diff
-        for phase, seconds in zip(greens, green_values):
-            phase.set("duration", str(int(seconds)))
-        modified += 1
-    tree.write(target, encoding="utf-8", xml_declaration=True)
-    return {"traffic_light_programs_modified": modified, "programs_retained": retained}
+def run_native_sumo_simulation(scenario: str, report: dict[str, Any] | None = None, proposed_phases: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
+    """Run baseline and proposed 3,600-second SUMO scenarios on identical demand."""
+    binary = sumo_binary()
+    if not binary or not NETWORK.exists():
+        return None
+    scenario = scenario if scenario in {"baseline", "demand_surge", "signal_priority"} else "baseline"
+    mean_count = float((report or {}).get("mean_vehicles_per_sampled_frame") or 5)
+    demand_multiplier = max(0.5, min(2.0, mean_count / 5.0))
+    if scenario == "demand_surge":
+        demand_multiplier = min(2.0, demand_multiplier * 1.25)
+    network_tree = ET.parse(NETWORK)
+    routes = _routes_from_network(network_tree.getroot(), wanted=8)
 
-
-def _write_trips(net_file: Path, trips_file: Path, *, seed: int = 41, num_trips: int = 420, last_depart: int = 480) -> int:
-    root = ET.parse(net_file).getroot()
-    edges = [edge for edge in root.findall("edge") if edge.get("function") != "internal" and edge.get("id")]
-    ids = [edge.get("id") for edge in edges]
-    if len(ids) < 4:
-        raise RuntimeError("Bundled SUMO network has too few routable edges")
-    rng = random.Random(seed)
-    trips_root = ET.Element("routes")
-    for index in range(num_trips):
-        origin, destination = rng.sample(ids, 2)
-        depart = round(rng.random() * last_depart, 1)
-        ET.SubElement(trips_root, "trip", {"id": f"veh{index:04d}", "depart": str(depart), "from": str(origin), "to": str(destination), "departLane": "best", "departSpeed": "max"})
-    ET.ElementTree(trips_root).write(trips_file, encoding="utf-8", xml_declaration=True)
-    return num_trips
-
-
-def _resolve_routes(duarouter: str, net_file: Path, trips_file: Path, routes_file: Path) -> int:
-    command = [duarouter, "--net-file", str(net_file), "--route-files", str(trips_file), "--output-file", str(routes_file), "--ignore-errors", "true", "--no-warnings", "true"]
-    result = subprocess.run(command, capture_output=True, text=True, timeout=90, check=False)
-    if result.returncode != 0 or not routes_file.is_file():
-        detail = (result.stderr or result.stdout or "duarouter did not produce routes")[-1200:]
-        raise RuntimeError(f"SUMO route generation failed: {detail}")
-    route_tree = ET.parse(routes_file).getroot()
-    count = len(route_tree.findall("vehicle")) + len(route_tree.findall("flow"))
-    if count < 20:
-        raise RuntimeError(f"SUMO could route only {count} trips; at least 20 are required for a useful demo")
-    return count
-
-
-def _run_one(sumo: str, traci: Any, net_file: Path, routes_file: Path, run_label: str, end_seconds: int = 900) -> dict[str, Any]:
-    command = [sumo, "--net-file", str(net_file), "--route-files", str(routes_file), "--begin", "0", "--end", str(end_seconds), "--seed", "41", "--time-to-teleport", "-1", "--no-step-log", "true", "--no-warnings", "true", "--duration-log.disable", "true"]
-    traci.start(command, label=run_label)
-    conn = traci.getConnection(run_label)
-    halting_samples: list[int] = []
-    vehicle_samples: list[int] = []
-    waiting_samples: list[float] = []
-    max_steps = end_seconds + 5
-    try:
-        for _ in range(max_steps):
-            if conn.simulation.getMinExpectedNumber() <= 0 and conn.simulation.getTime() > 2:
-                break
-            conn.simulationStep()
-            if int(conn.simulation.getTime()) % 5 == 0:
-                edge_ids = [edge_id for edge_id in conn.edge.getIDList() if not edge_id.startswith(":")]
-                halting_samples.append(sum(conn.edge.getLastStepHaltingNumber(edge_id) for edge_id in edge_ids))
-                vehicle_ids = list(conn.vehicle.getIDList())
-                vehicle_samples.append(len(vehicle_ids))
-                if vehicle_ids:
-                    waits = [conn.vehicle.getWaitingTime(vehicle_id) for vehicle_id in vehicle_ids]
-                    waiting_samples.append(sum(waits) / len(waits))
-        arrived = int(conn.simulation.getArrivedNumber())
-        departed = int(conn.simulation.getDepartedNumber())
-        time_end = float(conn.simulation.getTime())
-        return {
-            "simulation_seconds": round(time_end, 1),
-            "arrived_vehicles": arrived,
-            "departed_vehicles": departed,
-            "unfinished_vehicles": max(0, departed - arrived),
-            "mean_halting_vehicles": round(sum(halting_samples) / len(halting_samples), 2) if halting_samples else 0.0,
-            "peak_halting_vehicles": max(halting_samples, default=0),
-            "mean_active_vehicles": round(sum(vehicle_samples) / len(vehicle_samples), 2) if vehicle_samples else 0.0,
-            "mean_wait_per_active_vehicle_seconds": round(sum(waiting_samples) / len(waiting_samples), 2) if waiting_samples else 0.0,
-            "samples": len(halting_samples),
+    with tempfile.TemporaryDirectory(prefix="urbansaarthi-sumo-") as temp:
+        root = Path(temp)
+        route_path = root / "traffic.rou.xml"
+        vehicle_mix = _write_routes(route_path, routes, demand_multiplier, report=report)
+        baseline = _run_one(binary, NETWORK, route_path, root, "baseline")
+        intervention_net = root / "intervention.net.xml"
+        _patch_signal_cycles(NETWORK, intervention_net, proposed_phases)
+        intervention = _run_one(binary, intervention_net, route_path, root, "intervention")
+        base_summary = baseline["summary"]
+        proposed_summary = intervention["summary"]
+        base_queue = base_summary["queue_end"]
+        proposed_queue = proposed_summary["queue_end"]
+        emissions_base = base_summary.get("trip_emissions")
+        emissions_proposed = proposed_summary.get("trip_emissions")
+        pollutant_changes = {}
+        if emissions_base and emissions_proposed:
+            for key in ("co2_g", "nox_g", "pm_g", "co_g"):
+                pollutant_changes[key] = _percent_delta(emissions_base["totals"].get(key), emissions_proposed["totals"].get(key))
+        traffic_comparison = {
+            "average_wait_seconds": {"baseline": base_summary.get("avg_trip_waiting_seconds"), "proposed": proposed_summary.get("avg_trip_waiting_seconds"), "change_percent": _percent_delta(base_summary.get("avg_trip_waiting_seconds"), proposed_summary.get("avg_trip_waiting_seconds"))},
+            "average_trip_duration_seconds": {"baseline": base_summary.get("avg_trip_duration_seconds"), "proposed": proposed_summary.get("avg_trip_duration_seconds"), "change_percent": _percent_delta(base_summary.get("avg_trip_duration_seconds"), proposed_summary.get("avg_trip_duration_seconds"))},
+            "queue_at_60m": {"baseline": base_queue, "proposed": proposed_queue, "change_percent": _percent_delta(base_queue, proposed_queue)},
+            "vehicles_completed": {"baseline": base_summary.get("vehicles_completed"), "proposed": proposed_summary.get("vehicles_completed"), "change_percent": _percent_delta(base_summary.get("vehicles_completed"), proposed_summary.get("vehicles_completed"))},
+            "mean_speed_kmph_final": {"baseline": base_summary.get("mean_speed_kmph_final"), "proposed": proposed_summary.get("mean_speed_kmph_final")},
         }
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
-
-
-def run_signal_plan_comparison(phases: list[dict], *, seed: int = 41, num_trips: int = 420, last_depart: int = 480, end_seconds: int = 900) -> dict[str, Any]:
-    """Execute baseline and proposed timings on the same generated demand.
-
-    Raises RuntimeError if the external SUMO runtime is missing or fails. Caller should
-    transparently choose the analytical fallback in that case.
-    """
-    status = runtime_status()
-    if not status["available"]:
-        raise RuntimeError("SUMO runtime unavailable: " + ", ".join(status["missing"]))
-    sumo = str(status["sumo_binary"])
-    duarouter = str(status["duarouter_binary"])
-    traci, traci_error = _load_traci()
-    if not traci:
-        raise RuntimeError(traci_error or "TraCI unavailable")
-
-    with tempfile.TemporaryDirectory(prefix="urbansaarthi-sumo-") as temp_dir:
-        work = Path(temp_dir)
-        baseline_net = work / "baseline.net.xml"
-        adaptive_net = work / "adaptive.net.xml"
-        trips_file = work / "demand.trips.xml"
-        routes_file = work / "demand.rou.xml"
-        import shutil as _shutil
-        _shutil.copy2(NETWORK_FILE, baseline_net)
-        change_summary = _write_adaptive_network(NETWORK_FILE, adaptive_net, phases)
-        generated = _write_trips(NETWORK_FILE, trips_file, seed=seed, num_trips=num_trips, last_depart=last_depart)
-        routed = _resolve_routes(duarouter, baseline_net, trips_file, routes_file)
-        # Reset default labels and close old sessions; each run receives identical demand.
-        baseline = _run_one(sumo, traci, baseline_net, routes_file, f"urban-base-{time.time_ns()}", end_seconds)
-        proposed = _run_one(sumo, traci, adaptive_net, routes_file, f"urban-adaptive-{time.time_ns()}", end_seconds)
-        def change(before: float, after: float) -> float | None:
-            return round((after - before) / before * 100, 2) if before else None
+        emissions_comparison = {
+            "available": bool(emissions_base and emissions_proposed),
+            "method": "SUMO tripinfo routeLength × versioned vehicle-class emission factors",
+            "baseline": emissions_base,
+            "proposed": emissions_proposed,
+            "change_percent": pollutant_changes,
+            "interpretation": "Negative percentages indicate lower estimated emissions in the proposed run." if pollutant_changes else "SUMO trip-distance records were not available; emissions comparison is unavailable.",
+        }
+        summary = {
+            **proposed_summary,
+            "baseline_queue_end": base_queue,
+            "proposed_queue_end": proposed_queue,
+            "queue_change_vs_baseline_percent": _percent_delta(base_queue, proposed_queue),
+            "baseline_mean_speed_kmph_final": base_summary.get("mean_speed_kmph_final"),
+            "proposed_mean_speed_kmph_final": proposed_summary.get("mean_speed_kmph_final"),
+            "demand_multiplier": round(demand_multiplier, 2),
+        }
         return {
-            "engine": "sumo-traci-v1",
-            "sumo_run": True,
-            "network": NETWORK_FILE.name,
-            "demand_seed": seed,
-            "generated_trip_count": generated,
-            "routed_trip_count": routed,
-            "adaptive_network_changes": change_summary,
-            "baseline": baseline,
-            "proposed": proposed,
-            "comparison": {
-                "mean_halting_vehicles_change_percent": change(baseline["mean_halting_vehicles"], proposed["mean_halting_vehicles"]),
-                "mean_wait_per_active_vehicle_change_percent": change(baseline["mean_wait_per_active_vehicle_seconds"], proposed["mean_wait_per_active_vehicle_seconds"]),
-                "arrived_vehicles_change": proposed["arrived_vehicles"] - baseline["arrived_vehicles"],
-            },
-            "caveats": [
-                "This is a generated-demand simulation on the bundled demo road network, not a calibration to a real city junction.",
-                "Both plans used the same routed trips and random seed; results may still vary by SUMO version.",
-                "No command was sent to physical traffic signals.",
+            "mode": "native_sumo_simulation", "engine": "SUMO CLI / 3,600-second baseline + intervention",
+            "scenario": scenario, "duration_minutes": 60, "step_minutes": 5,
+            "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            "summary": summary, "timeline": intervention["timeline"], "baseline_timeline": baseline["timeline"],
+            "traffic_comparison": traffic_comparison, "emissions_comparison": emissions_comparison,
+            "training_data": {"road_edges": 80, "network_file": "grid.net.xml", "demand_source": "same deterministic multi-class synthetic flows for both runs; proportions derived from YOLO class counts", "routes": len(routes), "vehicle_mix": vehicle_mix},
+            "models": {"engine": "native SUMO execution", "simulated_seconds": DURATION_SECONDS, "seed": 42},
+            "notes": [
+                "This is a real 3,600-second SUMO execution on the bundled synthetic grid network with generated vehicle routes.",
+                "Baseline and candidate runs use identical generated demand and a fixed seed. The bundled network is synthetic and is not a mapped Kanpur junction.",
+                "Video detections inform vehicle-class proportions and demand scaling; footage is not geospatially map-matched to the network.",
+                "Emissions use trip routeLength and indicative vehicle-class factors. SUMO does not model speed/load-specific engine emissions in this prototype; fuel-use assumptions are not local fleet measurements.",
+                "Ambient AQI is not inferred from tailpipe emissions. The report's AQI observations, if any, remain separate.",
+                "This is a simulated experiment, not a field deployment or authorization to control physical signals.",
             ],
         }

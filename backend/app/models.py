@@ -65,7 +65,7 @@ class TrafficObservation(Base):
     source: Mapped[str] = mapped_column(String(80), default="manual", nullable=False, index=True)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
     vehicle_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    queue_length_m: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    queue_length_m: Mapped[float | None] = mapped_column(Float, nullable=True)
     average_speed_kmph: Mapped[float | None] = mapped_column(Float, nullable=True)
     average_wait_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     lane_density: Mapped[float | None] = mapped_column(Float, nullable=True)  # normalized 0..1
