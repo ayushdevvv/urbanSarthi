@@ -23,11 +23,11 @@ export default function CitizenLayout() {
         <button className="utility" onClick={() => setDark(!dark)}>{dark ? <Sun size={15}/> : <Moon size={15}/>} {dark ? 'Light' : 'Dark'}</button>
         <button className="utility" onClick={toggleLanguage}><span className="hindi">हि</span>{language === 'EN' ? 'हिंदी' : 'English'}</button>
         <button className="utility" onClick={() => navigate('/')}><House size={15}/> Main portal</button>
-        <button className="citizen-avatar" title="UrbanSaarthi citizen portal" onClick={() => navigate('/citizen')}>US</button>
+        <button className="citizen-avatar" title="UrbanSaarthi portal" onClick={() => navigate('/citizen')}>US</button>
       </div>
     </header>
     <main className="citizen-content"><Outlet /></main>
-    <footer className="citizen-footer"><span>UrbanSaarthi India · Multiple cities platform</span><span>Aligned with India’s Smart Cities Mission</span><span>Emergency: 112</span></footer>
+    <footer className="citizen-footer"><span>UrbanSaarthi · India</span><span>Air quality & traffic monitoring</span><span>Emergency: 112</span></footer>
     <FloatingAgentWidget mode="citizen" />
   </div>;
 }

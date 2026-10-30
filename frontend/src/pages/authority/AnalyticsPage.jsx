@@ -12,7 +12,7 @@ export default function AnalyticsPage() {
   const exportReport = () => {
     const rows = [['Metric', 'Value'], ['Period (days)', shown.period_days], ['Trip requests', shown.trip_requests], ['Completed trips', shown.completed_trips], ['Cancelled trips', shown.cancelled_trips], ['Recorded route distance km', shown.recorded_route_distance_km], ['Note', shown.note]];
     const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? '').replaceAll('"', '""')}"`).join(',')).join('\r\n');
-    const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); link.download = `urbansaarthi-city-analytics-${range}d.csv`; link.click(); URL.revokeObjectURL(link.href);
+    const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); link.download = `city-analytics-${range}d.csv`; link.click(); URL.revokeObjectURL(link.href);
   };
   const completionPct = Math.min(100, (shown.completed_trips / Math.max(1, shown.trip_requests)) * 100);
   const cancelPct = Math.min(100, (shown.cancelled_trips / Math.max(1, shown.trip_requests)) * 100);

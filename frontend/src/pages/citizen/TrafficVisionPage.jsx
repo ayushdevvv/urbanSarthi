@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api/client.js';
 import { useApp } from '../../context/AppContext.jsx';
+import { saveLatestVisionEvidence } from '../../services/visionEvidence.js';
 import './traffic-lab-premium.css';
 
 const ACCEPTED_VIDEO = '.mp4,.mov,.avi,.mkv,.webm,.m4v';
@@ -166,16 +167,14 @@ export default function TrafficVisionPage() {
       const analyzedReport = { ...data, source_filename: file.name, segment_distance_km: Number(segmentDistanceKm) || 0.5 };
       setReport(analyzedReport);
       if (mode === 'video') {
-        try {
-          localStorage.setItem('hawaflow.latestVisionEvidence', JSON.stringify({
-            source_filename: file.name,
-            counts: analyzedReport.counts || {},
-            total_vehicles: analyzedReport.total_vehicles || 0,
-            sampled_frames: analyzedReport.video?.sampled_frames || 1,
-            decoder: analyzedReport.video?.decoder || 'opencv',
-            captured_at: new Date().toISOString(),
-          }));
-        } catch { /* Local evidence hand-off is optional; the report remains available here. */ }
+        saveLatestVisionEvidence({
+          source_filename: file.name,
+          counts: analyzedReport.counts || {},
+          total_vehicles: analyzedReport.total_vehicles || 0,
+          sampled_frames: analyzedReport.video?.sampled_frames || 1,
+          decoder: analyzedReport.video?.decoder || 'opencv',
+          captured_at: new Date().toISOString(),
+        });
       }
       notify(mode === 'video' ? `Video analyzed with YOLO. Decoder: ${data.video?.decoder || 'OpenCV'}.` : 'Road image analyzed with YOLO.');
     } catch (e) {
@@ -207,7 +206,7 @@ export default function TrafficVisionPage() {
     if (!workflow?.plan?.id) return;
     setReviewBusy(true); setError('');
     try {
-      const result = await api.post(`/signals/plans/${workflow.plan.id}/${action}`, { note: action === 'approve' ? 'Reviewed in UrbanSaarthi Traffic Lab. Approval is for the draft record only; physical dispatch remains disabled.' : 'Rejected by operator during review in UrbanSaarthi Traffic Lab.' });
+      const result = await api.post(`/signals/plans/${workflow.plan.id}/${action}`, { note: action === 'approve' ? 'Reviewed in Traffic Analysis. Approval is for the draft record only; physical dispatch remains disabled.' : 'Rejected by operator during review in Traffic Analysis.' });
       setWorkflow((old) => ({ ...old, plan: { ...old.plan, status: result.status || (action === 'approve' ? 'approved' : 'rejected'), review_note: result.review_note } }));
       if (action === 'approve') notify('Plan approved. No physical signal controller was contacted.');
       else notify('Draft rejected.');
@@ -227,7 +226,7 @@ export default function TrafficVisionPage() {
 
   function downloadReport() {
     if (!report) return;
-    const payload = { project: 'UrbanSaarthi Traffic Intelligence Lab', generated_at: new Date().toISOString(), evidence: compactReport(report), agent: workflow?.agent || null, tools: workflow?.tools || [], draft_plan: workflow?.plan || null, forecast: workflow?.simulation || null, note: workflow?.simulation?.mode === 'native_sumo_simulation' ? 'Native SUMO ran 3,600 simulated seconds on the bundled synthetic grid. Video is not map-matched; human review required; physical dispatch disabled.' : 'Forecast data uses the supplied SUMO-generated dataset and trained XGBoost models. The video is not a lane-calibrated input to that forecast. Human review required; physical dispatch disabled.' };
+    const payload = { project: 'Traffic Intelligence', generated_at: new Date().toISOString(), evidence: compactReport(report), agent: workflow?.agent || null, tools: workflow?.tools || [], draft_plan: workflow?.plan || null, forecast: workflow?.simulation || null, note: workflow?.simulation?.mode === 'native_sumo_simulation' ? 'Native SUMO ran 3,600 simulated seconds on the bundled synthetic grid. Video is not map-matched; human review required; physical dispatch disabled.' : 'Forecast data uses the supplied SUMO-generated dataset and trained XGBoost models. The video is not a lane-calibrated input to that forecast. Human review required; physical dispatch disabled.' };
     const href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
     const link = document.createElement('a'); link.href = href; link.download = `urbansarthi-traffic-report-${Date.now()}.json`; link.click(); URL.revokeObjectURL(href);
   }

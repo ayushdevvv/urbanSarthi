@@ -29,3 +29,14 @@
 .network-priority .network-plan-chip{background:#e4f5de;color:#2d7343}.network-heavy .network-plan-chip{background:#f9e8dd;color:#a35a30}
 .dark .signal-network-preview{filter:brightness(.8) saturate(.85)}
 @media(max-width:700px){.signal-network-preview .network-lane-label{font-size:7px;padding:3px}.signal-network-preview .network-plan-chip{font-size:7px}.signal-network-preview .signal-stack i{width:7px;height:7px}}
+
+/* Air-first sidebar refinements */
+.sidebar .nav-area{flex:1;overflow-y:auto;min-height:0;padding-right:3px;scrollbar-width:thin;scrollbar-color:#416c5a transparent}.sidebar .nav-area section{margin-bottom:15px}
+.sidebar .nav-label{font-size:9px;letter-spacing:1.35px;margin-bottom:7px}
+.sidebar .nav-item{padding:10px 9px;margin:2px 0;font-size:12px;gap:10px}
+.sidebar-monitor-note{display:flex;align-items:center;gap:9px;padding:11px 9px;margin-bottom:16px;background:#16483c;border:1px solid #2b5a4d;border-radius:11px}
+.sidebar-monitor-icon{width:30px;height:30px;display:grid;place-items:center;background:#285b49;color:#c5ed70;border-radius:8px;flex-shrink:0}
+.sidebar-monitor-note b,.sidebar-monitor-note small{display:block}.sidebar-monitor-note b{font-size:10px;color:#f4f8ef}.sidebar-monitor-note small{font-size:8px;color:#a8c2b5;margin-top:3px}
+.workspace-status{display:flex;align-items:center;gap:7px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);border-radius:999px;padding:7px 10px;font-size:9px;font-weight:700;white-space:nowrap}
+.workspace-status i{width:6px;height:6px;border-radius:50%;background:#8ebd68;box-shadow:0 0 0 3px #8ebd6826}
+@media(max-width:800px){.workspace-status{display:none}.sidebar .nav-area section{margin-bottom:12px}}

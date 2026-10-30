@@ -47,6 +47,6 @@ export default function PortalLanding() {
       <article><span>Road segments</span><b>{snapshot.roads}</b><small>Covered by the simulation network</small></article>
       <article><span>Model evaluation</span><b>{snapshot.accuracy}%</b><small>Congestion level accuracy on held out simulation runs</small></article>
     </section>
-    <footer className="landing-footer"><span>UrbanSaarthi India</span><span>City mobility intelligence</span><span>Emergency: 112</span></footer>
+    <footer className="landing-footer"><span>UrbanSaarthi</span><span>Air quality & traffic intelligence</span><span>Emergency: 112</span></footer>
   </div>;
 }

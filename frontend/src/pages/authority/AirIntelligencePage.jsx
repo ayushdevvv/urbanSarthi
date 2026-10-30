@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api/client.js';
 import { useApp } from '../../context/AppContext.jsx';
+import { readLatestVisionEvidence } from '../../services/visionEvidence.js';
 import './air-intelligence.css';
 
 const CITIES = {
@@ -31,10 +32,8 @@ function downloadJson(payload, filename) {
 }
 
 function readVisionEvidence() {
-  try {
-    const value = JSON.parse(localStorage.getItem('hawaflow.latestVisionEvidence') || 'null');
-    return value?.counts && typeof value.counts === 'object' ? value : null;
-  } catch { return null; }
+  const value = readLatestVisionEvidence();
+  return value?.counts && typeof value.counts === 'object' ? value : null;
 }
 
 function getAqiValue(current) {
@@ -232,7 +231,7 @@ export default function AirIntelligencePage() {
     try {
       const data = await api.post('/air-intelligence/simulations/compare', {
         junction_id: Number(junctionId), signal_plan_id: plan.id,
-        scenario: 'baseline', name: 'HawaFlow baseline vs intervention',
+        scenario: 'baseline', name: 'Baseline vs intervention',
       });
       setComparison(data);
       notify('Baseline and intervention comparison completed.');
@@ -244,7 +243,7 @@ export default function AirIntelligencePage() {
     if (!comparison?.simulation_id) return;
     try {
       const report = await api.get(`/air-intelligence/reports/${comparison.simulation_id}`);
-      downloadJson(report, `hawaflow-impact-report-${comparison.simulation_id}.json`);
+      downloadJson(report, `air-impact-report-${comparison.simulation_id}.json`);
     } catch (error) { setMessage(error.message || 'Report could not be downloaded.'); }
   }
 
@@ -255,7 +254,7 @@ export default function AirIntelligencePage() {
     <section className="ai-hero">
       <div className="ai-hero-copy">
         <div className="ai-hero-overline"><span className="ai-pulse-dot"/> INNOVATEX 2026–27 <i/> THEME 02 · RISING URBAN AQI</div>
-        <h1>HawaFlow <em>AI.</em></h1>
+        <h1>Air quality <em>intelligence.</em></h1>
         <p>From street-level traffic evidence to air-quality intelligence. Detect pollution pressure, estimate vehicle emissions and test targeted interventions before an operator signs off.</p>
         <div className="ai-hero-tags"><span><Cpu size={13}/> YOLO + OpenCV</span><span><Wind size={13}/> AQI forecasting</span><span><Bot size={13}/> AI decision support</span></div>
       </div>
@@ -288,7 +287,7 @@ export default function AirIntelligencePage() {
         <TrendChart forecast={air?.forecast}/>
       </article>
       <article className="ai-panel ai-system-panel">
-        <div className="ai-panel-head"><div><span className="ai-kicker">HAWAFLOW RESPONSE LOOP</span><h3>From road activity to cleaner air</h3></div><span className="ai-source-pill">END-TO-END</span></div>
+        <div className="ai-panel-head"><div><span className="ai-kicker">AIR QUALITY RESPONSE LOOP</span><h3>From road activity to cleaner air</h3></div><span className="ai-source-pill">END-TO-END</span></div>
         <div className="ai-pipeline">
           {[
             [Cpu, 'Detect', 'YOLO + OpenCV', 'Vehicle mix'],
@@ -341,7 +340,7 @@ export default function AirIntelligencePage() {
           </div>
           <div className="ai-pollutant-grid ai-estimate-pollutants"><div><span>NOx</span><b>{number(estimate.totals?.nox_g, 3)} g</b></div><div><span>PM</span><b>{number(estimate.totals?.pm_g, 3)} g</b></div><div><span>CO</span><b>{number(estimate.totals?.co_g, 2)} g</b></div><div><span>CO₂</span><b>{number(estimate.totals?.co2_g, 1)} g</b></div></div>
           {estimate.by_class && <div className="ai-class-breakdown"><span className="ai-kicker">EMISSIONS BY VEHICLE CLASS</span>{Object.entries(estimate.by_class).filter(([, value]) => value.vehicle_km > 0).map(([key, value]) => <div key={key}><span>{key.replaceAll('_', ' ')}</span><b>{number(value.co2_g, 1)} g CO₂</b><small>{number(value.vehicle_km, 2)} veh-km</small></div>)}</div>}
-          <button className="ai-text-button" onClick={() => downloadJson(estimate, 'hawaflow-emissions-estimate.json')}><ArrowDownToLine size={14}/> Download calculation & assumptions</button>
+          <button className="ai-text-button" onClick={() => downloadJson(estimate, 'emissions-estimate.json')}><ArrowDownToLine size={14}/> Download calculation & assumptions</button>
         </div>}
         <p className="ai-footnote">Indicative factors only. Fuel-use values are project assumptions, not measured fleet rates. Tailpipe emissions are not ambient AQI and exclude road dust, brake/tyre wear and atmospheric chemistry.</p>
       </article>

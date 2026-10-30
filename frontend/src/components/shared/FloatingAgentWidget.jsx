@@ -32,8 +32,8 @@ export default function FloatingAgentWidget({ mode = 'citizen' }) {
     {
       sender: 'agent',
       text: isAuthority
-        ? 'Welcome, Operator. I am the UrbanSaarthi Authority AI. Ask me about city bottlenecks, simulate SUMO interventions, or review citizen hazard reports.'
-        : 'Hello! I am your UrbanSaarthi Citizen AI Assistant. Ask me about clean routes, traffic delays, air quality, or report a road hazard.',
+        ? 'Welcome, Operator. I am the Traffic & Air Assistant. Ask me about city bottlenecks, simulate SUMO interventions, or review citizen hazard reports.'
+        : 'Hello! I am your Traffic & Air Assistant. Ask me about clean routes, traffic delays, air quality, or report a road hazard.',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -234,7 +234,7 @@ export default function FloatingAgentWidget({ mode = 'citizen' }) {
                 <Bot size={18} />
               </div>
               <div className="drawer-header-titles">
-                <b>{isAuthority ? 'UrbanSaarthi Authority AI' : 'UrbanSaarthi Citizen AI'}</b>
+                <b>{isAuthority ? 'Traffic & Air Assistant' : 'Traffic & Air Assistant'}</b>
                 <small>
                   <Sparkles size={10} color={isAuthority ? '#72c3fc' : '#8fac4e'} />
                   {isAuthority ? 'Traffic Operations & Incident Triage' : 'Clean Travel & Hazard Reporting'}

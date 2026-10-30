@@ -191,7 +191,7 @@ export default function AgentPage({ adminMode = false }) {
             <Bot size={28} />
           </div>
           <div className="agent-titles">
-            <h1>UrbanSaarthi Traffic Intelligence Agent</h1>
+            <h1>Traffic & Air Intelligence</h1>
             <p>
               Rule-based reasoning engine coordinating SUMO traffic simulations, Open-Meteo CAMS atmospheric data, and road corridor route advisors without third-party LLM key lock-in.
             </p>

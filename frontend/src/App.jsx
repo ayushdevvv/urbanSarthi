@@ -8,11 +8,13 @@ import CitizenLayout from './components/layout/CitizenLayout.jsx';
 import CommandCenterPage from './pages/authority/CommandCenterPage.jsx';
 import SignalPlansPage from './pages/authority/SignalPlansPage.jsx';
 import AnalyticsPage from './pages/authority/AnalyticsPage.jsx';
-import AirIntelligencePage from './pages/authority/AirIntelligencePage.jsx';
+import AirQualityOverviewPage from './pages/authority/AirQualityOverviewPage.jsx';
+import CarbonImpactPage from './pages/authority/CarbonImpactPage.jsx';
+import IotNetworkPage from './pages/authority/IotNetworkPage.jsx';
+import DroneSurveyPage from './pages/authority/DroneSurveyPage.jsx';
 import DataSourcesPage from './pages/authority/DataSourcesPage.jsx';
 import SettingsPage from './pages/authority/SettingsPage.jsx';
 import TrafficVisionPage from './pages/citizen/TrafficVisionPage.jsx';
-import AuthorityAqiPage from './pages/authority/AuthorityAqiPage.jsx';
 import CitizenHomePage from './pages/citizen/CitizenHomePage.jsx';
 import RoutePlannerPage from './pages/citizen/RoutePlannerPage.jsx';
 import AirQualityPage from './pages/citizen/AirQualityPage.jsx';
@@ -20,7 +22,6 @@ import AqiVisionPage from './pages/citizen/AqiVisionPage.jsx';
 import TransitPage from './pages/citizen/TransitPage.jsx';
 import TripsPage from './pages/citizen/TripsPage.jsx';
 import TrafficInfoPage from './pages/citizen/TrafficInfoPage.jsx';
-import AgentPage from './pages/citizen/AgentPage.jsx';
 import Toast from './components/shared/Toast.jsx';
 
 export default function App() {
@@ -31,14 +32,18 @@ export default function App() {
       <Route path="/" element={<PortalLanding />} />
       <Route path="/agent" element={<Navigate to="/citizen" replace />} />
       <Route path="/authority" element={<AuthorityLayout />}>
-        <Route index element={<Navigate to="control" replace />} />
+        <Route index element={<Navigate to="air-intelligence" replace />} />
         <Route path="control" element={<CommandCenterPage />} />
-        <Route path="agent" element={<Navigate to="/authority/control" replace />} />
-        <Route path="signals" element={<SignalPlansPage />} />
+        <Route path="agent" element={<Navigate to="/authority/air-intelligence" replace />} />
+        <Route path="air-intelligence" element={<AirQualityOverviewPage />} />
+        <Route path="carbon" element={<CarbonImpactPage />} />
+        <Route path="traffic" element={<TrafficInfoPage adminMode />} />
         <Route path="traffic-model" element={<TrafficInfoPage adminMode />} />
+        <Route path="signals" element={<SignalPlansPage />} />
         <Route path="traffic-lab" element={<TrafficVisionPage authorityLab />} />
-        <Route path="air-intelligence" element={<AirIntelligencePage />} />
-        <Route path="aqi" element={<AuthorityAqiPage />} />
+        <Route path="iot" element={<IotNetworkPage />} />
+        <Route path="drones" element={<DroneSurveyPage />} />
+        <Route path="aqi" element={<Navigate to="/authority/air-intelligence" replace />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="sources" element={<DataSourcesPage />} />
         <Route path="settings" element={<SettingsPage />} />
@@ -51,7 +56,7 @@ export default function App() {
         <Route path="aqi-vision" element={<AqiVisionPage />} />
         <Route path="transit" element={<TransitPage />} />
         <Route path="traffic" element={<TrafficInfoPage />} />
-        <Route path="traffic-vision" element={<Navigate to="/authority/traffic-model" replace />} />
+        <Route path="traffic-vision" element={<Navigate to="/authority/traffic-lab" replace />} />
         <Route path="trips" element={<TripsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
