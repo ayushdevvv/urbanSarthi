@@ -9,3 +9,6 @@ torchvision==0.25.0+cpu ; sys_platform != "darwin"
 torch==2.10.0 ; sys_platform == "darwin"
 torchvision==0.25.0 ; sys_platform == "darwin"
 opencv-python-headless>=4.10,<5
+
+# Portable FFmpeg decoder fallback for phone-recorded / cloud-incompatible video codecs
+imageio-ffmpeg>=0.5.1,<1

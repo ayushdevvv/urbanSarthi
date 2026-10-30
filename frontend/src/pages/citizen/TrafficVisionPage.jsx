@@ -163,8 +163,21 @@ export default function TrafficVisionPage() {
         ? `/traffic-detection/analyze-video?confidence=${confidence}&sample_every_seconds=${sampleEvery}${roiQuery}`
         : `/traffic-detection/analyze?confidence=${confidence}`;
       const data = await api.postForm(endpoint, body);
-      setReport({ ...data, source_filename: file.name, segment_distance_km: Number(segmentDistanceKm) || 0.5 });
-      notify(mode === 'video' ? 'Video evidence analyzed with YOLO and OpenCV.' : 'Road image analyzed with YOLO.');
+      const analyzedReport = { ...data, source_filename: file.name, segment_distance_km: Number(segmentDistanceKm) || 0.5 };
+      setReport(analyzedReport);
+      if (mode === 'video') {
+        try {
+          localStorage.setItem('hawaflow.latestVisionEvidence', JSON.stringify({
+            source_filename: file.name,
+            counts: analyzedReport.counts || {},
+            total_vehicles: analyzedReport.total_vehicles || 0,
+            sampled_frames: analyzedReport.video?.sampled_frames || 1,
+            decoder: analyzedReport.video?.decoder || 'opencv',
+            captured_at: new Date().toISOString(),
+          }));
+        } catch { /* Local evidence hand-off is optional; the report remains available here. */ }
+      }
+      notify(mode === 'video' ? `Video analyzed with YOLO. Decoder: ${data.video?.decoder || 'OpenCV'}.` : 'Road image analyzed with YOLO.');
     } catch (e) {
       setError(e.message || 'The vision pipeline failed. Check the API and model status.');
     } finally { setBusy(false); }
@@ -226,12 +239,12 @@ export default function TrafficVisionPage() {
         <h1>Traffic intelligence <em>lab.</em></h1>
         <p>Turn road footage into verified vehicle evidence, a reviewable signal strategy, and a 60-minute traffic forecast.</p>
       </div>
-      <div className="ul-head-status"><span className={`ul-status-dot ${videoReadiness ? 'ready' : ''}`}/><div><b>{videoReadiness ? 'Vision pipeline ready' : 'Vision setup incomplete'}</b><small>{systemStatus?.ready ? 'YOLO weights detected' : 'Check weights and dependencies'}</small></div></div>
+      <div className="ul-head-status"><span className={`ul-status-dot ${videoReadiness ? 'ready' : ''}`}/><div><b>{videoReadiness ? 'Vision pipeline ready' : 'Vision setup incomplete'}</b><small>{systemStatus?.readiness_note || (systemStatus?.ready ? 'YOLO weights detected' : 'Check weights and dependencies')}</small></div></div>
     </header>
 
     <div className="ul-status-strip">
       <div className="ul-status-item"><span className={modelReadiness ? 'ready' : ''}><Cpu size={15}/></span><div><b>YOLO detector</b><small>{modelReadiness ? 'Weights + inference ready' : 'Not ready'}</small></div></div>
-      <div className="ul-status-item"><span className={systemStatus?.opencv_available ? 'ready' : ''}><ScanLine size={15}/></span><div><b>OpenCV video</b><small>{systemStatus?.opencv_available ? 'Frame extraction available' : 'Install OpenCV'}</small></div></div>
+      <div className="ul-status-item"><span className={systemStatus?.decoder_ready && systemStatus?.opencv_available ? 'ready' : ''}><ScanLine size={15}/></span><div><b>OpenCV video</b><small>{systemStatus?.opencv_available ? `OpenCV ${systemStatus.opencv_version || ''} · ${systemStatus?.ffmpeg_fallback_available ? 'FFmpeg fallback ready' : 'native decoder'}` : 'OpenCV package unavailable'}</small></div></div>
       <div className="ul-status-item"><span className={systemStatus?.forecast_ready ? 'ready' : ''}><Activity size={15}/></span><div><b>60 min scenario</b><small>{systemStatus?.native_sumo_available ? 'Native SUMO detected' : systemStatus?.forecast_ready ? 'XGBoost fallback ready' : 'Install forecast requirements'}</small></div></div>
       <div className="ul-status-item"><span className={systemStatus?.agent_tools_ready ? 'ready' : ''}><Bot size={15}/></span><div><b>Operations agent</b><small>{systemStatus?.llm_tool_calling_ready ? 'Groq LLM + tools ready' : 'Local tools ready · Groq optional'}</small></div></div>
     </div>
@@ -263,7 +276,8 @@ export default function TrafficVisionPage() {
         <button className="ul-primary-button ul-analyze-button" onClick={analyzeScene} disabled={!file || busy}>
           {busy ? <><LoaderCircle size={16} className="ul-spin"/> Processing real frames…</> : <><ScanLine size={16}/> Run YOLO analysis <ArrowUpRight size={16}/></>}
         </button>
-        {systemStatus?.note && !videoReadiness && <div className="ul-setup-hint"><CircleHelp size={15}/><span>{systemStatus.note} For video analysis install <code>backend/requirements-vision.txt</code> and provide the YOLO weights.</span></div>}
+        {systemStatus && !videoReadiness && <div className="ul-setup-hint"><CircleHelp size={15}/><span>{systemStatus.readiness_note || systemStatus.note || 'Video analysis is not ready.'} Install <code>backend/requirements.txt</code>, verify <code>backend/models/best.pt</code>, then restart the API.</span></div>}
+        {systemStatus?.ffmpeg_fallback_available && <div className="ul-setup-hint"><ShieldCheck size={15}/><span>Codec compatibility mode is available. If OpenCV cannot decode a phone-recorded clip, the bundled FFmpeg decoder will decode frames for the same YOLO pipeline.</span></div>}
       </section>
 
       <section className="ul-panel ul-evidence-panel">

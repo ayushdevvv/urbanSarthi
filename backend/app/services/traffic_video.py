@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import os
 import tempfile
+from contextlib import suppress
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -21,11 +22,28 @@ MAX_SIDE = 1280
 
 
 def video_status() -> dict[str, Any]:
-    from importlib.util import find_spec
+    """Report actual import/runtime health instead of only checking package metadata."""
+    opencv_available = False
+    opencv_version = None
+    opencv_ffmpeg_enabled = False
+    opencv_note = None
     try:
-        opencv_available = find_spec("cv2") is not None
+        import cv2
+        opencv_available = True
+        opencv_version = getattr(cv2, "__version__", None)
+        with suppress(Exception):
+            build_info = cv2.getBuildInformation()
+            opencv_ffmpeg_enabled = "FFMPEG:                      YES" in build_info or "FFMPEG: YES" in build_info
+    except Exception as exc:
+        opencv_note = f"OpenCV could not be imported ({type(exc).__name__})."
+
+    ffmpeg_fallback_available = False
+    try:
+        from importlib.util import find_spec
+        ffmpeg_fallback_available = find_spec("imageio_ffmpeg") is not None
     except (ImportError, ValueError):
-        opencv_available = False
+        pass
+
     model_status = __import__("app.services.traffic_detection", fromlist=["status"]).status()
     try:
         from app.services.sumo_runner import sumo_binary
@@ -41,20 +59,97 @@ def video_status() -> dict[str, Any]:
         xgboost_available = False
     forecast_artifacts_present = all((simulation_base / "models" / name).is_file() for name in ("queue_model.json", "queue_model_60min.json", "metrics.json", "metrics_60min.json", "edge_mean.json")) and (simulation_base / "data" / "raw.csv").is_file()
     agent_packages_available = all(find_spec(name) is not None for name in ("langgraph", "langchain_core", "langchain_groq"))
+    if not model_status.get("weights_present"):
+        readiness_note = "YOLO traffic weights are missing. Restore backend/models/best.pt or set TRAFFIC_MODEL_PATH."
+    elif not model_status.get("inference_dependency_available"):
+        readiness_note = "Ultralytics is not installed. Install backend/requirements.txt and restart the API."
+    elif not opencv_available:
+        readiness_note = opencv_note or "OpenCV is not installed or could not be imported."
+    elif not (opencv_ffmpeg_enabled or ffmpeg_fallback_available):
+        readiness_note = "OpenCV is installed but no supported video decoder was detected. Install imageio-ffmpeg."
+    else:
+        readiness_note = "YOLO, OpenCV and a video decoder are ready."
     return {
         **model_status,
         "opencv_available": opencv_available,
+        "opencv_version": opencv_version,
+        "opencv_ffmpeg_enabled": opencv_ffmpeg_enabled,
+        "ffmpeg_fallback_available": ffmpeg_fallback_available,
+        "decoder_ready": opencv_available or ffmpeg_fallback_available,
+        "opencv_note": opencv_note,
+        "readiness_note": readiness_note,
         "native_sumo_available": bool(native_sumo_path),
         "native_sumo_binary": Path(native_sumo_path).name if native_sumo_path else None,
         "forecast_artifacts_present": forecast_artifacts_present,
         "forecast_ready": bool(forecast_artifacts_present and xgboost_available) or bool(native_sumo_path),
         "agent_tools_ready": True,
         "llm_tool_calling_ready": bool(agent_packages_available and settings.groq_api_key.strip() or agent_packages_available and os.getenv("GROQ_API_KEY", "").strip()),
-        "video_analysis_ready": bool(model_status.get("ready") and opencv_available),
+        "video_analysis_ready": bool(model_status.get("ready") and opencv_available and (opencv_ffmpeg_enabled or ffmpeg_fallback_available)),
         "video_max_seconds": MAX_VIDEO_SECONDS,
         "video_max_sampled_frames": MAX_SAMPLED_FRAMES,
         "video_sampling_note": "Frames are sampled from the uploaded clip. Results represent the sampled segment, not continuous live CCTV monitoring.",
+        "note": readiness_note,
     }
+
+
+def _open_video_reader(cv2: Any, path: Path):
+    """Open a clip with OpenCV first, then fall back to bundled FFmpeg decoding.
+
+    Some phone-recorded MOV/MP4/WebM clips are accepted by the browser but fail
+    OpenCV's VideoCapture codec path on cloud Linux builds. The fallback still
+    feeds decoded BGR frames through the same OpenCV resize/YOLO pipeline.
+    """
+    capture = cv2.VideoCapture(str(path))
+    if capture.isOpened():
+        fps = float(capture.get(cv2.CAP_PROP_FPS) or 0)
+        total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+        first_ok, first_frame = capture.read()
+        if first_ok and first_frame is not None:
+            pending = [first_frame]
+
+            def read_next():
+                if pending:
+                    return True, pending.pop()
+                return capture.read()
+
+            duration = (total_frames / fps) if fps > 0 and total_frames > 0 else 0
+            return read_next, capture.release, fps, total_frames, width, height, duration, "opencv"
+        capture.release()
+
+    # `imageio-ffmpeg` ships a portable FFmpeg executable with its wheel. It is
+    # a decoder fallback only; detection and annotation still use OpenCV + YOLO.
+    try:
+        import numpy as np
+        import imageio_ffmpeg
+        reader = imageio_ffmpeg.read_frames(str(path), pix_fmt="bgr24")
+        metadata = next(reader)
+        width, height = [int(value) for value in metadata.get("size", (0, 0))]
+        fps = float(metadata.get("fps") or 0)
+        duration = float(metadata.get("duration") or 0)
+        total_frames = int(round(duration * fps)) if duration > 0 and fps > 0 else 0
+        if width <= 0 or height <= 0:
+            reader.close()
+            raise ValueError("FFmpeg could not read the video dimensions.")
+
+        def read_ffmpeg_frame():
+            try:
+                payload = next(reader)
+            except StopIteration:
+                return False, None
+            frame = np.frombuffer(payload, dtype=np.uint8)
+            expected = width * height * 3
+            if frame.size != expected:
+                return False, None
+            return True, frame.reshape((height, width, 3)).copy()
+
+        return read_ffmpeg_frame, reader.close, fps, total_frames, width, height, duration, "ffmpeg_fallback"
+    except Exception as exc:
+        raise ValueError(
+            "This video could not be decoded by OpenCV. Export it as MP4 (H.264) and retry. "
+            "The server's FFmpeg fallback is unavailable or could not decode this file."
+        ) from exc
 
 
 def analyze_video(raw: bytes, filename: str, confidence: float = 0.25, sample_every_seconds: int = 1, approach_rois: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -74,21 +169,17 @@ def analyze_video(raw: bytes, filename: str, confidence: float = 0.25, sample_ev
     with tempfile.TemporaryDirectory(prefix="urbansarthi-video-") as temp_dir:
         path = Path(temp_dir) / f"upload{suffix}"
         path.write_bytes(raw)
-        capture = cv2.VideoCapture(str(path))
-        if not capture.isOpened():
-            capture.release()
-            raise ValueError("OpenCV could not decode this video. Try MP4 (H.264) or AVI footage.")
-        fps = float(capture.get(cv2.CAP_PROP_FPS) or 0)
-        total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
-        height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
-        duration = (total_frames / fps) if fps > 0 and total_frames > 0 else 0
+        read_frame, close_reader, fps, total_frames, width, height, duration, decoder_backend = _open_video_reader(cv2, path)
         if duration and duration > MAX_VIDEO_SECONDS:
-            capture.release()
+            close_reader()
             raise ValueError(f"Video is {duration / 60:.1f} minutes long. The current limit is 10 minutes.")
 
         effective_interval = max(int(sample_every_seconds), int((duration or 1) / MAX_SAMPLED_FRAMES) + 1)
-        model = _load_model()
+        try:
+            model = _load_model()
+        except Exception:
+            close_reader()
+            raise
         names = model.names
         if isinstance(names, list):
             names = {index: name for index, name in enumerate(names)}
@@ -114,7 +205,7 @@ def analyze_video(raw: bytes, filename: str, confidence: float = 0.25, sample_ev
         approach_peak_totals: dict[str, int] = {roi["id"]: 0 for roi in rois}
 
         while True:
-            ok, frame = capture.read()
+            ok, frame = read_frame()
             if not ok:
                 break
             if fps > 0:
@@ -189,7 +280,7 @@ def analyze_video(raw: bytes, filename: str, confidence: float = 0.25, sample_ev
                     peak_frame = result.plot()  # BGR frame with detector annotations
                     peak_detections = detections[:100]
             frame_index += 1
-        capture.release()
+        close_reader()
 
         if analyzed_frames == 0:
             raise ValueError("No frames could be sampled from the video. Try a different clip.")
@@ -234,7 +325,7 @@ def analyze_video(raw: bytes, filename: str, confidence: float = 0.25, sample_ev
             "mode": "model_video",
             "model": "YOLO11 + OpenCV + ByteTrack (tracking when IDs are available)",
             "source_filename": Path(filename or "traffic-video").name,
-            "video": {"width": width, "height": height, "fps": round(fps, 2) if fps else None, "duration_seconds": round(duration, 2) if duration else None, "decoded_frames": frame_index, "sampled_frames": analyzed_frames, "sampling_interval_seconds": effective_interval},
+            "video": {"width": width, "height": height, "fps": round(fps, 2) if fps else None, "duration_seconds": round(duration, 2) if duration else None, "decoded_frames": frame_index, "sampled_frames": analyzed_frames, "sampling_interval_seconds": effective_interval, "decoder": decoder_backend},
             "counts": counts_summary,
             "unique_vehicles": unique_vehicles if tracking_ids_seen else None,
             "total_vehicles": unique_vehicles,

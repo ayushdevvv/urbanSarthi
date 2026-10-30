@@ -29,3 +29,6 @@ opencv-python-headless>=4.10,<5
 langgraph>=0.2,<2
 langchain-core>=0.3,<2
 langchain-groq>=0.2,<2
+
+# Portable FFmpeg decoder fallback for phone-recorded / cloud-incompatible video codecs
+imageio-ffmpeg>=0.5.1,<1

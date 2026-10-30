@@ -142,6 +142,36 @@ def test_video_analysis_initializes_timeline_and_reports_roi_counts(monkeypatch)
     }
 
 
+def test_video_reader_falls_back_to_portable_ffmpeg_decoder(monkeypatch, tmp_path):
+    """A codec failure in VideoCapture should still feed BGR frames into the YOLO path."""
+    import sys
+    from types import SimpleNamespace
+    import numpy as np
+    from app.services import traffic_video
+
+    class BrokenCapture:
+        def __init__(self, _path): pass
+        def isOpened(self): return False
+        def release(self): pass
+
+    def fake_reader(_path, pix_fmt):
+        assert pix_fmt == "bgr24"
+        yield {"size": (2, 2), "fps": 1.0, "duration": 1.0}
+        yield bytes([1, 2, 3] * 4)
+
+    fake_cv2 = SimpleNamespace(VideoCapture=BrokenCapture)
+    monkeypatch.setitem(sys.modules, "imageio_ffmpeg", SimpleNamespace(read_frames=fake_reader))
+    read_frame, close_reader, fps, frame_count, width, height, duration, decoder = traffic_video._open_video_reader(fake_cv2, tmp_path / "clip.mp4")
+    ok, frame = read_frame()
+    close_reader()
+
+    assert decoder == "ffmpeg_fallback"
+    assert (fps, width, height, duration) == (1.0, 2, 2, 1.0)
+    assert frame_count == 1
+    assert ok and isinstance(frame, np.ndarray) and frame.shape == (2, 2, 3)
+    assert frame[0, 0].tolist() == [1, 2, 3]
+
+
 def test_air_intelligence_api_exposes_factor_catalog_and_estimator(client):
     catalog = client.get("/api/v1/air-intelligence/factors")
     assert catalog.status_code == 200

@@ -11,7 +11,7 @@ const navGroups = [
     { label: 'Signal plans', to: '/authority/signals', icon: Zap },
     { label: 'Traffic Simulation', to: '/authority/traffic-model', icon: Activity },
     { label: 'Traffic Lab', to: '/authority/traffic-lab', icon: Camera },
-    { label: 'Air Intelligence', to: '/authority/air-intelligence', icon: CloudSun },
+    { label: 'HawaFlow AI', to: '/authority/air-intelligence', icon: CloudSun },
     { label: 'Analytics', to: '/authority/analytics', icon: BarChart3 },
   ]},
   { label: 'MANAGE', items: [
@@ -25,7 +25,7 @@ const meta = {
   '/authority/signals': ['Network control', 'Signal plans'],
   '/authority/traffic-model': ['Network operations', 'Traffic Simulation'],
   '/authority/traffic-lab': ['Network operations', 'Traffic Lab'],
-  '/authority/air-intelligence': ['Air & emissions', 'Air intelligence'],
+  '/authority/air-intelligence': ['InnovateX · Theme 02', 'HawaFlow AI'],
   '/authority/aqi': ['Air & sensors', 'Air quality'],
   '/authority/analytics': ['Performance', 'City analytics'],
   '/authority/sources': ['Manage', 'Data sources'],

@@ -29,13 +29,18 @@ for (const endpoint of ['/air-intelligence/factors', '/air-intelligence/hotspots
   assert(airPage.includes(endpoint), `Air Intelligence page must use ${endpoint}`);
 }
 assert(airPage.includes('Download environmental report'), 'Air Intelligence must offer impact report export');
-console.log('✓ Air Intelligence page and API calls verified');
+for (const feature of ['HawaFlow', '/aqi/location-forecast', 'PM2.5', 'Carbon & pollutant estimator', 'Baseline versus intervention']) {
+  assert(airPage.includes(feature), `HawaFlow must include ${feature}`);
+}
+console.log('✓ HawaFlow Theme 2 monitoring, visualisation and emissions modules verified');
 
 const trafficLab = read('src/pages/citizen/TrafficVisionPage.jsx');
 assert(trafficLab.includes('/traffic-detection/analyze-video'), 'Traffic Lab must call the video-analysis API');
 assert(trafficLab.includes('/traffic-detection/ops-workflow'), 'Traffic Lab must call the operations workflow');
 assert(trafficLab.includes('approach_rois'), 'Traffic Lab must support camera ROI calibration');
 assert(trafficLab.includes('segment_distance_km'), 'Traffic Lab must pass the corridor distance assumption');
-console.log('✓ Traffic Lab video, ROI and agent workflow verified');
+assert(trafficLab.includes('hawaflow.latestVisionEvidence'), 'Traffic Lab must hand YOLO counts to HawaFlow emissions estimator');
+assert(trafficLab.includes('ffmpeg_fallback_available'), 'Traffic Lab must display FFmpeg decoder fallback readiness');
+console.log('✓ Traffic Lab video, ROI, decoder diagnostics and agent workflow verified');
 
 console.log('--- ALL FRONTEND SMOKE TESTS PASSED ---');
