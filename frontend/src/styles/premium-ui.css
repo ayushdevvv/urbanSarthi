@@ -79,7 +79,7 @@ button, input, select, textarea { font-size: inherit; }
 .authority-app .status-pill { font-size: 11px; padding: 6px 10px; }
 .authority-app .notice { padding: 12px 15px; font-size: 12px; border-radius: 11px; }
 
-/* AQI, carbon, sensor and drone pages */
+/* AQI, carbon and sensor pages */
 .monitor-page { gap: 18px; }
 .monitor-page .intro { margin-bottom: 24px; }
 .monitor-page .intro h2 { font-size: 34px; line-height: 1.1; letter-spacing: -1.25px; }
@@ -165,12 +165,12 @@ button, input, select, textarea { font-size: inherit; }
 .monitor-journey-card small { font-size: 11px; line-height: 1.5; }
 
 /* Carbon / emissions */
-.carbon-hero, .iot-hero, .drone-hero { min-height: 300px; padding: 34px 38px; border-radius: 24px; }
-.carbon-hero-copy h2, .iot-hero-copy h2, .drone-hero-copy h2 { font-size: clamp(34px, 3.7vw, 46px); line-height: 1.08; letter-spacing: -1.7px; margin: 18px 0 14px; }
-.carbon-hero-copy p, .iot-hero-copy p, .drone-hero-copy p { max-width: 600px; font-size: 14px; line-height: 1.75; }
-.carbon-hero-tags, .drone-hero-meta { gap: 10px; margin-top: 22px; }
-.carbon-hero-tags span, .drone-hero-meta span { padding: 8px 11px; border-radius: 9px; font-size: 11px; }
-.carbon-workspace, .iot-content-grid, .drone-main-grid, .drone-air-grid { gap: 16px; margin-top: 17px; }
+.carbon-hero, .iot-hero { min-height: 300px; padding: 34px 38px; border-radius: 24px; }
+.carbon-hero-copy h2, .iot-hero-copy h2 { font-size: clamp(34px, 3.7vw, 46px); line-height: 1.08; letter-spacing: -1.7px; margin: 18px 0 14px; }
+.carbon-hero-copy p, .iot-hero-copy p { max-width: 600px; font-size: 14px; line-height: 1.75; }
+.carbon-hero-tags { gap: 10px; margin-top: 22px; }
+.carbon-hero-tags span { padding: 8px 11px; border-radius: 9px; font-size: 11px; }
+.carbon-workspace, .iot-content-grid { gap: 16px; margin-top: 17px; }
 .carbon-total-block { padding: 23px 25px; }
 .carbon-total-block strong { font-size: 36px; }
 .carbon-total-block span, .carbon-total-block small { font-size: 12px; }
@@ -199,54 +199,12 @@ button, input, select, textarea { font-size: inherit; }
 .device-state { padding: 6px 9px; border-radius: 7px; font-size: 10px; }
 .iot-form { padding: 22px; gap: 16px; }
 .iot-form-grid { gap: 13px; }
-.iot-form label, .drone-mission-fields label, .drone-sensor-form label { gap: 7px; font-size: 12px; }
-.iot-form input, .iot-form select, .drone-mission-fields input, .drone-mission-fields select, .drone-sensor-form input { min-height: 43px; padding: 10px 12px; border-radius: 10px; font-size: 13px; }
+.iot-form label { gap: 7px; font-size: 12px; }
+.iot-form input, .iot-form select { min-height: 43px; padding: 10px 12px; border-radius: 10px; font-size: 13px; }
 .iot-note, .iot-success { padding: 13px 16px; border-radius: 11px; font-size: 11px; line-height: 1.6; }
 .iot-api-panel pre, .iot-code-wrap pre { font-size: 11px; line-height: 1.65; }
 .iot-connect-panel, .iot-api-panel { border-radius: 18px; }
 
-/* Drone survey */
-.drone-illustration { min-height: 250px; }
-.drone-dropzone { margin: 18px; min-height: 220px; padding: 24px; border-radius: 16px; }
-.drone-upload-icon { width: 58px; height: 58px; border-radius: 17px; }
-.drone-dropzone>b { font-size: 16px; }
-.drone-dropzone>small { font-size: 12px; }
-.drone-upload-limits { font-size: 11px; }
-.drone-preview { grid-template-columns: 180px minmax(0,1fr); gap: 16px; }
-.drone-preview img, .drone-preview video { height: 135px; border-radius: 11px; }
-.drone-preview b { font-size: 13px; }
-.drone-preview small { font-size: 11px; }
-.drone-mission-fields { padding: 20px; gap: 14px; }
-.drone-field-pair { gap: 12px; }
-.drone-status-note { padding: 13px 18px 16px; font-size: 11px; line-height: 1.6; }
-.drone-result-kpis>div { padding: 21px 23px; }
-.drone-result-kpis small, .drone-result-kpis span { font-size: 11px; }
-.drone-result-kpis b { font-size: 29px; }
-.drone-class-grid { padding: 19px 23px; gap: 16px; }
-.drone-class-grid span { font-size: 11px; }
-.drone-class-grid b { font-size: 18px; }
-.drone-report-foot { padding: 14px 22px; font-size: 10px; }
-.drone-air-reading { grid-template-columns: 140px 1fr; padding: 20px; gap: 18px; }
-.drone-air-reading small { font-size: 10px; }
-.drone-air-reading strong { font-size: 36px; }
-.drone-air-reading>div:first-child span { font-size: 11px; }
-.drone-air-pollutants { gap: 12px; }
-.drone-air-pollutants span, .drone-air-pollutants b { font-size: 11px; }
-.drone-nearby-note { padding: 0 20px 12px; font-size: 10px; }
-.drone-sensor-form { padding: 19px; gap: 12px; }
-
-/* Traffic and other authority sections */
-.authority-app .content :is(.panel, .kpi, .metric-card, .shortcut-card, .route-widget, .aqiv-info-panel, .traffic-capture-panel, .traffic-results-panel) { border-radius: 17px; }
-.authority-app .content :is(.panel-head, .card-head) h3 { font-size: 18px; }
-.authority-app .content :is(.panel-head p, .panel-description, .helper-text) { font-size: 12px; line-height: 1.6; }
-.authority-app .content :is(.eyebrow, .section-kicker) { font-size: 10px; letter-spacing: 1.2px; }
-.authority-app .content :is(label, .form-label) { font-size: 12px; }
-.authority-app .content :is(input, select, textarea) { min-height: 40px; padding: 9px 11px; font-size: 13px; border-radius: 9px; }
-.authority-app .content :is(.primary, .secondary, .monitor-button, .monitor-primary) { font-size: 13px; }
-.authority-app .content :is(.empty-state, .loading-lines) { font-size: 13px; }
-.authority-app .content :is(.empty-state p, .loading-lines p) { font-size: 12px; line-height: 1.6; }
-
-/* Keep text readable on smaller screens */
 @media (max-width: 1180px) {
   .authority-app .sidebar { width: 228px; flex-basis: 228px; }
   .authority-app .topbar { padding-inline: 25px; }
@@ -265,7 +223,7 @@ button, input, select, textarea { font-size: inherit; }
   .aqi-hero-copy h2 { font-size: 35px; }
   .aqi-dial { width: 170px; height: 170px; }
   .aqi-dial-copy strong { font-size: 43px; }
-  .carbon-hero, .iot-hero, .drone-hero { padding: 25px; }
+  .carbon-hero, .iot-hero { padding: 25px; }
 }
 @media (max-width: 560px) {
   .authority-app .content { padding: 18px 13px 28px; }
@@ -286,10 +244,8 @@ button, input, select, textarea { font-size: inherit; }
   .pollutant-grid { padding: 14px; }
   .pollutant-card { padding: 13px; }
   .pollutant-top>b { font-size: 17px; }
-  .carbon-hero, .iot-hero, .drone-hero { padding: 19px; }
-  .carbon-hero-copy h2, .iot-hero-copy h2, .drone-hero-copy h2 { font-size: 31px; }
-  .drone-result-kpis { grid-template-columns: 1fr; }
-  .drone-result-kpis>div { border-right: 0; border-bottom: 1px solid var(--m-line); }
+  .carbon-hero, .iot-hero { padding: 19px; }
+  .carbon-hero-copy h2, .iot-hero-copy h2 { font-size: 31px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .authority-app *, .authority-app *::before, .authority-app *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

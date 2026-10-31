@@ -16,16 +16,16 @@ console.log('--- RUNNING URBANSARTHI WORKSPACE SMOKE TESTS ---');
 const app = read('src/App.jsx');
 for (const [route, component] of [
   ['air-intelligence', 'AirQualityOverviewPage'], ['carbon', 'CarbonImpactPage'],
-  ['iot', 'IotNetworkPage'], ['drones', 'DroneSurveyPage'], ['traffic', 'TrafficInfoPage'],
+  ['iot', 'IotNetworkPage'], ['traffic', 'TrafficInfoPage'],
 ]) assert(app.includes(`path="${route}"`) && app.includes(`<${component}`), `${route} page must be registered`);
 assert(app.includes('Navigate to="air-intelligence"'), 'Authority workspace must open on AQI overview');
 console.log('✓ Air-first route structure verified');
 
 const layout = read('src/components/layout/AuthorityLayout.jsx');
-for (const target of ['/authority/air-intelligence', '/authority/carbon', '/authority/traffic', '/authority/iot', '/authority/drones']) {
+for (const target of ['/authority/air-intelligence', '/authority/carbon', '/authority/traffic', '/authority/iot']) {
   assert(layout.includes(target), `Navigation must include ${target}`);
 }
-assert(layout.includes('AIR QUALITY') && layout.includes('TRAFFIC') && layout.includes('FIELD MONITORING'), 'Navigation must separate air, traffic and field monitoring');
+assert(layout.includes('AIR QUALITY') && layout.includes('TRAFFIC') && layout.includes('FIELD DATA'), 'Navigation must separate air, traffic and field data');
 assert(!layout.includes('API configuration'), 'Technical API configuration label must not be shown in the main navigation');
 console.log('✓ Section navigation and user-facing labels verified');
 
@@ -47,13 +47,6 @@ assert(iot.includes("aqi: ''") && iot.includes("form.aqi !== ''"), 'IoT sensor m
 assert(iot.includes('HTTP ingestion available') && iot.includes('does not currently run an MQTT broker'), 'IoT transport and limits must be explicit');
 console.log('✓ IoT observation ingestion and device registry verified');
 
-const drone = read('src/pages/authority/DroneSurveyPage.jsx');
-assert(drone.includes('/traffic-detection/analyze-video'), 'Drone page must analyze uploaded aerial video');
-assert(drone.includes('/traffic-detection/analyze?'), 'Drone page must analyze uploaded aerial images');
-assert(drone.includes("api.post('/aqi/observations', payload)"), 'Drone page must accept onboard sensor observations');
-assert(drone.includes("aqi: ''") && drone.includes("mission.aqi !== ''"), 'Drone sensor flow must keep optional AQI source-provided');
-assert(drone.includes('does not infer PM2.5 or AQI from pixels'), 'Drone page must distinguish camera evidence from air measurements');
-console.log('✓ Drone media workflow and measurement provenance verified');
 
 const traffic = read('src/pages/citizen/TrafficVisionPage.jsx');
 assert(traffic.includes('/traffic-detection/analyze-video'), 'Traffic Lab must call the video-analysis API');
@@ -63,4 +56,18 @@ assert(traffic.includes('saveLatestVisionEvidence'), 'Traffic Lab must hand vehi
 const evidenceStore = read('src/services/visionEvidence.js');
 assert(evidenceStore.includes('airtraffic.latestVisionEvidence') && evidenceStore.includes('LEGACY_STORAGE_KEY'), 'Video evidence storage must use the neutral key and preserve existing saved evidence');
 console.log('✓ Existing traffic video and operations workflow preserved');
+const html = read('index.html');
+assert(html.includes('href="/favicon.png"') && !html.includes('href="/favicon.svg"'), 'PNG favicon must be linked in the browser shell');
+assert(fs.existsSync(path.join(root, 'public/favicon.png')), 'Linked PNG favicon must exist in the public assets');
+const routePlanner = read('src/pages/citizen/RoutePlannerPage.jsx');
+assert(routePlanner.includes('buildGoogleMapsUrl') && routePlanner.includes('routeOptions'), 'Route planner must link each mapped route to Google Maps and draw alternatives');
+assert(routePlanner.includes('slice(0, 3)') && routePlanner.includes('3 road routes mapped'), 'Route planner must expose a three-route comparison state');
+assert(routePlanner.includes('String.fromCharCode(65 + index)') || routePlanner.includes('Route A'), 'Route planner should label distinct road alternatives');
+assert(routePlanner.includes('route-carbon-grid') && routePlanner.includes('route-emission-card'), 'Each route alternative must have a dedicated premium carbon card');
+assert(routePlanner.includes('Lowest CO₂') && routePlanner.includes('vs lowest') && routePlanner.includes('formatCO2'), 'Route cards must compare route-specific CO2 estimates');
+const routeStyles = read('src/styles/citizen.css');
+assert(routeStyles.includes('.route-carbon-grid') && routeStyles.includes('.route-emission-card') && routeStyles.includes('@media(max-width:700px){.route-carbon-grid{grid-template-columns:1fr'), 'Route carbon cards must have responsive premium styling');
+const cityMap = read('src/components/maps/CityMap.jsx');
+assert(cityMap.includes('routeOptions') && cityMap.includes('Polyline'), 'Map must render road-network route geometries');
+console.log('✓ PNG favicon, multi-route map and Google Maps handoff verified');
 console.log('--- ALL URBANSARTHI SMOKE TESTS PASSED ---');

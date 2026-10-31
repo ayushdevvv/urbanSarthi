@@ -107,3 +107,51 @@
 @media(max-width:900px){.air-quality-summary-grid,.air-quality-lower-grid{grid-template-columns:1fr}.air-location-form{grid-template-columns:minmax(0,1fr) auto}.air-location-form .secondary{grid-column:2}.air-location-form>label{grid-row:1/3}.traffic-admin-place-form{grid-template-columns:minmax(0,1fr) auto!important}.traffic-route-options{grid-template-columns:1fr}}
 @media(max-width:560px){.air-search-panel,.air-aqi-card,.air-pollutants-card,.air-map-card,.air-hourly-card{padding:15px}.air-location-form,.aqi-place-search{grid-template-columns:1fr}.air-location-form>label{grid-row:auto}.air-location-form .secondary{grid-column:auto}.air-location-form .primary,.air-location-form .secondary{width:100%}.air-pollutants-grid{gap:7px}.air-pollutants-grid>div{padding:12px}.air-hourly-list article{grid-template-columns:minmax(90px,1fr) auto minmax(50px,.5fr);gap:8px}.aqi-search-hero{grid-template-columns:1fr}.aqi-place-search{grid-column:auto}.aqi-search-hero .aqi-location-button{width:100%}.route-map-actions{align-items:stretch;flex-direction:column}.route-map-actions .primary{justify-content:center}.traffic-route-options{padding:10px}.traffic-map-toggles{gap:10px}.traffic-admin-place-form{grid-template-columns:1fr!important}.traffic-admin-place-form>*{width:100%}}
 .air-index-duo{margin:14px 0 0}.air-index-duo>div{background:var(--surface2);border-radius:11px;padding:10px}.air-index-duo b{font-size:21px}.air-index-duo i{font-size:10px}
+
+/* Premium route comparison cards with route-specific carbon estimates. */
+.route-results{margin-top:24px}
+.route-results>.section-heading{align-items:flex-end;margin-bottom:14px}
+.route-results>.section-heading h3{font-size:clamp(19px,2vw,24px);letter-spacing:-.65px}
+.route-carbon-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:stretch}
+.route-carbon-card{position:relative;display:flex;flex-direction:column;gap:15px;padding:18px!important;min-width:0;border-radius:17px!important;overflow:hidden;isolation:isolate;box-shadow:0 12px 34px #173b3309;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
+.route-carbon-card:before{content:"";position:absolute;inset:0 0 auto;height:3px;background:var(--route-accent);opacity:.9;z-index:-1}
+.route-carbon-card:hover{transform:translateY(-2px);box-shadow:0 17px 40px #173b3314}
+.route-carbon-card-selected{border-color:var(--route-accent)!important;box-shadow:0 0 0 2px color-mix(in srgb,var(--route-accent) 20%,transparent),0 15px 36px #173b3310!important}
+.route-carbon-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:9px;min-height:42px}
+.route-carbon-name{display:flex;align-items:center;gap:11px;min-width:0}
+.route-color-marker{width:5px;height:37px;border-radius:8px;background:var(--route-accent);flex:none}
+.route-carbon-name>div{display:grid;gap:3px;min-width:0}
+.route-carbon-name small{font-size:9px!important;font-weight:800;letter-spacing:1px;color:var(--muted);line-height:1.2}
+.route-carbon-name h4{margin:0;color:var(--text);font:700 19px/1.2 Manrope,'DM Sans',sans-serif;letter-spacing:-.55px}
+.route-carbon-badges{display:flex;justify-content:flex-end;align-items:flex-end;gap:5px;flex-wrap:wrap}
+.route-carbon-badge{display:inline-flex;align-items:center;gap:4px;padding:6px 8px;border-radius:999px;font-size:9px!important;line-height:1;font-weight:800;white-space:nowrap}
+.route-carbon-badge.lowest{background:#eaf3dc;color:#426d32;border:1px solid #d8e8c3}
+.route-carbon-badge.fastest{background:#eaf0f8;color:#456c92;border:1px solid #dce7f2}
+.route-carbon-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.route-carbon-stats>div{display:grid;gap:7px;padding:11px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:11px;min-width:0}
+.route-carbon-stats span{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:9px!important;font-weight:800;letter-spacing:.65px}
+.route-carbon-stats span svg{color:var(--route-accent)}
+.route-carbon-stats b{font:700 17px/1.15 Manrope,'DM Sans',sans-serif;color:var(--text);letter-spacing:-.35px;overflow-wrap:anywhere}
+.route-emission-card{padding:15px 15px 13px;border-radius:13px;border:1px solid color-mix(in srgb,var(--route-accent) 23%,var(--border));background:linear-gradient(145deg,var(--route-accent-soft),color-mix(in srgb,var(--surface) 94%,var(--route-accent-soft)));min-width:0}
+.route-emission-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--muted);font-size:9px!important;font-weight:900;letter-spacing:.8px}
+.route-emission-leaf{display:grid;place-items:center;width:31px;height:31px;border-radius:10px;background:var(--route-accent-soft);color:var(--route-accent)}
+.route-emission-value{margin:8px 0 13px;color:var(--text);font:800 clamp(28px,3vw,36px)/1 Manrope,'DM Sans',sans-serif;letter-spacing:-1.4px;overflow-wrap:anywhere}
+.route-emission-track{height:7px;border-radius:99px;background:color-mix(in srgb,var(--muted) 15%,transparent);overflow:hidden}
+.route-emission-track i{display:block;height:100%;border-radius:99px;background:var(--route-accent);transition:width .3s ease}
+.route-emission-compare{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;flex-wrap:wrap}
+.route-emission-compare span{font-size:10px!important;color:var(--muted)}
+.route-emission-compare b{font-size:10px!important;color:var(--route-accent);font-weight:800;text-align:right}
+.route-carbon-footnote{font-size:10px!important;line-height:1.45;color:var(--muted);margin-top:-5px}
+.route-carbon-warning{font-size:10px!important;line-height:1.45;color:#977044;padding:8px 10px;border-radius:8px;background:#fbf3e6}
+.route-carbon-actions{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-top:auto;padding-top:3px}
+.route-carbon-actions .primary,.route-carbon-actions .secondary{min-height:39px;padding:0 13px;font-size:11px!important}
+.route-carbon-actions .secondary{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--border);border-radius:9px;background:var(--surface2);color:var(--text);font-weight:800}
+.route-google-link{display:inline-flex;align-items:center;gap:5px;color:var(--text);font-size:10px!important;font-weight:800;text-decoration:none;white-space:nowrap;opacity:.78}
+.route-google-link:hover{opacity:1;color:var(--route-accent)}
+.route-emissions-disclaimer{margin:12px 2px 0;color:var(--muted);font-size:10px!important;line-height:1.6}
+.dark .route-carbon-badge.lowest{background:#263b2b;color:#c9e9a4;border-color:#38553a}
+.dark .route-carbon-badge.fastest{background:#243747;color:#b5d4ef;border-color:#344f65}
+.dark .route-carbon-warning{background:#403725;color:#e7d2a5}
+@media(max-width:1100px){.route-carbon-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.route-carbon-grid{grid-template-columns:1fr;gap:11px}.route-carbon-card{padding:16px!important}.route-carbon-name h4{font-size:18px}.route-emission-value{font-size:32px}.route-carbon-badges{max-width:48%}}
+@media(prefers-reduced-motion:reduce){.route-carbon-card,.route-emission-track i{transition:none}.route-carbon-card:hover{transform:none}}

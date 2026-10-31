@@ -26,7 +26,7 @@ export default function CarbonImpactPage() {
   const barMax = Math.max(1, ...['co2_g', 'nox_g', 'pm_g', 'co_g'].map((key) => Number(emissions[key] || 0)));
   async function importLatest() {
     const latest = readEvidence();
-    if (!latest?.counts) { notify('Run a road or drone video analysis first.'); return; }
+    if (!latest?.counts) { notify('Run a road video analysis first.'); return; }
     setCounts({ car: String(latest.counts.car || 0), motorbike: String(latest.counts.motorbike || 0), bus: String(latest.counts.bus || 0), truck: String(latest.counts.truck || 0), bicycle: String(latest.counts.bicycle || 0) });
     notify('Latest vehicle counts imported.');
   }

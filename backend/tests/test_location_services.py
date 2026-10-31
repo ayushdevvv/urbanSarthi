@@ -67,3 +67,49 @@ def test_60_minute_scenario_contains_13_frames_and_80_edges(client):
     assert len(payload["timeline"][0]["roads"]) == 80
     assert payload["training_data"]["records"] == 518400
     assert payload["models"]["horizon_60"]["level_accuracy_percent"] == 61.5
+
+
+def test_network_routes_combine_distinct_osrm_and_valhalla_paths(monkeypatch):
+    def route(points, provider):
+        return {
+            "distance_meters": 4200,
+            "duration_seconds": 720,
+            "mode": "driving",
+            "provider": provider,
+            "data_quality": "road-network-route",
+            "geometry": {"type": "LineString", "coordinates": points},
+        }
+
+    osrm_path = route([[77.000, 28.000], [77.010, 28.012], [77.020, 28.020], [77.030, 28.030]], "OSRM")
+    valhalla_path_a = route([[77.000, 28.000], [77.008, 28.018], [77.019, 28.026], [77.030, 28.030]], "Valhalla")
+    valhalla_path_b = route([[77.000, 28.000], [77.015, 28.006], [77.025, 28.018], [77.030, 28.030]], "Valhalla")
+    monkeypatch.setattr(routing_service, "_osrm_routes", lambda mode, origin, dest: [osrm_path])
+    monkeypatch.setattr(routing_service, "_valhalla_routes", lambda mode, origin, dest, **kwargs: [valhalla_path_a, valhalla_path_b])
+
+    routes = routing_service._network_routes("driving", (28.0, 77.0), (28.03, 77.03))
+
+    assert len(routes) == 3
+    assert all(route["data_quality"] == "road-network-route" for route in routes)
+    assert all(len(route["geometry"]["coordinates"]) >= 2 for route in routes)
+
+
+def test_duplicate_network_route_is_not_counted_as_alternative():
+    route = {
+        "geometry": {"type": "LineString", "coordinates": [[77.0, 28.0], [77.01, 28.01], [77.02, 28.02], [77.03, 28.03]]}
+    }
+    duplicate = {
+        "geometry": {"type": "LineString", "coordinates": [[77.0, 28.0], [77.01, 28.01], [77.02, 28.02], [77.03, 28.03]]}
+    }
+    assert not routing_service._is_distinct_network_route(duplicate, [route])
+
+
+def test_route_co2_uses_transparent_car_profile_and_varies_by_distance():
+    short_route = routing_service._route_co2_estimate(5000, "driving")
+    long_route = routing_service._route_co2_estimate(8000, "driving")
+
+    assert short_route == 746.3
+    assert long_route == 1194.1
+    assert long_route > short_route
+    assert routing_service._route_co2_estimate(5000, "walking") == 0.0
+    assert routing_service._route_co2_estimate(5000, "cycling") == 0.0
+    assert routing_service._route_co2_estimate(5000, "transit") is None

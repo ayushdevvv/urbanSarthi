@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, CloudSun, Droplets, MapPin, RefreshCw, RadioTower, Wind, Waves, Leaf, Camera, Plane, ChevronRight } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, CloudSun, Droplets, MapPin, RefreshCw, RadioTower, Wind, Waves, Leaf, Camera, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api } from '../../services/api/client.js';
 import PageIntro from '../../components/shared/PageIntro.jsx';
@@ -145,6 +145,6 @@ export default function AirQualityOverviewPage() {
       </article>
     </section>
 
-    <section className="monitor-journeys"><Link to="/authority/carbon" className="monitor-journey-card"><span className="journey-icon"><Leaf size={18}/></span><div><b>Carbon & emissions</b><small>Estimate CO₂, NOx, PM and CO from observed traffic.</small></div><ChevronRight size={16}/></Link><Link to="/authority/drones" className="monitor-journey-card"><span className="journey-icon"><Plane size={18}/></span><div><b>Drone surveys</b><small>Review aerial road activity and onboard air readings.</small></div><ChevronRight size={16}/></Link><Link to="/authority/traffic-lab" className="monitor-journey-card"><span className="journey-icon"><Camera size={18}/></span><div><b>Traffic intelligence</b><small>Analyze road footage and create an evidence report.</small></div><ChevronRight size={16}/></Link></section>
+    <section className="monitor-journeys"><Link to="/authority/carbon" className="monitor-journey-card"><span className="journey-icon"><Leaf size={18}/></span><div><b>Carbon & emissions</b><small>Estimate CO₂, NOx, PM and CO from observed traffic.</small></div><ChevronRight size={16}/></Link><Link to="/authority/traffic-lab" className="monitor-journey-card"><span className="journey-icon"><Camera size={18}/></span><div><b>Traffic intelligence</b><small>Analyze road footage and create an evidence report.</small></div><ChevronRight size={16}/></Link></section>
   </main>;
 }

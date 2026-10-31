@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, Bell, Camera, ChevronRight, CloudSun, House, Leaf, Menu, Moon, Plane, RadioTower, Settings, Sun, Wind, Zap, Route } from 'lucide-react';
+import { BarChart3, Bell, Camera, ChevronRight, CloudSun, House, Leaf, Menu, Moon, RadioTower, Settings, Sun, Wind, Zap, Route } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 import FloatingAgentWidget from '../shared/FloatingAgentWidget.jsx';
@@ -15,9 +15,8 @@ const navGroups = [
     { label: 'Traffic video analysis', to: '/authority/traffic-lab', icon: Camera },
     { label: 'Signal plans', to: '/authority/signals', icon: Zap },
   ]},
-  { label: 'FIELD MONITORING', items: [
+  { label: 'FIELD DATA', items: [
     { label: 'IoT sensor network', to: '/authority/iot', icon: RadioTower },
-    { label: 'Drone surveys', to: '/authority/drones', icon: Plane },
   ]},
   { label: 'INSIGHTS', items: [
     { label: 'Analytics', to: '/authority/analytics', icon: BarChart3 },
@@ -33,7 +32,6 @@ const meta = {
   '/authority/air-intelligence': ['Air quality', 'AQI overview'],
   '/authority/carbon': ['Air quality', 'Carbon & emissions'],
   '/authority/iot': ['Field network', 'IoT sensor network'],
-  '/authority/drones': ['Field network', 'Drone surveys'],
   '/authority/analytics': ['Insights', 'City analytics'],
   '/authority/sources': ['Manage', 'Data sources'],
   '/authority/settings': ['Manage', 'Settings'],

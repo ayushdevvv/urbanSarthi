@@ -11,7 +11,6 @@ import AnalyticsPage from './pages/authority/AnalyticsPage.jsx';
 import AirQualityOverviewPage from './pages/authority/AirQualityOverviewPage.jsx';
 import CarbonImpactPage from './pages/authority/CarbonImpactPage.jsx';
 import IotNetworkPage from './pages/authority/IotNetworkPage.jsx';
-import DroneSurveyPage from './pages/authority/DroneSurveyPage.jsx';
 import DataSourcesPage from './pages/authority/DataSourcesPage.jsx';
 import SettingsPage from './pages/authority/SettingsPage.jsx';
 import TrafficVisionPage from './pages/citizen/TrafficVisionPage.jsx';
@@ -42,7 +41,6 @@ export default function App() {
         <Route path="signals" element={<SignalPlansPage />} />
         <Route path="traffic-lab" element={<TrafficVisionPage authorityLab />} />
         <Route path="iot" element={<IotNetworkPage />} />
-        <Route path="drones" element={<DroneSurveyPage />} />
         <Route path="aqi" element={<Navigate to="/authority/air-intelligence" replace />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="sources" element={<DataSourcesPage />} />
