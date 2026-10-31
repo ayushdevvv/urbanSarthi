@@ -103,11 +103,18 @@ _ROUTING_BASES = {
 def _osrm_routes(mode: str, origin: tuple[float, float], dest: tuple[float, float]) -> list[dict] | None:
     if mode not in _ROUTING_BASES:
         return None
-    # Merge alternatives from independent OSRM deployments. The first provider
-    # often returns only one path, so returning early here used to hide the second.
-    bases = [settings.osrm_base_url.rstrip("/")] if settings.osrm_base_url else [_ROUTING_BASES[mode]]
-    if mode == "driving" and "https://router.project-osrm.org" not in bases:
-        bases.append("https://router.project-osrm.org")
+    # OSRM_BASE_URL is a car-routing override. Do not send walking/cycling
+    # requests to that same profile: use their dedicated OSM routing instances.
+    # Normalize an accidentally supplied /route/v1/... suffix so callers can
+    # paste either the service root or a standard OSRM URL.
+    configured_base = (settings.osrm_base_url or "").strip().rstrip("/")
+    configured_base = configured_base.split("/route/v1/", 1)[0].rstrip("/") if configured_base else ""
+    if mode == "driving":
+        bases = [configured_base] if configured_base else [_ROUTING_BASES[mode]]
+        if "https://router.project-osrm.org" not in bases:
+            bases.append("https://router.project-osrm.org")
+    else:
+        bases = [_ROUTING_BASES[mode]]
 
     def fetch(base: str) -> list[dict]:
         profile = "driving"
@@ -142,7 +149,7 @@ def _osrm_routes(mode: str, origin: tuple[float, float], dest: tuple[float, floa
                     "warnings": ["Travel time is based on mapped network estimates; live traffic may not be included."],
                 })
             return output
-        except (httpx.HTTPError, ValueError, TypeError, KeyError):
+        except Exception:
             return []
 
     with ThreadPoolExecutor(max_workers=min(3, len(bases))) as pool:

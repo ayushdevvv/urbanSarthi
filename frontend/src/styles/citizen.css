@@ -160,3 +160,7 @@
 .traffic-route-options .traffic-route-co2{color:#557b3f;font-size:11px;font-weight:800}
 .dark .traffic-route-options .traffic-route-co2{color:#c3e79b}
 .route-carbon-insight{min-width:0}
+
+/* The dedicated AQI forecast page owns the hourly outlook; the current AQI page keeps a full-width location map. */
+.air-quality-lower-grid.air-quality-map-only{grid-template-columns:minmax(0,1fr)}
+.air-quality-map-only .air-map-card .leaflet-map{height:340px}

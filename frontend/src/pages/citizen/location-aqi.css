@@ -8,3 +8,44 @@
 .aqi-index-dual b,.air-index-duo b{font-size:20px;color:var(--text,#173b33)}
 .aqi-index-dual i,.air-index-duo i{font-size:10px;font-style:normal;color:var(--muted,#76847a);margin-left:3px}
 @media(max-width:480px){.aqi-index-dual,.air-index-duo{gap:6px}.aqi-index-dual>div,.air-index-duo>div{padding:8px}}
+
+/* Single premium AQI workspace: current conditions and 24-hour outlook together. */
+.air-aqi-outlook{display:grid;gap:14px;margin-top:2px}
+.air-aqi-outlook-header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:2px 1px 4px}
+.air-aqi-outlook-header h3{font-size:clamp(23px,2.2vw,30px);letter-spacing:-.8px;margin:6px 0 4px;color:var(--text,#173b33)}
+.air-aqi-outlook-header p{margin:0;color:var(--muted,#718075);font-size:13px}
+.air-aqi-forecast-pill{display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border:1px solid #dce8d4;border-radius:99px;background:#f3f8ee;color:#557c43;font-size:11px;font-weight:750;white-space:nowrap}
+.air-aqi-outlook-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}
+.air-aqi-outlook-kpis article{min-width:0;padding:16px 17px;border:1px solid #e1e9dc;border-radius:14px;background:#fff;box-shadow:0 6px 20px #173f2c08}
+.air-aqi-outlook-kpis span,.air-aqi-outlook-kpis b,.air-aqi-outlook-kpis small{display:block}
+.air-aqi-outlook-kpis span{font-size:11px;color:#718174;font-weight:650}
+.air-aqi-outlook-kpis b{font-size:clamp(22px,2.4vw,29px);letter-spacing:-.8px;color:#254a36;margin-top:8px}
+.air-aqi-outlook-kpis small{font-size:10px;color:#89968b;margin-top:3px}
+.air-aqi-outlook-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(320px,.88fr);gap:14px;align-items:stretch}
+.air-aqi-trend-panel,.air-aqi-hourly-panel{padding:19px;min-width:0}
+.air-aqi-panel-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.air-aqi-panel-heading h4{font-size:17px;letter-spacing:-.35px;margin:5px 0 0;color:#234634}
+.air-aqi-panel-heading>svg{color:#729957}
+.air-aqi-panel-heading>span{font-size:10px;color:#758577;white-space:nowrap}
+.air-aqi-chart{height:210px;display:flex;flex-direction:column;justify-content:space-between;gap:10px;padding:14px 8px 0;border:1px solid #e6ede1;border-radius:11px;background:linear-gradient(180deg,#f9fcf6,#fff)}
+.air-aqi-chart svg{width:100%;height:165px;overflow:visible}
+.air-aqi-chart-grid{stroke:#e4ebdf;stroke-width:.55;stroke-dasharray:1.5 2;vector-effect:non-scaling-stroke}
+.air-aqi-chart-line{fill:none;stroke:#6e984b;stroke-width:2.7;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.air-aqi-chart>div{display:flex;justify-content:space-between;padding:0 3px 9px;color:#859286;font-size:9px}
+.air-aqi-chart-empty{height:210px;display:grid;place-items:center;padding:20px;text-align:center;color:#7e8b80;font-size:12px;border:1px dashed #dce7d6;border-radius:11px;background:#fafcf8}
+.air-aqi-trend-legend{display:flex;align-items:center;justify-content:space-between;margin-top:11px;color:#7a887c;font-size:10px}
+.air-aqi-trend-legend span{display:flex;align-items:center;gap:7px}
+.air-aqi-trend-legend i{width:18px;height:3px;border-radius:9px;background:#6e984b}
+.air-aqi-hourly-list{max-height:260px;overflow:auto;padding-right:4px}
+.air-aqi-hourly-list>div{display:grid;grid-template-columns:58px 36px 1fr 94px;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid #edf1e9}
+.air-aqi-hourly-list time{font-size:10px;color:#758477}
+.air-aqi-hourly-list b{font-size:12px;color:#234734}
+.air-aqi-hourly-list small{font-size:9px;color:#79867b;text-align:right}
+.air-aqi-hourly-list em{grid-column:3/5;font-size:9px;font-style:normal;color:#8a968b}
+.air-aqi-hourly-band{height:6px;border-radius:99px;background:#9aba70}
+.air-aqi-hourly-band.moderate{background:#c3b65d}.air-aqi-hourly-band.sensitive{background:#d69d52}.air-aqi-hourly-band.poor{background:#c87562}
+.air-aqi-forecast-note{display:flex;align-items:flex-start;gap:9px;padding:12px 14px;border:1px solid #e1ead9;border-radius:11px;background:#f7faf4;color:#728174;font-size:11px;line-height:1.6}
+.air-aqi-forecast-note svg{flex:none;color:#739457;margin-top:1px}
+.air-aqi-forecast-note b{color:#486844}
+@media(max-width:900px){.air-aqi-outlook-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.air-aqi-outlook-grid{grid-template-columns:1fr}}
+@media(max-width:560px){.air-aqi-outlook-header{align-items:flex-start;flex-direction:column}.air-aqi-outlook-kpis{gap:8px}.air-aqi-outlook-kpis article{padding:13px}.air-aqi-trend-panel,.air-aqi-hourly-panel{padding:14px}.air-aqi-hourly-list>div{grid-template-columns:52px 32px 1fr 80px;gap:7px}}

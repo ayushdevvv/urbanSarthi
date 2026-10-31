@@ -1,4 +1,4 @@
-.traffic-agent-page{--ta-ink:#1a3d30;--ta-muted:#718276;--ta-line:#dfe8da;--ta-soft:#f3f7ef;--ta-green:#2f6a49;--ta-lime:#8eb866;color:var(--ta-ink);max-width:1600px;margin:0 auto;padding:4px 0 30px}
+.traffic-agent-page{color-scheme:light;background:transparent;--ta-ink:#1a3d30;--ta-muted:#718276;--ta-line:#dfe8da;--ta-soft:#f3f7ef;--ta-green:#2f6a49;--ta-lime:#8eb866;color:var(--ta-ink);max-width:1600px;margin:0 auto;padding:4px 0 30px}
 .traffic-agent-page *{box-sizing:border-box}
 .ta-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(265px,340px);gap:24px;align-items:center;padding:24px 0 25px;border-bottom:1px solid var(--ta-line)}
 .ta-eyebrow{display:flex;align-items:center;gap:9px;color:#648455;font-size:10px;font-weight:850;letter-spacing:1.5px}

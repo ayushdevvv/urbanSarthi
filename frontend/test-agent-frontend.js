@@ -18,14 +18,16 @@ for (const [route, component] of [
   ['air-intelligence', 'AirQualityOverviewPage'], ['carbon', 'CarbonImpactPage'],
   ['iot', 'IotNetworkPage'], ['traffic', 'TrafficInfoPage'],
 ]) assert(app.includes(`path="${route}"`) && app.includes(`<${component}`), `${route} page must be registered`);
-assert(app.includes('Navigate to="air-intelligence"'), 'Authority workspace must open on AQI overview');
+assert(app.includes('Navigate to="control"'), 'Authority workspace must open on City overview');
 console.log('✓ Air-first route structure verified');
 
 const layout = read('src/components/layout/AuthorityLayout.jsx');
-for (const target of ['/authority/air-intelligence', '/authority/carbon', '/authority/traffic', '/authority/iot']) {
+for (const target of ['/authority/control', '/authority/air-intelligence', '/authority/iot', '/authority/traffic-lab', '/authority/traffic-agent', '/authority/traffic-simulation']) {
   assert(layout.includes(target), `Navigation must include ${target}`);
 }
-assert(layout.includes('AIR QUALITY') && layout.includes('TRAFFIC') && layout.includes('FIELD DATA'), 'Navigation must separate air, traffic and field data');
+assert(layout.includes('OVERVIEW') && layout.includes('AIR QUALITY') && layout.includes('FIELD NETWORK') && layout.includes('TRAFFIC'), 'Navigation must group overview, AQI, IoT and traffic');
+assert(layout.indexOf("to: '/authority/control'") < layout.indexOf("to: '/authority/air-intelligence'") && layout.indexOf("to: '/authority/air-intelligence'") < layout.indexOf("to: '/authority/iot'") && layout.indexOf("to: '/authority/iot'") < layout.indexOf("to: '/authority/traffic-lab'") && layout.indexOf("to: '/authority/traffic-lab'") < layout.indexOf("to: '/authority/traffic-agent'") && layout.indexOf("to: '/authority/traffic-agent'") < layout.indexOf("to: '/authority/traffic-simulation'"), 'Admin navigation order must be Overview → AQI → IoT → Traffic');
+assert(!layout.includes("to: '/authority/signals'") && !layout.includes("to: '/authority/analytics'") && !layout.includes("to: '/authority/traffic-analysis'"), 'Removed standalone Signal Plans and Traffic Analysis must not appear in navigation');
 assert(!layout.includes('API configuration'), 'Technical API configuration label must not be shown in the main navigation');
 console.log('✓ Section navigation and user-facing labels verified');
 const shellCss = read('src/styles/app-shell-refinement.css');
@@ -80,10 +82,16 @@ assert(routePlanner.includes('slice(0, 3)') && routePlanner.includes('3 road rou
 assert(routePlanner.includes('String.fromCharCode(65 + index)') || routePlanner.includes('Route A'), 'Route planner should label distinct road alternatives');
 assert(routePlanner.includes('route-carbon-grid') && routePlanner.includes('route-emission-card'), 'Each route alternative must have a dedicated premium carbon card');
 assert(routePlanner.includes('sortRouteOptions') && routePlanner.includes('const displayRoutes'), 'Route cards and map must use one preference-sorted route order');
+assert(routePlanner.includes("lastAutoKey.current = '';") && routePlanner.includes('planRunRef.current += 1;') && !routePlanner.includes('destination.resolved, mode, preference]'), 'Editing or swapping locations must cancel stale route requests; sorting preferences must not refetch the route network.');
 assert(routePlanner.includes('setResult(null); setSelectedRouteId(null);') && routePlanner.includes('Checking live road-routing providers'), 'Old route data must be hidden while fresh route providers are queried');
+assert(routePlanner.includes('Promise.all([') && routePlanner.includes('resolveMappedPlace(originQuery)') && routePlanner.includes('resolveMappedPlace(destinationQuery)'), 'Route submit must resolve both typed endpoints together instead of stopping after the first unresolved place');
+assert(routePlanner.includes('estimateRouteOnly(') && routePlanner.includes('No road path is available for this estimate'), 'If road routing is unavailable, return an honest estimate without drawing a fake path');
 assert(routePlanner.includes('Lowest CO₂') && routePlanner.includes('vs lowest') && routePlanner.includes('formatCO2'), 'Route cards must compare route-specific CO2 estimates');
 const routeStyles = read('src/styles/citizen.css');
 assert(routeStyles.includes('.route-carbon-grid') && routeStyles.includes('.route-emission-card') && routeStyles.includes('@media(max-width:700px){.route-carbon-grid{grid-template-columns:1fr'), 'Route carbon cards must have responsive premium styling');
+const publicRouting = read('src/services/publicRouting.js');
+assert(publicRouting.includes('OSRM_BASES') && publicRouting.includes('requestValhalla') && publicRouting.includes('detourWaypoints'), 'Route fallback must query multiple OSM routers and forced road-network waypoints');
+assert(publicRouting.includes("data_quality: 'road-network-route'") && publicRouting.includes('coordinates'), 'Fallback alternatives must use provider-returned road geometry');
 const cityMap = read('src/components/maps/CityMap.jsx');
 assert(cityMap.includes('routeOptions') && cityMap.includes('Polyline'), 'Map must render road-network route geometries');
 const apiClient = read('src/services/api/client.js');
@@ -92,8 +100,9 @@ assert(apiClient.includes('DEFAULT_REQUEST_TIMEOUT_MS = 70_000') && apiClient.in
 const dataBanner = read('src/components/shared/DataStatusBanner.jsx');
 assert(dataBanner.includes('Showing the last successful update'), 'Cached response state must be visible and timestamped');
 assert(dataBanner.includes("detail.type === 'pending'") && dataBanner.includes('latestRequestByPath') && dataBanner.includes('setStatuses') && !dataBanner.includes('readDataStatusEvents'), 'Outage banner must track each endpoint separately and ignore out-of-order responses');
-const forecast = read('src/pages/shared/AqiForecastPage.jsx');
-assert(forecast.includes('loadLocationAirQuality'), 'Both portals must share the direct-provider AQI forecast fallback');
+assert(!fs.existsSync(path.join(root, 'src/pages/shared/AqiForecastPage.jsx')), 'The duplicate standalone AQI forecast page must be removed');
+const airQualitySource = read('src/pages/citizen/AirQualityPage.jsx');
+assert(airQualitySource.includes('loadLocationAirQuality') && airQualitySource.includes('searchPublicPlaces'), 'Combined AQI page must include forecast data and geocoder fallback');
 const trafficCss = read('src/pages/citizen/traffic-lab-premium.css');
 assert(trafficCss.includes('--ul-panel:#ffffff') && trafficCss.includes('--ul-green:#6e984b') && trafficCss.includes('color-scheme:light') && trafficCss.includes('background:#f4f7f0'), 'Traffic Lab must use the same light-green theme as the app');
 const trafficAgent = read('src/pages/authority/TrafficAgentPage.jsx');
@@ -116,7 +125,11 @@ const airQualityService = read('src/services/airQuality.js');
 assert(airQualityService.includes('readApiSnapshot(apiPath)') && airQualityService.includes('savedApiSnapshot?.savedAt'), 'AQI fallback must preserve the original data timestamp');
 assert(traffic.includes('compactReport(analyzedReport)') && traffic.includes('Last successful analysis') && traffic.includes('reportRestored'), 'Traffic Lab must persist compact historical evidence and clearly label restored reports');
 assert(!traffic.includes("setReport(null); setWorkflow(null);"), 'Failed re-analysis must not erase the previous successful traffic report');
-assert(layout.indexOf("to: '/authority/air-intelligence'") < layout.indexOf("to: '/authority/aqi-forecast'") && layout.indexOf("to: '/authority/aqi-forecast'") < layout.indexOf("to: '/authority/traffic-lab'") && layout.indexOf("to: '/authority/traffic-lab'") < layout.indexOf("to: '/authority/traffic-simulation'") && layout.indexOf("to: '/authority/traffic-simulation'") < layout.indexOf("to: '/authority/iot'"), 'Authority navigation must order AQI, forecast, Traffic Lab, simulation and IoT');
+assert(!layout.includes("to: '/authority/aqi-forecast'"), 'Authority forecast should stay integrated in the single AQI overview');
+const airQualityPage = read('src/pages/citizen/AirQualityPage.jsx');
+assert(airQualityPage.includes('air-aqi-outlook') && airQualityPage.includes('AirQualityTrend'), 'Citizen AQI page must combine current readings and the 24-hour outlook');
+assert(!citizenLayout.includes("to: '/citizen/aqi-forecast'"), 'Citizen navigation must not show a separate duplicate AQI forecast destination');
+assert(app.includes('path="aqi-forecast" element={<Navigate to="/citizen/air-quality"'), 'The old citizen AQI forecast URL must redirect into the combined AQI page');
 console.log('✓ Live-first loading, error-only fallback, route sorting, AQI provenance and workflow navigation verified');
 
 

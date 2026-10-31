@@ -1,45 +1,33 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Activity, BarChart3, Bell, Bot, Camera, ChevronRight, CloudSun, House, Leaf, Menu, Moon, RadioTower, Settings, Sun, Wind, Zap, Route } from 'lucide-react';
+import { Activity, Bell, Bot, Camera, ChevronRight, House, Menu, Moon, RadioTower, Sun, Wind, Route } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 import FloatingAgentWidget from '../shared/FloatingAgentWidget.jsx';
 import DataStatusBanner from '../shared/DataStatusBanner.jsx';
 
 const navGroups = [
+  { label: 'OVERVIEW', items: [
+    { label: 'City overview', to: '/authority/control', icon: Activity },
+  ]},
   { label: 'AIR QUALITY', items: [
     { label: 'AQI overview', to: '/authority/air-intelligence', icon: Wind },
-    { label: 'AQI forecast', to: '/authority/aqi-forecast', icon: CloudSun },
-    { label: 'Carbon & emissions', to: '/authority/carbon', icon: Leaf },
+  ]},
+  { label: 'FIELD NETWORK', items: [
+    { label: 'IoT sensor network', to: '/authority/iot', icon: RadioTower },
   ]},
   { label: 'TRAFFIC', items: [
-    { label: 'Traffic video lab', to: '/authority/traffic-lab', icon: Camera },
-    { label: 'TrafficSaarthi agent', to: '/authority/traffic-agent', icon: Bot },
+    { label: 'Camera system', to: '/authority/traffic-lab', icon: Camera },
+    { label: 'Traffic agent', to: '/authority/traffic-agent', icon: Bot },
     { label: 'Traffic simulation', to: '/authority/traffic-simulation', icon: Route },
-    { label: 'Traffic conditions', to: '/authority/traffic', icon: Activity },
-    { label: 'Signal plans', to: '/authority/signals', icon: Zap },
-  ]},
-  { label: 'FIELD DATA', items: [
-    { label: 'IoT sensor network', to: '/authority/iot', icon: RadioTower },
-    { label: 'Data sources', to: '/authority/sources', icon: RadioTower },
-  ]},
-  { label: 'INSIGHTS', items: [
-    { label: 'City overview', to: '/authority/control', icon: Activity },
-    { label: 'Analytics', to: '/authority/analytics', icon: BarChart3 },
-    { label: 'Settings', to: '/authority/settings', icon: Settings },
   ]},
 ];
 const meta = {
-  '/authority/control': ['Overview', 'City monitoring'],
-  '/authority/signals': ['City operations', 'Signal plans'],
-  '/authority/traffic': ['City operations', 'Traffic conditions'],
-  '/authority/traffic-model': ['City operations', '60-minute outlook'],
-  '/authority/traffic-lab': ['Traffic', 'Video analysis'],
-  '/authority/traffic-agent': ['Traffic', 'TrafficSaarthi agent'],
+  '/authority/control': ['Overview', 'City overview'],
+  '/authority/traffic-lab': ['Traffic', 'Camera system'],
+  '/authority/traffic-agent': ['Traffic', 'Traffic agent'],
   '/authority/air-intelligence': ['Air quality', 'AQI overview'],
-  '/authority/aqi-forecast': ['Air quality', 'AQI forecast'],
   '/authority/traffic-simulation': ['Traffic', '60-minute traffic simulation'],
-  '/authority/carbon': ['Air quality', 'Carbon & emissions'],
   '/authority/iot': ['Field network', 'IoT sensor network'],
   '/authority/analytics': ['Insights', 'City analytics'],
   '/authority/sources': ['Manage', 'Data sources'],
@@ -51,7 +39,7 @@ export default function AuthorityLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
-  const [crumb, title] = meta[location.pathname] || meta['/authority/air-intelligence'];
+  const [crumb, title] = meta[location.pathname] || meta['/authority/control'];
   return <div className={`app authority-app ${dark ? 'dark' : ''}`}>
     {mobileOpen && <button className="sidebar-scrim" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />}
     <aside id="authority-sidebar" className={`sidebar ${mobileOpen ? 'show' : ''}`}>
@@ -62,7 +50,7 @@ export default function AuthorityLayout() {
           <Icon size={17} strokeWidth={1.8} /><span>{label}</span>
         </NavLink>)}
       </section>)}</nav>
-      <div className="sidebar-monitor-note"><span className="sidebar-monitor-icon"><CloudSun size={16}/></span><div><b>City monitoring</b><small>Air quality · traffic · field data</small></div></div>
+      <div className="sidebar-monitor-note"><span className="sidebar-monitor-icon"><Wind size={16}/></span><div><b>City monitoring</b><small>Air quality · field network · traffic</small></div></div>
       <div className="profile"><div className="avatar">US</div><div><b>UrbanSaarthi</b><small>Air quality & traffic operations</small></div><ChevronRight size={17}/></div>
       <button className="switch" onClick={() => navigate('/')}>← Switch portal</button>
     </aside>

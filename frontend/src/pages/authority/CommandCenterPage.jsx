@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Activity, AirVent, AlertTriangle, Cloud, MapPin, Navigation, RefreshCw } from 'lucide-react';
 import PageIntro from '../../components/shared/PageIntro.jsx';
 import { EmptyState } from '../../components/shared/Toast.jsx';
 import CityMap from '../../components/maps/CityMap.jsx';
 import useApiResource from '../../hooks/useApiResource.js';
 import { api, endpoints } from '../../services/api/client.js';
-import { useApp } from '../../context/AppContext.jsx';
 
 const display = (value, suffix = '') => value === null || value === undefined ? '—' : `${value}${suffix}`;
 function Kpi({ icon: Icon, label, value, caption }) {
@@ -27,7 +27,7 @@ const previewOverview = {
 };
 
 export default function CommandCenterPage() {
-  const { notify } = useApp();
+  const navigate = useNavigate();
   const { data, loading, error, reload, fallbackReady } = useApiResource(() => api.get(endpoints.commandOverview), []);
   const { data: junctions } = useApiResource(() => api.get(endpoints.junctions), []);
   const [selected, setSelected] = useState(null);
@@ -69,7 +69,7 @@ export default function CommandCenterPage() {
           <div className="map-foot"><span><Navigation size={13}/> Traffic junctions</span><span><AirVent size={13}/> AQI observations</span><small>{previewMode ? 'Illustrative locations · not connected junction telemetry' : markers.length ? `${markers.length} registered junctions mapped` : 'No mapped junction coordinates returned by the backend.'}</small></div>
         </section>
         <aside className="panel hotspot"><div className="hotspot-head"><span className={picked ? 'critical' : 'status-pill'}>{picked ? 'HIGH CONGESTION' : 'NO HOTSPOT DATA'}</span><button className="icon-btn" aria-label="Toggle selected hotspot" onClick={() => setDetailOpen(!detailOpen)}>{detailOpen ? '×' : <MapPin size={16}/>}</button></div>
-          {detailOpen && picked ? <><h3>{picked.name || `Junction ${picked.junction_id}`}</h3><p>{previewMode ? 'Illustrative congestion reference' : 'Latest congestion observation'}</p><div className="hot-metrics"><div><small>Vehicles</small><b>{display(picked.vehicle_count)}</b></div><div><small>Queue length</small><b>{display(picked.queue_length_m, ' m')}</b></div><div><small>Congestion</small><b>{display(picked.congestion_score)}</b></div></div><div className="hotspot-detail-row"><span>Observed at</span><b>{picked.observed_at ? new Date(picked.observed_at).toLocaleString() : previewMode ? 'Preview only' : '—'}</b></div><button className="control-link" onClick={() => notify('Signal timing changes require a reviewed plan and an authorized operator account.')}>Signal control <b>Open signal plans <Navigation size={14}/></b></button></> : <EmptyState title="No recent traffic observations" description="The selected city has no highlighted hotspot in the current view."/>}
+          {detailOpen && picked ? <><h3>{picked.name || `Junction ${picked.junction_id}`}</h3><p>{previewMode ? 'Illustrative congestion reference' : 'Latest congestion observation'}</p><div className="hot-metrics"><div><small>Vehicles</small><b>{display(picked.vehicle_count)}</b></div><div><small>Queue length</small><b>{display(picked.queue_length_m, ' m')}</b></div><div><small>Congestion</small><b>{display(picked.congestion_score)}</b></div></div><div className="hotspot-detail-row"><span>Observed at</span><b>{picked.observed_at ? new Date(picked.observed_at).toLocaleString() : previewMode ? 'Preview only' : '—'}</b></div><button className="control-link" onClick={() => navigate('/authority/traffic-agent')}>Signal strategy <b>Open Traffic Agent <Navigation size={14}/></b></button></> : <EmptyState title="No recent traffic observations" description="The selected city has no highlighted hotspot in the current view."/>}
           <div className="source-footnote"><AlertTriangle size={13}/> The API does not imply live CCTV or physical signal control is connected.</div>
         </aside>
       </div>
