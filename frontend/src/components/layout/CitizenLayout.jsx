@@ -19,13 +19,13 @@ export default function CitizenLayout() {
   const navigate = useNavigate();
   return <div className={`citizen-app ${dark ? 'dark' : ''}`}>
     <header className="citizen-header">
-      <button className="citizen-brand-button" onClick={() => navigate('/citizen')}><BrandMark /></button>
-      <nav className="citizen-nav">{links.map(({ to, label, icon: Icon, end }) => <NavLink key={to} to={to} end={end} className={({ isActive }) => `citizen-nav-item ${isActive ? 'active' : ''}`}><Icon size={16}/>{label}</NavLink>)}</nav>
+      <button className="citizen-brand-button" aria-label="UrbanSaarthi citizen home" onClick={() => navigate('/citizen')}><BrandMark /></button>
+      <nav className="citizen-nav" aria-label="Citizen navigation">{links.map(({ to, label, icon: Icon, end }) => <NavLink key={to} to={to} end={end} className={({ isActive }) => `citizen-nav-item ${isActive ? 'active' : ''}`}><Icon size={16}/>{label}</NavLink>)}</nav>
       <div className="citizen-actions">
-        <button className="utility" onClick={() => setDark(!dark)}>{dark ? <Sun size={15}/> : <Moon size={15}/>} {dark ? 'Light' : 'Dark'}</button>
-        <button className="utility" onClick={toggleLanguage}><span className="hindi">हि</span>{language === 'EN' ? 'हिंदी' : 'English'}</button>
-        <button className="utility" onClick={() => navigate('/')}><House size={15}/> Main portal</button>
-        <button className="citizen-avatar" title="UrbanSaarthi portal" onClick={() => navigate('/citizen')}>US</button>
+        <button className="utility" aria-label={dark ? 'Switch to light appearance' : 'Switch to dark appearance'} title={dark ? 'Switch to light appearance' : 'Switch to dark appearance'} onClick={() => setDark(!dark)}>{dark ? <Sun size={15}/> : <Moon size={15}/>} {dark ? 'Light' : 'Dark'}</button>
+        <button className="utility" aria-label={language === 'EN' ? 'Switch language to Hindi' : 'Switch language to English'} onClick={toggleLanguage}><span className="hindi">हि</span>{language === 'EN' ? 'हिंदी' : 'English'}</button>
+        <button className="utility" aria-label="Switch to main portal" onClick={() => navigate('/')}><House size={15}/> Main portal</button>
+        <button className="citizen-avatar" aria-label="UrbanSaarthi portal home" title="UrbanSaarthi portal" onClick={() => navigate('/citizen')}>US</button>
       </div>
     </header>
     <main className="citizen-content"><DataStatusBanner/><Outlet /></main>

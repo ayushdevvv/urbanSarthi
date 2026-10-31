@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useApp } from './context/AppContext.jsx';
 import { installSiteTranslation } from './context/translationRuntime.js';
 import PortalLanding from './pages/landing/PortalLanding.jsx';
@@ -15,6 +15,7 @@ import IotNetworkPage from './pages/authority/IotNetworkPage.jsx';
 import DataSourcesPage from './pages/authority/DataSourcesPage.jsx';
 import SettingsPage from './pages/authority/SettingsPage.jsx';
 import TrafficVisionPage from './pages/citizen/TrafficVisionPage.jsx';
+import TrafficAgentPage from './pages/authority/TrafficAgentPage.jsx';
 import CitizenHomePage from './pages/citizen/CitizenHomePage.jsx';
 import RoutePlannerPage from './pages/citizen/RoutePlannerPage.jsx';
 import AirQualityPage from './pages/citizen/AirQualityPage.jsx';
@@ -24,10 +25,20 @@ import TripsPage from './pages/citizen/TripsPage.jsx';
 import TrafficInfoPage from './pages/citizen/TrafficInfoPage.jsx';
 import Toast from './components/shared/Toast.jsx';
 
+function RouteScrollReset() {
+  const location = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.querySelector('.main, .citizen-content')?.scrollTo?.({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname]);
+  return null;
+}
+
 export default function App() {
   const { dark, language } = useApp();
   useEffect(() => installSiteTranslation(language), [language]);
   return <div className={dark ? 'theme-root dark-theme' : 'theme-root'}>
+    <RouteScrollReset />
     <Routes>
       <Route path="/" element={<PortalLanding />} />
       <Route path="/agent" element={<Navigate to="/citizen" replace />} />
@@ -40,9 +51,10 @@ export default function App() {
         <Route path="traffic-simulation" element={<TrafficInfoPage adminMode />} />
         <Route path="carbon" element={<CarbonImpactPage />} />
         <Route path="traffic" element={<TrafficInfoPage adminMode />} />
-        <Route path="traffic-model" element={<TrafficInfoPage adminMode />} />
+        <Route path="traffic-model" element={<Navigate to="/authority/traffic-simulation" replace />} />
         <Route path="signals" element={<SignalPlansPage />} />
         <Route path="traffic-lab" element={<TrafficVisionPage authorityLab />} />
+        <Route path="traffic-agent" element={<TrafficAgentPage />} />
         <Route path="iot" element={<IotNetworkPage />} />
         <Route path="aqi" element={<Navigate to="/authority/air-intelligence" replace />} />
         <Route path="analytics" element={<AnalyticsPage />} />

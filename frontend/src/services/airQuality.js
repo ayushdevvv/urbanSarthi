@@ -1,5 +1,5 @@
 import { api } from './api/client.js';
-import { publishDataStatus, readApiSnapshot, readLocalRecord, saveLocalRecord } from './apiSnapshot.js';
+import { publishDataStatus, readApiSnapshot, readLocalRecord, saveLocalRecord, createDataStatusContext } from './apiSnapshot.js';
 
 const categoryFor = (value) => {
   if (value == null || !Number.isFinite(Number(value))) return 'Unavailable';
@@ -12,7 +12,7 @@ const categoryFor = (value) => {
   return 'Hazardous';
 };
 
-export async function fetchOpenMeteoAirQuality(latitude, longitude) {
+export async function fetchOpenMeteoAirQuality(latitude, longitude, statusContext = createDataStatusContext()) {
   const params = new URLSearchParams({
     latitude: String(latitude), longitude: String(longitude),
     current: 'us_aqi,pm2_5,pm10,ozone,nitrogen_dioxide',
@@ -57,42 +57,50 @@ export async function fetchOpenMeteoAirQuality(latitude, longitude) {
       note: 'Retrieved directly from Open-Meteo because the UrbanSaarthi API was unavailable. These are forecast-grid values, not ground-station measurements.',
       source: 'Open-Meteo Air Quality API',
     };
-    publishDataStatus({ type: 'provider', path: 'air-quality-direct', provider: 'Open-Meteo' });
+    publishDataStatus({ type: 'provider', path: 'air-quality-direct', provider: 'Open-Meteo' }, statusContext);
     return result;
   } finally { clearTimeout(timer); }
 }
 
 export async function loadLocationAirQuality(latitude, longitude) {
+  const routePath = typeof window === 'undefined' ? '/' : window.location.pathname;
   const storageKey = `aqi-grid:${Number(latitude).toFixed(3)}:${Number(longitude).toFixed(3)}`;
+  const apiPath = `/aqi/location-forecast?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}`;
+  let apiError = null;
+  let data = null;
+
   try {
-    const apiPath = `/aqi/location-forecast?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}`;
-    const data = await api.get(apiPath);
-    if (data?.current && (data.current.us_aqi != null || data.current.openweather_index != null || data.current.pm25 != null || data.current.pm2_5 != null)) {
-      publishDataStatus({ type: 'fresh', path: 'air-quality-direct' });
-      const savedApiSnapshot = readApiSnapshot(apiPath);
-      saveLocalRecord(storageKey, data, savedApiSnapshot?.savedAt || Date.now());
-      return data;
-    }
-    const providerData = await fetchOpenMeteoAirQuality(latitude, longitude);
+    // The shared client gives the live backend its full retry/grace window.
+    // Direct-provider recovery is attempted only after that request fails.
+    data = await api.get(apiPath);
+  } catch (error) {
+    apiError = error;
+    const availabilityFailure = !error?.status || error.status >= 500 || error.status === 408 || error.status === 429;
+    if (!availabilityFailure) throw error;
+  }
+
+  if (data?.current && (data.current.us_aqi != null || data.current.openweather_index != null || data.current.pm25 != null || data.current.pm2_5 != null)) {
+    const savedApiSnapshot = readApiSnapshot(apiPath);
+    saveLocalRecord(storageKey, data, savedApiSnapshot?.savedAt || Date.now());
+    return data;
+  }
+
+  const statusContext = createDataStatusContext(routePath);
+  try {
+    const providerData = await fetchOpenMeteoAirQuality(latitude, longitude, statusContext);
     saveLocalRecord(storageKey, providerData);
     return providerData;
-  } catch (error) {
-    try {
-      const providerData = await fetchOpenMeteoAirQuality(latitude, longitude);
-      saveLocalRecord(storageKey, providerData);
-      return providerData;
-    } catch (providerError) {
-      const saved = readLocalRecord(storageKey);
-      if (saved?.value?.current) {
-        publishDataStatus({ type: 'snapshot', path: storageKey, cachedAt: saved.savedAt, reason: 'Restored the last successful air-quality forecast.' });
-        return {
-          ...saved.value,
-          status: 'cached_provider',
-          note: `${saved.value.note || 'Air-quality forecast.'} The provider is currently unavailable; this is the last successfully saved forecast, not a new reading.`,
-        };
-      }
-      providerError.cause = error;
-      throw providerError;
+  } catch (providerError) {
+    const saved = readLocalRecord(storageKey);
+    if (saved?.value?.current) {
+      publishDataStatus({ type: 'snapshot', path: storageKey, cachedAt: saved.savedAt, reason: 'Restored the last successful air-quality forecast.' }, statusContext);
+      return {
+        ...saved.value,
+        status: 'cached_provider',
+        note: `${saved.value.note || 'Air-quality forecast.'} The provider is currently unavailable; this is the last successfully saved forecast, not a new reading.`,
+      };
     }
+    if (apiError) providerError.cause = apiError;
+    throw providerError;
   }
 }

@@ -4,7 +4,7 @@ import PageIntro from '../../components/shared/PageIntro.jsx';
 import TrafficSimulationScene from '../authority/TrafficSimulationScene.jsx';
 import CityMap from '../../components/maps/CityMap.jsx';
 import { api } from '../../services/api/client.js';
-import { readApiSnapshot, saveLocalRecord, readLocalRecord, publishDataStatus } from '../../services/apiSnapshot.js';
+import { readApiSnapshot, saveLocalRecord, readLocalRecord, publishDataStatus, createDataStatusContext } from '../../services/apiSnapshot.js';
 import './traffic-simulation.css';
 
 const SCENARIO_KEY = 'urbansarthi.activeTrafficScenario';
@@ -45,7 +45,7 @@ export default function TrafficInfoPage({ adminMode = false }) {
   const [showRouteAlternatives, setShowRouteAlternatives] = useState(true);
   const [showTrafficCrowd, setShowTrafficCrowd] = useState(true);
   const [roadFlowPoints, setRoadFlowPoints] = useState([]);
-  const [mapMarkers, setMapMarkers] = useState([{ id: 'traffic-location', lat: 28.6139, lng: 77.2090, title: 'New Delhi', description: 'Selected traffic area' }]);
+  const [mapMarkers, setMapMarkers] = useState([]);
   const [mappedRoute, setMappedRoute] = useState(null);
   const [searchBusy, setSearchBusy] = useState(false);
   const timerRef = useRef(null);
@@ -71,6 +71,7 @@ export default function TrafficInfoPage({ adminMode = false }) {
   }, [adminMode]);
 
   const refresh = useCallback(async (overridePoint = point, overrideScenario = scenario) => {
+    const statusRoutePath = typeof window === 'undefined' ? '/' : window.location.pathname;
     const latitude = Number(overridePoint.latitude), longitude = Number(overridePoint.longitude);
     if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
       setError('Enter a valid location or choose one from the suggestions.'); return;
@@ -99,7 +100,7 @@ export default function TrafficInfoPage({ adminMode = false }) {
       if (saved?.value?.timeline?.length) {
         setScenarioData(saved.value); setFrameIndex(0); setPlaying(false);
         setLastUpdated(new Date(saved.savedAt).toISOString());
-        publishDataStatus({ type: 'snapshot', path: `traffic-simulation:${overrideScenario}`, cachedAt: saved.savedAt, reason: 'Restored the last successful scenario saved in this browser.' });
+        publishDataStatus({ type: 'snapshot', path: `traffic-simulation:${overrideScenario}`, cachedAt: saved.savedAt, reason: 'Restored the last successful scenario saved in this browser.' }, createDataStatusContext(statusRoutePath));
       } else {
         setScenarioData(null);
         setError(`${err?.message || 'The simulation service is unavailable.'} No saved scenario is available for these inputs yet. Reconnect to refresh this view.`);

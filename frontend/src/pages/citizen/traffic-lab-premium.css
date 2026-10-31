@@ -80,3 +80,87 @@
 .ul-lab .ul-chart-labels{color:#93a68b}
 .ul-lab .ul-annotated-details summary{color:#d5e5cc}
 .ul-lab .ul-saved-report-note{font-size:12px}
+
+/* Final light-green theme: Traffic Lab stays aligned with the main UrbanSaarthi portal. */
+.ul-lab{
+  color-scheme:light;
+  --ul-bg:#f4f7f0;--ul-panel:#ffffff;--ul-panel2:#f1f6ed;--ul-border:#dce6d5;
+  --ul-text:#193b2f;--ul-muted:#64796a;--ul-dim:#879789;--ul-blue:#3f7958;--ul-green:#6e984b;--ul-red:#b8564f;
+  background:transparent;color:var(--ul-text);padding-bottom:38px;
+}
+.ul-lab .ul-page-head{border-color:var(--ul-border)}
+.ul-lab .ul-page-head h1{color:#173b30}
+.ul-lab .ul-page-head h1 em{color:#6b984a}
+.ul-lab .ul-page-head p,.ul-lab .ul-section-heading p{color:#64796a}
+.ul-lab .ul-overline,.ul-lab .ul-panel-kicker,.ul-lab .ul-section-heading>div>span{color:#58744e}
+.ul-lab .ul-head-status,.ul-lab .ul-status-item,.ul-lab .ul-panel{background:#fff;border-color:#dce6d5;box-shadow:0 8px 28px #1b4c3510}
+.ul-lab .ul-head-status b,.ul-lab .ul-status-item b,.ul-lab .ul-panel-head h3,.ul-lab .ul-section-heading h2{color:#193b2f}
+.ul-lab .ul-head-status small,.ul-lab .ul-status-item small{color:#718476}
+.ul-lab .ul-status-item>span{background:#edf4e8;color:#527a45}
+.ul-lab .ul-status-item>span.ready{background:#e4f1dc;color:#477c39}
+.ul-lab .ul-tabs{background:#f2f6ee;border-color:#dce6d5}
+.ul-lab .ul-tabs button{color:#6a7c70}
+.ul-lab .ul-tabs button.active{background:#e5f0dd;border-color:#bfd4af;color:#244b36}
+.ul-lab .ul-dropzone{background:linear-gradient(145deg,#f8fbf5,#eef5e9);border-color:#bfd2b4}
+.ul-lab .ul-dropzone> b,.ul-lab .ul-empty-evidence>b{color:#1e4133}
+.ul-lab .ul-dropzone>p,.ul-lab .ul-empty-evidence>p{color:#708274}
+.ul-lab .ul-upload-icon{background:#e6f1df;border-color:#d0e1c4;color:#5b8744}
+.ul-lab .ul-secondary-button,.ul-lab .ul-text-button{background:#f4f8f0;border-color:#d3e1ca;color:#385d3d}
+.ul-lab .ul-secondary-button:hover,.ul-lab .ul-text-button:hover{background:#eaf3e3;border-color:#aeca9b}
+.ul-lab .ul-preview-media{background:#e9efe5}
+.ul-lab .ul-preview-media video,.ul-lab .ul-preview-media img{background:#e9efe5}
+.ul-lab .ul-file-meta{background:#f8faf6;border-color:#e4eadf;color:#687b6c}
+.ul-lab .ul-file-meta b{color:#294b37}
+.ul-lab .ul-control>span{color:#385644}
+.ul-lab .ul-control>span b{color:#5b8a43}
+.ul-lab .ul-control select,.ul-lab .ul-control textarea,.ul-lab .ul-calibration-details textarea,.ul-lab .ul-distance-assumption input{background:#fbfdf9;border-color:#d5e0d0;color:#203f31}
+.ul-lab .ul-control select:focus,.ul-lab .ul-control textarea:focus,.ul-lab .ul-distance-assumption input:focus{border-color:#84a96d;box-shadow:0 0 0 3px #84a96d20}
+.ul-lab .ul-control small,.ul-lab .ul-setup-hint{color:#738477}
+.ul-lab .ul-image-note{background:#f5f9f2;border-color:#e0ead9}
+.ul-lab .ul-image-note>span{color:#4c7f46}
+.ul-lab .ul-primary-button{background:#2e6849;border-color:#2e6849;color:#fff;box-shadow:0 5px 12px #2e68491c}
+.ul-lab .ul-primary-button:hover:not(:disabled){background:#24593e;border-color:#24593e}
+.ul-lab .ul-inline-error{background:#fff3f0;border-color:#efcec5;color:#9b4d43}
+.ul-lab .ul-scan-illustration{background:linear-gradient(#f0f6eb,#e8f1e1);border-color:#d4e3cc}
+.ul-lab .ul-scan-illustration:before,.ul-lab .ul-scan-illustration:after{background:#cedfc5}
+.ul-lab .ul-scan-illustration span{border-color:#8eaf75}
+.ul-lab .ul-scan-illustration span:nth-child(2){border-color:#4e8b54}
+.ul-lab .ul-scan-illustration i{background:#6e984b;box-shadow:0 0 12px #6e984b55}
+.ul-lab .ul-report-status{background:#f1f7ed;border-color:#d6e7cd}
+.ul-lab .ul-report-status>span{background:#e0efd7;color:#4b8041}
+.ul-lab .ul-report-status b{color:#244735}
+.ul-lab .ul-report-status small{color:#738477}
+.ul-lab .ul-report-status em{color:#5d8c45}
+.ul-lab .ul-metric-card{background:#f8fbf6;border-color:#e1e9dc}
+.ul-lab .ul-metric-card span,.ul-lab .ul-metric-card small{color:#718274}
+.ul-lab .ul-metric-card strong{color:#1d4433}
+.ul-lab .ul-class-row{color:#536b58}
+.ul-lab .ul-class-track{background:#e8eee3}
+.ul-lab .ul-class-track i{background:linear-gradient(90deg,#79a65b,#3e7950)}
+.ul-lab .ul-report-foot{border-color:#e1e9dc;color:#6f8072}
+.ul-lab .ul-report-foot svg{color:#5d8a4c}
+.ul-lab .ul-disclaimer,.ul-lab .ul-setup-hint{background:#f7faf4;border-color:#e1e9dc;color:#65796a}
+.ul-lab .ul-disclaimer svg,.ul-lab .ul-setup-hint svg{color:#7c965f}
+.ul-lab .ul-calibration-details{background:#f6faf3;border-color:#dce7d6}
+.ul-lab .ul-calibration-details>summary{color:#365542}
+.ul-lab .ul-calibration-details>p{color:#6a7d6e}
+.ul-lab .ul-calibration-details code{color:#416f48}
+.ul-lab .ul-saved-report-note{background:#f1f7ed;border-color:#d8e7cf;color:#54714d}
+.ul-lab .ul-preview-report-note{background:#fff8e9;border-color:#eadcb9;color:#806a3a}
+.ul-lab .ul-agent-handoff{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-top:25px;padding:25px 27px;border:1px solid #d8e6d0;border-radius:17px;background:linear-gradient(115deg,#f0f7e9,#fff 65%);box-shadow:0 10px 30px #183e2e0b}
+.ul-lab .ul-agent-handoff-copy{max-width:760px}
+.ul-lab .ul-agent-handoff h2{font-size:clamp(22px,2.3vw,29px);letter-spacing:-.8px;margin:7px 0;color:#1b4332}
+.ul-lab .ul-agent-handoff p{font-size:13px;line-height:1.7;color:#667a6a;margin:0}
+.ul-lab .ul-handoff-points{display:flex;flex-wrap:wrap;gap:8px;margin-top:15px}
+.ul-lab .ul-handoff-points span{padding:7px 10px;border:1px solid #dbe7d3;border-radius:999px;background:#fff;color:#55724e;font-size:11px;font-weight:650}
+.ul-lab .ul-agent-handoff-button{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:12px 16px;border-radius:10px;background:#2e6849;color:white;text-decoration:none;font-size:13px;font-weight:750;white-space:nowrap;box-shadow:0 7px 17px #2e684922;transition:transform .16s ease,background .16s ease}
+.ul-lab .ul-agent-handoff-button:hover{background:#24583e;transform:translateY(-1px)}
+.ul-lab .ul-lab-footer{border-color:#dce6d5;color:#829184}
+.ul-lab .ul-lab-footer>div svg{color:#5f8b4b}
+@media(max-width:760px){.ul-lab .ul-agent-handoff{align-items:flex-start;flex-direction:column;padding:19px}.ul-lab .ul-agent-handoff-button{width:100%}}
+.main:has(.ul-lab){background:#f4f7f0;color:#193b2f}
+.main:has(.ul-lab) .topbar{background:#fff;border-color:#dce6d5;color:#193b2f}
+.main:has(.ul-lab) .crumb h1{color:#193b2f}
+.main:has(.ul-lab) .crumb small{color:#718276}
+.main:has(.ul-lab) .topbar .utility,.main:has(.ul-lab) .topbar .icon-btn{background:#fff;border-color:#dce6d5;color:#426548}
+.main:has(.ul-lab) .content{background:#f4f7f0}

@@ -1,17 +1,26 @@
-const PREFIX = 'urbansaarthi:api-snapshot:v2:';
+const PREFIX = 'urbansaarthi:api-snapshot:v3:';
 const MAX_ITEM_BYTES = 420_000;
 const MAX_ITEMS = 45;
-const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_API_AGE_MS = 6 * 60 * 60 * 1000;
+const MAX_LOCAL_RECORD_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+let statusRequestSequence = 0;
+
+export function createDataStatusContext(routePath) {
+  return { routePath: routePath || (typeof window === 'undefined' ? '/' : window.location.pathname), requestId: ++statusRequestSequence };
+}
 
 function safeStorage() {
   try { return globalThis.localStorage; } catch { return null; }
 }
 
-export function publishDataStatus(detail) {
-  // Connection notices are session-scoped. Persisting them caused a stale
-  // fallback banner to appear on the next visit before the live API was checked.
+export function publishDataStatus(detail, contextOrRoutePath, legacyRequestId) {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent('urbansaarthi:data-status', { detail: { ...detail, updatedAt: Date.now() } }));
+  const context = contextOrRoutePath && typeof contextOrRoutePath === 'object'
+    ? contextOrRoutePath
+    : { routePath: contextOrRoutePath || window.location.pathname, requestId: legacyRequestId || ++statusRequestSequence };
+  window.dispatchEvent(new CustomEvent('urbansaarthi:data-status', {
+    detail: { ...detail, routePath: context.routePath, requestId: context.requestId, updatedAt: Date.now() },
+  }));
 }
 
 export function storeApiSnapshot(path, payload) {
@@ -46,7 +55,7 @@ export function readApiSnapshot(path) {
     const raw = storage.getItem(`${PREFIX}${path}`);
     if (!raw) return null;
     const entry = JSON.parse(raw);
-    if (!entry || !entry.savedAt || Date.now() - entry.savedAt > MAX_AGE_MS) return null;
+    if (!entry || !entry.savedAt || Date.now() - entry.savedAt > MAX_API_AGE_MS) return null;
     return { payload: entry.payload, savedAt: entry.savedAt };
   } catch { return null; }
 }
@@ -63,7 +72,7 @@ export function readLocalRecord(key) {
   if (!storage) return null;
   try {
     const record = JSON.parse(storage.getItem(`urbansarthi:record:${key}`) || 'null');
-    if (record?.value == null || !record.savedAt || Date.now() - record.savedAt > MAX_AGE_MS) return null;
+    if (record?.value == null || !record.savedAt || Date.now() - record.savedAt > MAX_LOCAL_RECORD_AGE_MS) return null;
     return { value: record.value, savedAt: record.savedAt };
   } catch { return null; }
 }
