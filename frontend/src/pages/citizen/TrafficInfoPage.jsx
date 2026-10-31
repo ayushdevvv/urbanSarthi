@@ -4,6 +4,7 @@ import PageIntro from '../../components/shared/PageIntro.jsx';
 import TrafficSimulationScene from '../authority/TrafficSimulationScene.jsx';
 import CityMap from '../../components/maps/CityMap.jsx';
 import { api } from '../../services/api/client.js';
+import { readApiSnapshot, saveLocalRecord, readLocalRecord, publishDataStatus } from '../../services/apiSnapshot.js';
 import './traffic-simulation.css';
 
 const SCENARIO_KEY = 'urbansarthi.activeTrafficScenario';
@@ -13,31 +14,9 @@ const SCENARIOS = {
   demand_surge: { label: 'Higher demand', multiplier: 1.45 },
   signal_priority: { label: 'Signal-priority sensitivity', multiplier: 0.72 },
 };
-const ROAD_NAMES = ['Ring Road · west', 'Connaught Place approach', 'ITO junction approach', 'NH-48 connector', 'Outer Ring Road', 'Janpath corridor', 'Airport Road', 'Old Delhi approach'];
 const fmt = (value, suffix = '') => value === null || value === undefined || !Number.isFinite(Number(value)) ? '—' : `${Math.round(Number(value) * 10) / 10}${suffix}`;
 const int = (value) => Number(value || 0).toLocaleString('en-IN');
 const savedScenario = () => { try { const value = localStorage.getItem(SCENARIO_KEY); return SCENARIOS[value] ? value : 'baseline'; } catch { return 'baseline'; } };
-
-// Only used when the simulation service is unreachable. It is explicitly tagged
-// as reference data, and must never be presented as live traffic or an ML result.
-function makeReferenceScenario(scenario) {
-  const factor = SCENARIOS[scenario]?.multiplier ?? 1;
-  const timeline = Array.from({ length: 13 }, (_, step) => {
-    const roads = ROAD_NAMES.map((road, index) => {
-      const baseline = 7 + ((index * 7 + 9) % 29);
-      const queue = Math.max(0, Math.round(baseline * factor + step * (0.45 + (index % 4) * 0.18) * factor - (scenario === 'signal_priority' ? step * 0.12 : 0)));
-      const vehicles = Math.round(queue * 1.35 + 5 + (index % 3) * 3);
-      const level = queue >= 32 ? 'Heavy' : queue >= 18 ? 'Moderate' : 'Light';
-      return { road, vehicles, queue, level };
-    });
-    return { minute: step * 5, roads, queue_total: roads.reduce((sum, road) => sum + road.queue, 0), heavy_roads: roads.filter((road) => road.level === 'Heavy').length };
-  });
-  return {
-    mode: 'reference', summary: { road_count: ROAD_NAMES.length }, timeline,
-    training_data: { records: 0, simulation_runs: 0, road_edges: ROAD_NAMES.length, minutes_per_run: 60 },
-    models: {}, notes: ['The simulation service was unavailable. These road labels and values are illustrative reference patterns, not live observations or model predictions.'],
-  };
-}
 
 function pickPlace(response, query) {
   const results = response?.results || [];
@@ -98,19 +77,28 @@ export default function TrafficInfoPage({ adminMode = false }) {
     }
     setLoading(true); setError('');
     const params = new URLSearchParams({ minutes: '60', step_minutes: '5', scenario: overrideScenario });
+    const scenarioPath = `/traffic/simulation/scenario?${params.toString()}`;
     try {
       const [current, timeline] = await Promise.all([
         api.get(`/traffic/current?latitude=${latitude}&longitude=${longitude}`).catch(() => null),
-        api.get(`/traffic/simulation/scenario?${params.toString()}`),
+        api.get(scenarioPath),
       ]);
+      const snapshot = readApiSnapshot(scenarioPath);
       setProvider(current?.flow ? current : null);
-      setScenarioData(timeline); setFrameIndex(0); setPlaying(false); setLastUpdated(new Date().toISOString());
+      setScenarioData(timeline); setFrameIndex(0); setPlaying(false); setLastUpdated(new Date(snapshot?.savedAt || Date.now()).toISOString());
+      if (snapshot) saveLocalRecord(`traffic-simulation:${overrideScenario}`, timeline, snapshot.savedAt);
       if (current?.flow == null) setError('No location-specific live speed feed is configured for this point. The network scenario is shown separately.');
     } catch (err) {
       setProvider(null);
-      setScenarioData(makeReferenceScenario(overrideScenario));
-      setFrameIndex(0); setPlaying(false); setLastUpdated(new Date().toISOString());
-      setError(`${err?.message || 'The simulation service is unavailable.'} Showing clearly labelled reference road activity instead.`);
+      const saved = readLocalRecord(`traffic-simulation:${overrideScenario}`);
+      if (saved?.value?.timeline?.length) {
+        setScenarioData(saved.value); setFrameIndex(0); setPlaying(false);
+        setLastUpdated(new Date(saved.savedAt).toISOString());
+        publishDataStatus({ type: 'snapshot', path: `traffic-simulation:${overrideScenario}`, cachedAt: saved.savedAt, reason: 'Restored the last successful scenario saved in this browser.' });
+      } else {
+        setScenarioData(null);
+        setError(`${err?.message || 'The simulation service is unavailable.'} No saved scenario is available for these inputs yet. Reconnect to refresh this view.`);
+      }
     } finally { setLoading(false); }
   }, [point, scenario]);
 
@@ -208,7 +196,7 @@ export default function TrafficInfoPage({ adminMode = false }) {
             origin_latitude: Number(origin.latitude), origin_longitude: Number(origin.longitude),
             destination_latitude: Number(destination.latitude), destination_longitude: Number(destination.longitude),
             origin_label: origin.label, destination_label: destination.label, preference: 'balanced', modes: ['driving'],
-          });
+          }, { cacheResponse: true });
           const routes = Array.isArray(trip?.routes) ? trip.routes : [];
           setRouteAlternatives(routes);
           const route = routes[0];
@@ -275,7 +263,7 @@ export default function TrafficInfoPage({ adminMode = false }) {
 
     {!scenarioData && <section className="panel traffic-loading-panel"><Activity size={21}/><b>{loading ? 'Preparing road activity…' : 'Road activity unavailable'}</b><p>The app will show the configured network forecast when the simulation endpoint responds.</p></section>}
     {scenarioData && frame && <>
-      {!adminMode && <section className="panel traffic-map-panel"><div className="panel-head"><div><div className="eyebrow">MAPPED AREA / ROUTE</div><h3>{mappedRoute ? `${originQuery} to ${destinationQuery}` : point.label}</h3></div><span className="status-pill">{mappedRoute ? 'Route search' : 'Location search'}</span></div><div className="traffic-map-toggles"><label><input type="checkbox" checked={showRouteAlternatives} onChange={(e) => setShowRouteAlternatives(e.target.checked)}/> Show route alternatives</label><label><input type="checkbox" checked={showTrafficCrowd} onChange={(e) => setShowTrafficCrowd(e.target.checked)}/> Show traffic crowd layer</label></div><CityMap markers={[...mapMarkers, ...(showTrafficCrowd ? roadFlowPoints : [])]} route={mapRoute} routeOptions={showRouteAlternatives ? routeAlternatives.map((route, index) => ({ id: route.id ?? `${route.mode}-${route.label}-${index}`, color: ['#4f83c5', '#9572c7', '#d68c4b', '#3f9b97'][index % 4], selected: (route.id ?? `${route.mode}-${route.label}-${index}`) === selectedTrafficRouteId, coordinates: route.geometry?.coordinates?.map?.(([lon, lat]) => ({ lat, lng: lon })) || [] })) : []} zoom={13} className="traffic-user-map"/><div className="map-foot"><span><MapPin size={13}/> Selected place and route alternatives</span><small>Map tiles © OpenStreetMap</small></div>{showTrafficCrowd && <div className="traffic-crowd-legend"><span><i className="crowd-heavy"/> Heavy</span><span><i className="crowd-slow"/> Slow</span><span><i className="crowd-moving"/> Moving</span><small>{roadFlowPoints.length ? `${roadFlowPoints.length} provider readings on map` : 'No provider readings returned for this area'}</small></div>}{mappedRoute && <div className="traffic-map-route-summary"><b>{mappedRoute.label}</b><span>{mappedRoute.distance == null ? 'Distance unavailable' : `${(mappedRoute.distance / 1000).toFixed(1)} km`}</span><span>{mappedRoute.duration == null ? 'Duration unavailable' : `${Math.round(mappedRoute.duration / 60)} min estimated`}</span><small>{mappedRoute.provider || 'Routing service'}</small>{selectedGoogleMapsUrl && <a href={selectedGoogleMapsUrl} target="_blank" rel="noreferrer" className="traffic-google-maps-link">Open selected route in Google Maps ↗</a>}</div>}{routeAlternatives.length > 1 && <div className="traffic-route-options">{routeAlternatives.slice(0, 5).map((route, index) => { const id = route.id ?? `${route.mode}-${route.label}-${index}`; return <button type="button" className={id === selectedTrafficRouteId ? 'selected' : ''} key={id} onClick={() => selectTrafficRoute(route, index)}><span><b>{route.label || `Route ${index + 1}`}</b><small>{route.provider || 'Routing provider'} · {route.data_quality || 'mapped route'}</small></span><strong>{route.duration_seconds == null ? '—' : `${Math.max(1, Math.round(route.duration_seconds / 60))} min`}</strong><em>{route.distance_meters == null ? '—' : `${(route.distance_meters / 1000).toFixed(1)} km`}</em></button>; })}</div>}{searchMode === 'route' && showTrafficCrowd && !roadFlowPoints.length && <div className="traffic-layer-empty">No road-speed readings were returned along this route. Route geometry is available; the crowd layer appears when a traffic-flow provider returns readings.</div>}</section>}
+      {!adminMode && <section className="panel traffic-map-panel"><div className="panel-head"><div><div className="eyebrow">MAPPED AREA / ROUTE</div><h3>{mappedRoute ? `${originQuery} to ${destinationQuery}` : point.label}</h3></div><span className="status-pill">{mappedRoute ? 'Route search' : 'Location search'}</span></div><div className="traffic-map-toggles"><label><input type="checkbox" checked={showRouteAlternatives} onChange={(e) => setShowRouteAlternatives(e.target.checked)}/> Show route alternatives</label><label><input type="checkbox" checked={showTrafficCrowd} onChange={(e) => setShowTrafficCrowd(e.target.checked)}/> Show traffic crowd layer</label></div><CityMap markers={[...mapMarkers, ...(showTrafficCrowd ? roadFlowPoints : [])]} route={mapRoute} routeOptions={showRouteAlternatives ? routeAlternatives.map((route, index) => ({ id: route.id ?? `${route.mode}-${route.label}-${index}`, color: ['#26764f', '#8b9f4e', '#b17b3d', '#497d78', '#806c98'][index % 5], selected: (route.id ?? `${route.mode}-${route.label}-${index}`) === selectedTrafficRouteId, coordinates: route.geometry?.coordinates?.map?.(([lon, lat]) => ({ lat, lng: lon })) || [] })) : []} zoom={13} className="traffic-user-map"/><div className="map-foot"><span><MapPin size={13}/> Selected place and route alternatives</span><small>Map tiles © OpenStreetMap</small></div>{showTrafficCrowd && <div className="traffic-crowd-legend"><span><i className="crowd-heavy"/> Heavy</span><span><i className="crowd-slow"/> Slow</span><span><i className="crowd-moving"/> Moving</span><small>{roadFlowPoints.length ? `${roadFlowPoints.length} provider readings on map` : 'No provider readings returned for this area'}</small></div>}{mappedRoute && <div className="traffic-map-route-summary"><b>{mappedRoute.label}</b><span>{mappedRoute.distance == null ? 'Distance unavailable' : `${(mappedRoute.distance / 1000).toFixed(1)} km`}</span><span>{mappedRoute.duration == null ? 'Duration unavailable' : `${Math.round(mappedRoute.duration / 60)} min estimated`}</span><small>{mappedRoute.provider || 'Routing service'}</small>{selectedGoogleMapsUrl && <a href={selectedGoogleMapsUrl} target="_blank" rel="noreferrer" className="traffic-google-maps-link">Open selected route in Google Maps ↗</a>}</div>}{routeAlternatives.length > 1 && <div className="traffic-route-options">{routeAlternatives.slice(0, 5).map((route, index) => { const id = route.id ?? `${route.mode}-${route.label}-${index}`; const grams = Number.isFinite(Number(route.estimated_co2_grams)) ? Number(route.estimated_co2_grams) : null; const low = Math.min(...routeAlternatives.map((item) => Number(item.estimated_co2_grams)).filter(Number.isFinite)); const downside = grams == null || !Number.isFinite(low) ? null : Math.max(0, grams - low); return <button type="button" className={id === selectedTrafficRouteId ? 'selected' : ''} key={id} onClick={() => selectTrafficRoute(route, index)}><span><b>{route.label || `Route ${index + 1}`}</b><small>{route.provider || 'Routing provider'} · {route.data_quality || 'mapped route'}</small><small className="traffic-route-co2">{grams == null ? 'CO₂ estimate unavailable' : `Est. CO₂ ${grams >= 1000 ? `${(grams / 1000).toFixed(2)} kg` : `${Math.round(grams)} g`}${downside != null && downside > 0.5 ? ` · +${Math.round(downside)} g vs lowest` : ' · lowest footprint'}`}</small></span><strong>{route.duration_seconds == null ? '—' : `${Math.max(1, Math.round(route.duration_seconds / 60))} min`}</strong><em>{route.distance_meters == null ? '—' : `${(route.distance_meters / 1000).toFixed(1)} km`}</em></button>; })}</div>}{searchMode === 'route' && showTrafficCrowd && !roadFlowPoints.length && <div className="traffic-layer-empty">No road-speed readings were returned along this route. Route geometry is available; the crowd layer appears when a traffic-flow provider returns readings.</div>}</section>}
 
       {adminMode ? <><section className="traffic-scenario-hero panel"><div className="traffic-scenario-hero-top"><div><span className="traffic-live-label"><i/>{scenarioLabel.toUpperCase()}</span><h2>60-minute traffic simulation</h2><p>{point.label || locationQuery} · playback advances through the selected scenario.</p></div><span className="traffic-trained-label"><ShieldCheck size={13}/> {playing ? 'Simulation running' : 'Ready to play'}</span></div>
         <div className="traffic-scenario-kpis"><div><small>Simulated time</small><strong>{frame.minute}<em> / 60 min</em></strong></div><div><small>Total queued vehicles</small><strong>{int(frame.queue_total)}</strong><span>{previousFrame && frame.queue_total !== previousFrame.queue_total ? `${frame.queue_total > previousFrame.queue_total ? '+' : ''}${int(frame.queue_total - previousFrame.queue_total)} since last step` : 'Starting snapshot'}</span></div><div><small>Heavy roads</small><strong>{frame.heavy_roads}<em> / {scenarioData.summary.road_count}</em></strong><span>{fmt((frame.heavy_roads / Math.max(frame.roads.length, 1)) * 100, '%')} of road segments in heavy flow</span></div><div><small>Network queue change</small><strong>{fmt((frame.queue_total - timeline[0].queue_total) / Math.max(timeline[0].queue_total, 1) * 100, '%')}</strong><span>vs. minute 0</span></div></div>

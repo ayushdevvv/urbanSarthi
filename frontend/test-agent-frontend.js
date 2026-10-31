@@ -30,7 +30,8 @@ assert(!layout.includes('API configuration'), 'Technical API configuration label
 console.log('✓ Section navigation and user-facing labels verified');
 
 const aqi = read('src/pages/authority/AirQualityOverviewPage.jsx');
-for (const endpoint of ['/aqi/location-forecast', '/aqi/nearby', '/air-intelligence/hotspots']) assert(aqi.includes(endpoint), `AQI overview must use ${endpoint}`);
+assert(aqi.includes('loadLocationAirQuality'), 'AQI overview must use the API plus direct provider fallback');
+for (const endpoint of ['/aqi/nearby', '/air-intelligence/hotspots']) assert(aqi.includes(endpoint), `AQI overview must use ${endpoint}`);
 for (const feature of ['AqiDial', 'AirTrend', 'PM2.5', 'Nearby sensor network', 'Priority locations']) assert(aqi.includes(feature), `AQI overview must include ${feature}`);
 console.log('✓ AQI-centred overview and visualisations verified');
 
@@ -57,7 +58,9 @@ const evidenceStore = read('src/services/visionEvidence.js');
 assert(evidenceStore.includes('airtraffic.latestVisionEvidence') && evidenceStore.includes('LEGACY_STORAGE_KEY'), 'Video evidence storage must use the neutral key and preserve existing saved evidence');
 console.log('✓ Existing traffic video and operations workflow preserved');
 const html = read('index.html');
+const brand = read('src/components/shared/BrandMark.jsx');
 assert(html.includes('href="/favicon.png"') && !html.includes('href="/favicon.svg"'), 'PNG favicon must be linked in the browser shell');
+assert(brand.includes('src="/favicon.png"') && !brand.includes('.svg'), 'PNG favicon must be used by shared branding');
 assert(fs.existsSync(path.join(root, 'public/favicon.png')), 'Linked PNG favicon must exist in the public assets');
 const routePlanner = read('src/pages/citizen/RoutePlannerPage.jsx');
 assert(routePlanner.includes('buildGoogleMapsUrl') && routePlanner.includes('routeOptions'), 'Route planner must link each mapped route to Google Maps and draw alternatives');
@@ -69,5 +72,23 @@ const routeStyles = read('src/styles/citizen.css');
 assert(routeStyles.includes('.route-carbon-grid') && routeStyles.includes('.route-emission-card') && routeStyles.includes('@media(max-width:700px){.route-carbon-grid{grid-template-columns:1fr'), 'Route carbon cards must have responsive premium styling');
 const cityMap = read('src/components/maps/CityMap.jsx');
 assert(cityMap.includes('routeOptions') && cityMap.includes('Polyline'), 'Map must render road-network route geometries');
-console.log('✓ PNG favicon, multi-route map and Google Maps handoff verified');
-console.log('--- ALL URBANSARTHI SMOKE TESTS PASSED ---');
+const apiClient = read('src/services/api/client.js');
+assert(apiClient.includes('cacheResponse') && apiClient.includes('readApiSnapshot'), 'API client must restore saved read responses during backend outages');
+const dataBanner = read('src/components/shared/DataStatusBanner.jsx');
+assert(dataBanner.includes('Showing your last saved update'), 'Cached response state must be visible and timestamped');
+const forecast = read('src/pages/shared/AqiForecastPage.jsx');
+assert(forecast.includes('loadLocationAirQuality'), 'Both portals must share the direct-provider AQI forecast fallback');
+const trafficCss = read('src/pages/citizen/traffic-lab-premium.css');
+assert(trafficCss.includes('--ul-panel:#101b13') && trafficCss.includes('--ul-green:#baf36b'), 'Traffic Lab must use the shared green palette');
+console.log('✓ PNG favicon, multi-route map, Google Maps, carbon cards and outage recovery verified');
+const apiSnapshots = read('src/services/apiSnapshot.js');
+assert(apiSnapshots.includes('readDataStatusEvents') && apiSnapshots.includes('STATUS_MAX_AGE_MS'), 'Offline status must survive layout remounts and stay time-bounded');
+assert(apiSnapshots.includes('MAX_AGE_MS'), 'Local fallback records must expire instead of being treated as current forever');
+const airQualityService = read('src/services/airQuality.js');
+assert(airQualityService.includes('readApiSnapshot(apiPath)') && airQualityService.includes('savedApiSnapshot?.savedAt'), 'AQI fallback must preserve the original data timestamp');
+assert(traffic.includes('compactReport(analyzedReport)') && traffic.includes('Last successful analysis') && traffic.includes('reportRestored'), 'Traffic Lab must persist compact historical evidence and clearly label restored reports');
+assert(!traffic.includes("setReport(null); setWorkflow(null);"), 'Failed re-analysis must not erase the previous successful traffic report');
+assert(layout.indexOf("to: '/authority/air-intelligence'") < layout.indexOf("to: '/authority/aqi-forecast'") && layout.indexOf("to: '/authority/aqi-forecast'") < layout.indexOf("to: '/authority/traffic-lab'") && layout.indexOf("to: '/authority/traffic-lab'") < layout.indexOf("to: '/authority/traffic-simulation'") && layout.indexOf("to: '/authority/traffic-simulation'") < layout.indexOf("to: '/authority/iot'"), 'Authority navigation must order AQI, forecast, Traffic Lab, simulation and IoT');
+console.log('✓ Persistent outage status, honest historical reports, AQI provenance and workflow navigation verified');
+
+console.log('--- ALL URBANSAARTHI SMOKE TESTS PASSED ---');

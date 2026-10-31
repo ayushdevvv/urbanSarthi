@@ -113,3 +113,28 @@ def test_route_co2_uses_transparent_car_profile_and_varies_by_distance():
     assert routing_service._route_co2_estimate(5000, "walking") == 0.0
     assert routing_service._route_co2_estimate(5000, "cycling") == 0.0
     assert routing_service._route_co2_estimate(5000, "transit") is None
+
+
+def test_osrm_search_merges_independent_driving_router_results(monkeypatch):
+    monkeypatch.setattr(routing_service.settings, "osrm_base_url", None)
+    calls = []
+
+    def route(coords, distance, duration):
+        return {"distance": distance, "duration": duration, "geometry": {"type": "LineString", "coordinates": coords}}
+
+    payloads = [
+        {"code": "Ok", "routes": [route([[77.0, 28.0], [77.01, 28.012], [77.02, 28.02]], 4000, 600)]},
+        {"code": "Ok", "routes": [route([[77.0, 28.0], [77.012, 28.006], [77.02, 28.02]], 4300, 660)]},
+    ]
+
+    def fake_get(url, **kwargs):
+        calls.append(url)
+        return FakeResponse(payloads[len(calls) - 1])
+
+    monkeypatch.setattr(routing_service.httpx, "get", fake_get)
+    routes = routing_service._osrm_routes("driving", (28.0, 77.0), (28.02, 77.02))
+
+    assert len(calls) == 2
+    assert len(routes) == 2
+    assert all(item["data_quality"] == "road-network-route" for item in routes)
+    assert routes[0]["geometry"]["coordinates"] != routes[1]["geometry"]["coordinates"]

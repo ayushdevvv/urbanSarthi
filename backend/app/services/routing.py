@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from statistics import mean
+from concurrent.futures import ThreadPoolExecutor
+import math
 import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -101,33 +103,32 @@ _ROUTING_BASES = {
 def _osrm_routes(mode: str, origin: tuple[float, float], dest: tuple[float, float]) -> list[dict] | None:
     if mode not in _ROUTING_BASES:
         return None
-    # OpenStreetMap routing profiles support car, foot, and bike. If a custom
-    # endpoint is configured, respect it; otherwise try the profile-specific
-    # public router and a second OSRM instance for driving.
+    # Merge alternatives from independent OSRM deployments. The first provider
+    # often returns only one path, so returning early here used to hide the second.
     bases = [settings.osrm_base_url.rstrip("/")] if settings.osrm_base_url else [_ROUTING_BASES[mode]]
-    if not settings.osrm_base_url and mode == "driving":
+    if mode == "driving" and "https://router.project-osrm.org" not in bases:
         bases.append("https://router.project-osrm.org")
-    for base in bases:
-        url = f"{base}/route/v1/driving/{origin[1]},{origin[0]};{dest[1]},{dest[0]}"
+
+    def fetch(base: str) -> list[dict]:
+        profile = "driving"
+        url = f"{base}/route/v1/{profile}/{origin[1]},{origin[0]};{dest[1]},{dest[0]}"
         try:
             response = httpx.get(
                 url,
                 params={"alternatives": "3", "overview": "full", "geometries": "geojson", "steps": "false"},
                 headers={"User-Agent": "UrbanSaarthi/1.0 (mobility route planner)"},
-                timeout=8.0,
+                timeout=5.0,
             )
             response.raise_for_status()
             payload = response.json()
             if payload.get("code") != "Ok" or not payload.get("routes"):
-                continue
-            output = []
+                return []
+            output: list[dict] = []
             for i, route in enumerate(payload["routes"][:3]):
                 distance = float(route.get("distance", 0.0))
                 duration = int(float(route.get("duration", 0.0)))
                 geometry = route.get("geometry") or {}
                 coordinates = geometry.get("coordinates") or []
-                # A route without actual road-network coordinates must not be
-                # rendered as a navigable path.
                 if len(coordinates) < 2:
                     continue
                 output.append({
@@ -140,11 +141,13 @@ def _osrm_routes(mode: str, origin: tuple[float, float], dest: tuple[float, floa
                     "itinerary": {"provider_summary": "Route geometry follows the provider's mapped road, footpath, or cycle network. Live traffic is not implied."},
                     "warnings": ["Travel time is based on mapped network estimates; live traffic may not be included."],
                 })
-            if output:
-                return output
+            return output
         except (httpx.HTTPError, ValueError, TypeError, KeyError):
-            continue
-    return None
+            return []
+
+    with ThreadPoolExecutor(max_workers=min(3, len(bases))) as pool:
+        batches = list(pool.map(fetch, bases))
+    return [route for batch in batches for route in batch] or None
 
 _VALHALLA_URL = "https://valhalla1.openstreetmap.de/route"
 
@@ -209,15 +212,20 @@ def _valhalla_routes(
     *,
     alternates: int = 2,
     exclude_locations: list[tuple[float, float]] | None = None,
+    costing_override: str | None = None,
+    costing_options: dict | None = None,
+    via: tuple[float, float] | None = None,
+    strategy_label: str | None = None,
 ) -> list[dict]:
     """Fetch independent road-network paths from the public Valhalla OSM router."""
-    costing = {"driving": "auto", "walking": "pedestrian", "cycling": "bicycle"}.get(mode)
+    costing = costing_override or {"driving": "auto", "walking": "pedestrian", "cycling": "bicycle"}.get(mode)
     if not costing:
         return []
     payload: dict = {
         "locations": [
-            {"lat": origin[0], "lon": origin[1]},
-            {"lat": dest[0], "lon": dest[1]},
+            {"lat": origin[0], "lon": origin[1], "type": "break"},
+            *([{"lat": via[0], "lon": via[1], "type": "through"}] if via else []),
+            {"lat": dest[0], "lon": dest[1], "type": "break"},
         ],
         "costing": costing,
         "units": "kilometers",
@@ -226,17 +234,21 @@ def _valhalla_routes(
         "directions_type": "none",
         "alternates": max(0, min(int(alternates), 3)),
     }
+    if costing_options:
+        payload["costing_options"] = {costing: costing_options}
     if exclude_locations:
+        # Valhalla maps each coordinate to its nearest road edge and excludes it.
+        # Several spaced points force the solver to leave a previously used corridor.
         payload["exclude_locations"] = [
-            {"lat": lat, "lon": lon, "radius": 35}
-            for lat, lon in exclude_locations[:5]
+            {"lat": lat, "lon": lon}
+            for lat, lon in exclude_locations[:12]
         ]
     try:
         response = httpx.post(
             _VALHALLA_URL,
             json=payload,
             headers={"User-Agent": "UrbanSaarthi/1.0 (mobility route planner)"},
-            timeout=8.0,
+            timeout=6.0,
         )
         response.raise_for_status()
         data = response.json()
@@ -246,6 +258,8 @@ def _valhalla_routes(
             for raw in raw_routes:
                 normalized = _route_record(raw, mode, "Valhalla / OpenStreetMap")
                 if normalized:
+                    if strategy_label:
+                        normalized["label"] = strategy_label
                     output.append(normalized)
             return output
 
@@ -267,6 +281,8 @@ def _valhalla_routes(
                 "geometry": {"type": "LineString", "coordinates": coordinates},
             }, mode, "Valhalla / OpenStreetMap")
             if normalized:
+                if strategy_label:
+                    normalized["label"] = strategy_label
                 output.append(normalized)
         return output
     except (httpx.HTTPError, ValueError, TypeError, KeyError):
@@ -284,68 +300,152 @@ def _sample_route_points(route: dict, fractions: tuple[float, ...] = (0.36, 0.52
     return points
 
 
-def _is_distinct_network_route(candidate: dict, accepted: list[dict]) -> bool:
-    """Reject duplicate router responses while allowing genuinely different road paths."""
-    coords = (candidate.get("geometry") or {}).get("coordinates") or []
-    if len(coords) < 3:
-        return False
-    candidate_samples = [coords[min(len(coords) - 1, int(i * (len(coords) - 1) / 17))] for i in range(18)]
-    for existing in accepted:
-        other = (existing.get("geometry") or {}).get("coordinates") or []
-        if len(other) < 3:
+def _route_sample_points(route: dict, sample_count: int = 32) -> list[tuple[float, float]]:
+    """Sample a LineString at equal travelled-distance intervals, not vertex indexes."""
+    coordinates = (route.get("geometry") or {}).get("coordinates") or []
+    if len(coordinates) < 2:
+        return []
+    segments: list[tuple[float, list[float], list[float]]] = []
+    total = 0.0
+    for first, second in zip(coordinates, coordinates[1:]):
+        lon1, lat1 = float(first[0]), float(first[1])
+        lon2, lat2 = float(second[0]), float(second[1])
+        length = haversine_m(lat1, lon1, lat2, lon2)
+        if length <= 0:
             continue
-        other_samples = [other[min(len(other) - 1, int(i * (len(other) - 1) / 17))] for i in range(18)]
+        total += length
+        segments.append((length, [lon1, lat1], [lon2, lat2]))
+    if total <= 0:
+        return []
+    result: list[tuple[float, float]] = []
+    for index in range(sample_count):
+        target = total * index / max(1, sample_count - 1)
+        traversed = 0.0
+        for length, first, second in segments:
+            if traversed + length >= target:
+                ratio = max(0.0, min(1.0, (target - traversed) / length))
+                result.append((first[0] + (second[0] - first[0]) * ratio, first[1] + (second[1] - first[1]) * ratio))
+                break
+            traversed += length
+    return result
+
+
+def _is_distinct_network_route(candidate: dict, accepted: list[dict]) -> bool:
+    """Reject paths that substantially reuse an already displayed road corridor."""
+    candidate_samples = _route_sample_points(candidate)
+    if len(candidate_samples) < 3:
+        return False
+    for existing in accepted:
+        other_samples = _route_sample_points(existing)
+        if len(other_samples) < 3:
+            continue
         close = 0
         for lon, lat in candidate_samples:
-            nearest = min(haversine_m(float(lat), float(lon), float(other_lat), float(other_lon)) for other_lon, other_lat in other_samples)
-            if nearest <= 35:
+            nearest = min(haversine_m(lat, lon, other_lat, other_lon) for other_lon, other_lat in other_samples)
+            if nearest <= 25:
                 close += 1
-        # More than 82% shared sampled geometry is treated as the same route.
-        if close / len(candidate_samples) >= 0.82:
+        # A candidate must diverge meaningfully from an existing route for a
+        # material part of the journey; parallel roads can be only a few metres apart.
+        if close / len(candidate_samples) >= 0.80:
             return False
     return True
 
 
-def _network_routes(mode: str, origin: tuple[float, float], dest: tuple[float, float]) -> list[dict]:
-    """Combine OSRM and Valhalla, then request road-avoidance variants if needed.
+def _detour_waypoints(origin: tuple[float, float], dest: tuple[float, float]) -> list[tuple[float, float]]:
+    """Generate candidate via-points either side of the direct corridor.
 
-    All returned options have provider-supplied road-network geometry. This function
-    deliberately refuses to draw synthetic straight/curved lines as navigation paths.
+    The routing engine snaps these coordinates to its road graph; returned geometry
+    remains provider-generated and is never replaced with a straight line.
+    """
+    lat1, lon1 = origin
+    lat2, lon2 = dest
+    mid_lat = (lat1 + lat2) / 2.0
+    cos_lat = max(0.2, abs(math.cos(math.radians(mid_lat))))
+    dx = (lon2 - lon1) * cos_lat
+    dy = lat2 - lat1
+    norm = (dx * dx + dy * dy) ** 0.5
+    if norm < 1e-9:
+        return []
+    # In local road networks a few hundred metres can move the route onto a
+    # parallel arterial without forcing a large, unrealistic detour.
+    direct = haversine_m(lat1, lon1, lat2, lon2)
+    perp_x, perp_y = -dy / norm, dx / norm
+    points: list[tuple[float, float]] = []
+    # Two offset scales help the solver snap onto both nearby parallel streets
+    # and a wider arterial corridor. All returned paths still come from Valhalla.
+    offsets = [max(220.0, min(900.0, direct * 0.12)), max(450.0, min(2200.0, direct * 0.28))]
+    candidates = [(0.30, 1, 0), (0.48, -1, 0), (0.68, 1, 0), (0.38, -1, 1), (0.60, 1, 1), (0.76, -1, 1), (0.22, 1, 1), (0.54, -1, 0)]
+    for fraction, side, scale_index in candidates:
+        offset_m = offsets[scale_index]
+        lat = lat1 + (lat2 - lat1) * fraction + side * perp_y * offset_m / 111_000.0
+        lon = lon1 + (lon2 - lon1) * fraction + side * perp_x * offset_m / (111_000.0 * cos_lat)
+        if -90 < lat < 90 and -180 < lon < 180:
+            points.append((lat, lon))
+    return points
+
+
+def _network_routes(mode: str, origin: tuple[float, float], dest: tuple[float, float]) -> list[dict]:
+    """Build up to three distinct paths from independent OSM network searches.
+
+    Native alternatives are best-effort. If the initial engines return at least one
+    road path, a bounded second wave varies driving cost profiles and forces several
+    routes through different snapped road corridors. If both engines are unavailable,
+    stop quickly and let the caller show a clearly labelled distance/time estimate.
+    Every returned alternative is provider-generated road geometry; no straight line
+    is invented to reach a target count.
     """
     candidates: list[dict] = []
-    batches = (
-        _osrm_routes(mode, origin, dest) or [],
-        _valhalla_routes(mode, origin, dest, alternates=2),
-    )
-    for batch in batches:
-        for route in batch:
+
+    def add_batch(batch: list[dict] | None) -> None:
+        for route in batch or []:
             if _is_distinct_network_route(route, candidates):
                 candidates.append(route)
-            if len(candidates) >= 3:
-                return candidates[:3]
+                if len(candidates) >= 3:
+                    return
 
-    # OSRM and Valhalla may return fewer alternatives than requested. Ask
-    # Valhalla for additional paths while excluding a point on each accepted
-    # path. Only provider-supplied road geometry can become a visible route.
-    fractions = (0.24, 0.40, 0.60, 0.76)
-    attempts: list[tuple[float, float]] = []
-    for route in candidates:
-        attempts.extend(_sample_route_points(route, fractions))
+    # Independent OSRM + Valhalla requests run concurrently.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        osrm_future = pool.submit(_osrm_routes, mode, origin, dest)
+        valhalla_future = pool.submit(_valhalla_routes, mode, origin, dest, alternates=3)
+        add_batch(osrm_future.result())
+        add_batch(valhalla_future.result())
 
-    attempted: set[tuple[int, int]] = set()
-    for avoid in attempts[:4]:
-        if len(candidates) >= 3:
-            break
-        key = (round(avoid[0] * 10000), round(avoid[1] * 10000))
-        if key in attempted:
-            continue
-        attempted.add(key)
-        for route in _valhalla_routes(mode, origin, dest, alternates=0, exclude_locations=[avoid]):
-            if _is_distinct_network_route(route, candidates):
-                candidates.append(route)
-                break
+    # If neither primary engine can produce a path, additional calls to the same
+    # unavailable routing services are unlikely to help and only increase latency.
+    if not candidates:
+        return []
+
+    if len(candidates) < 3:
+        jobs = []
+        if mode == "driving":
+            jobs.extend([
+                lambda: _valhalla_routes(mode, origin, dest, alternates=0, costing_override="auto_shorter", strategy_label="Shorter distance"),
+                lambda: _valhalla_routes(mode, origin, dest, alternates=0, costing_options={"use_distance": 0.72}, strategy_label="Distance-balanced"),
+            ])
+        # Four offset waypoints explore both nearby streets and a wider arterial.
+        # The server snaps each waypoint to its actual road graph.
+        vias = _detour_waypoints(origin, dest)[:4]
+        jobs.extend([
+            (lambda via=via, index=index: _valhalla_routes(
+                mode, origin, dest, alternates=0, via=via,
+                strategy_label=f"Alternate corridor {index + 1}"
+            ))
+            for index, via in enumerate(vias)
+        ])
+        with ThreadPoolExecutor(max_workers=max(1, len(jobs))) as pool:
+            futures = [pool.submit(job) for job in jobs]
+            for future in futures:
+                add_batch(future.result())
+                if len(candidates) >= 3:
+                    break
+
+    # Descriptive names survive the user's preference sort.
+    for index, route in enumerate(candidates):
+        label = str(route.get("label") or "").strip()
+        generic = not label or label == "Road-network route" or label.startswith(("Driving route ", "Walking route ", "Cycling route "))
+        if generic:
+            route["label"] = ("Fastest route", "Alternative route 2", "Alternative route 3")[index]
     return candidates[:3]
-
 
 def build_routes(db: Session, request, user_id: int | None = None) -> dict:
     origin = (request.origin_latitude, request.origin_longitude)
@@ -416,7 +516,9 @@ def build_routes(db: Session, request, user_id: int | None = None) -> dict:
         mapped_routes = [route for route in routes if route.get("mode") == mode and route.get("data_quality") == "road-network-route"]
         for index, route in enumerate(mapped_routes):
             route["id"] = f"{mode}-route-{index + 1}"
-            route["label"] = f"Route {chr(65 + index)}"
+            existing_label = str(route.get("label") or "").strip()
+            if not existing_label or existing_label in {"Road-network route", "Driving route", "Walking route", "Cycling route"}:
+                route["label"] = ("Fastest route", "Alternative route 2", "Alternative route 3")[index]
             route["route_number"] = index + 1
     for index, route in enumerate(routes):
         route["preference_rank"] = f"{request.preference}-#{index + 1}"

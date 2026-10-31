@@ -9,6 +9,7 @@ import CommandCenterPage from './pages/authority/CommandCenterPage.jsx';
 import SignalPlansPage from './pages/authority/SignalPlansPage.jsx';
 import AnalyticsPage from './pages/authority/AnalyticsPage.jsx';
 import AirQualityOverviewPage from './pages/authority/AirQualityOverviewPage.jsx';
+import AqiForecastPage from './pages/shared/AqiForecastPage.jsx';
 import CarbonImpactPage from './pages/authority/CarbonImpactPage.jsx';
 import IotNetworkPage from './pages/authority/IotNetworkPage.jsx';
 import DataSourcesPage from './pages/authority/DataSourcesPage.jsx';
@@ -35,6 +36,8 @@ export default function App() {
         <Route path="control" element={<CommandCenterPage />} />
         <Route path="agent" element={<Navigate to="/authority/air-intelligence" replace />} />
         <Route path="air-intelligence" element={<AirQualityOverviewPage />} />
+        <Route path="aqi-forecast" element={<AqiForecastPage authorityMode />} />
+        <Route path="traffic-simulation" element={<TrafficInfoPage adminMode />} />
         <Route path="carbon" element={<CarbonImpactPage />} />
         <Route path="traffic" element={<TrafficInfoPage adminMode />} />
         <Route path="traffic-model" element={<TrafficInfoPage adminMode />} />
@@ -51,6 +54,7 @@ export default function App() {
         <Route path="plan" element={<Navigate to="/citizen" replace />} />
         <Route path="agent" element={<Navigate to="/citizen" replace />} />
         <Route path="air-quality" element={<AirQualityPage />} />
+        <Route path="aqi-forecast" element={<AqiForecastPage />} />
         <Route path="aqi-vision" element={<AqiVisionPage />} />
         <Route path="transit" element={<TransitPage />} />
         <Route path="traffic" element={<TrafficInfoPage />} />

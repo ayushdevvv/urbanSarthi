@@ -3,6 +3,7 @@ import { Activity, AlertTriangle, Clock3, LocateFixed, MapPin, RefreshCw, Search
 import PageIntro from '../../components/shared/PageIntro.jsx';
 import CityMap from '../../components/maps/CityMap.jsx';
 import { api } from '../../services/api/client.js';
+import { loadLocationAirQuality } from '../../services/airQuality.js';
 import './location-aqi.css';
 
 const show = (value, unit = '') => value == null || !Number.isFinite(Number(value)) ? '—' : `${Math.round(Number(value) * 10) / 10}${unit}`;
@@ -20,12 +21,12 @@ export default function AirQualityPage({ authorityMode = false } = {}) {
   const load = useCallback(async (latitude, longitude, label) => {
     setLoading(true); setError('');
     try {
-      const data = await api.get(`/aqi/location-forecast?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}`);
+      const data = await loadLocationAirQuality(latitude, longitude);
       setLocation({ latitude: Number(latitude), longitude: Number(longitude), label: label || `${Number(latitude).toFixed(4)}, ${Number(longitude).toFixed(4)}` });
       setReport(data);
       if (data?.status === 'unavailable' || currentIndex(data?.current) == null) setError(data?.note || 'No AQI index was returned for this location. Try another nearby area.');
     } catch (err) {
-      setReport(null); setError(err?.message || 'Could not load air quality for this location.');
+      setError(err?.message || 'Could not load air quality for this location.');
     } finally { setLoading(false); }
   }, []);
 

@@ -7,6 +7,7 @@ import {
 import { api } from '../../services/api/client.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { saveLatestVisionEvidence } from '../../services/visionEvidence.js';
+import { saveLocalRecord, readLocalRecord } from '../../services/apiSnapshot.js';
 import './traffic-lab-premium.css';
 
 const ACCEPTED_VIDEO = '.mp4,.mov,.avi,.mkv,.webm,.m4v';
@@ -72,10 +73,13 @@ function TrendChart({ timeline }) {
 
 export default function TrafficVisionPage() {
   const { notify } = useApp();
-  const [mode, setMode] = useState('video');
+  const [initialReportSnapshot] = useState(() => readLocalRecord('traffic-lab-last-report'));
+  const [mode, setMode] = useState(() => initialReportSnapshot?.value?.mode || 'video');
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
-  const [report, setReport] = useState(null);
+  const [report, setReport] = useState(() => initialReportSnapshot?.value || null);
+  const [reportRestored, setReportRestored] = useState(Boolean(initialReportSnapshot?.value));
+  const [reportSavedAt, setReportSavedAt] = useState(initialReportSnapshot?.savedAt || null);
   const [systemStatus, setSystemStatus] = useState(null);
   const [junctions, setJunctions] = useState([]);
   const [junctionId, setJunctionId] = useState('');
@@ -130,7 +134,7 @@ export default function TrafficVisionPage() {
     if (nextFile.size > maxSize) { setError(`This file exceeds the ${mode === 'video' ? '150 MB' : '8 MB'} upload limit.`); return; }
     setFile(nextFile);
     setPreviewUrl(URL.createObjectURL(nextFile));
-    setReport(null);
+    if (report) setReportRestored(true);
     setWorkflow(null);
     setDispatchPreview(null);
     setError('');
@@ -139,7 +143,7 @@ export default function TrafficVisionPage() {
   function switchMode(nextMode) {
     setMode(nextMode);
     setFile(null);
-    setReport(null);
+    if (report) setReportRestored(true);
     setWorkflow(null);
     setDispatchPreview(null);
     setError('');
@@ -148,7 +152,7 @@ export default function TrafficVisionPage() {
 
   async function analyzeScene() {
     if (!file) { setError(`Upload a ${mode === 'video' ? 'traffic video' : 'road image'} first.`); return; }
-    setBusy(true); setError(''); setReport(null); setWorkflow(null); setDispatchPreview(null);
+    setBusy(true); setError(''); setWorkflow(null); setDispatchPreview(null);
     try {
       const body = new FormData();
       body.append('file', file);
@@ -164,8 +168,12 @@ export default function TrafficVisionPage() {
         ? `/traffic-detection/analyze-video?confidence=${confidence}&sample_every_seconds=${sampleEvery}${roiQuery}`
         : `/traffic-detection/analyze?confidence=${confidence}`;
       const data = await api.postForm(endpoint, body);
-      const analyzedReport = { ...data, source_filename: file.name, segment_distance_km: Number(segmentDistanceKm) || 0.5 };
+      const analyzedReport = { ...data, mode, source_filename: file.name, segment_distance_km: Number(segmentDistanceKm) || 0.5, saved_at: new Date().toISOString() };
       setReport(analyzedReport);
+      setReportRestored(false);
+      setReportSavedAt(Date.now());
+      // Keep compact evidence in browser storage; annotated base64 frames can be several MB.
+      saveLocalRecord('traffic-lab-last-report', { ...compactReport(analyzedReport), saved_at: analyzedReport.saved_at });
       if (mode === 'video') {
         saveLatestVisionEvidence({
           source_filename: file.name,
@@ -178,6 +186,7 @@ export default function TrafficVisionPage() {
       }
       notify(mode === 'video' ? `Video analyzed with YOLO. Decoder: ${data.video?.decoder || 'OpenCV'}.` : 'Road image analyzed with YOLO.');
     } catch (e) {
+      if (report) setReportRestored(true);
       setError(e.message || 'The vision pipeline failed. Check the API and model status.');
     } finally { setBusy(false); }
   }
@@ -256,7 +265,7 @@ export default function TrafficVisionPage() {
         <div className={`ul-dropzone ${file ? 'has-file' : ''}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); pickFile(event.dataTransfer.files?.[0]); }}>
           {file && previewUrl ? <div className="ul-preview-media">
             {mode === 'video' ? <video src={previewUrl} controls muted playsInline /> : <img src={previewUrl} alt="Selected road scene" />}
-            <button className="ul-remove-file" onClick={() => { setFile(null); setReport(null); setWorkflow(null); setPreviewUrl((old) => { if (old) URL.revokeObjectURL(old); return ''; }); }} aria-label="Remove uploaded file"><XCircle size={17}/></button>
+            <button className="ul-remove-file" onClick={() => { setFile(null); if (report) setReportRestored(true); setWorkflow(null); setPreviewUrl((old) => { if (old) URL.revokeObjectURL(old); return ''; }); }} aria-label="Remove uploaded file"><XCircle size={17}/></button>
             <div className="ul-file-meta"><b>{file.name}</b><span>{(file.size / (1024 * 1024)).toFixed(1)} MB</span></div>
           </div> : <><div className="ul-upload-icon"><Video size={25}/></div><b>Drop your {mode === 'video' ? 'traffic clip' : 'road image'} here</b><p>{mode === 'video' ? 'MP4, MOV, AVI, MKV or WebM · up to 150 MB · 10 minutes max' : 'JPG, PNG or WebP · up to 8 MB'}</p><button className="ul-secondary-button" onClick={() => fileInput.current?.click()}>Browse files <ArrowUpRight size={14}/></button></>}
           <input ref={fileInput} type="file" accept={mode === 'video' ? ACCEPTED_VIDEO : ACCEPTED_IMAGE} onChange={(event) => { pickFile(event.target.files?.[0]); event.target.value = ''; }} hidden />
@@ -282,9 +291,10 @@ export default function TrafficVisionPage() {
       <section className="ul-panel ul-evidence-panel">
         <div className="ul-panel-head"><div><span className="ul-panel-kicker">MEASURED OUTPUT</span><h3>Scene report</h3></div>{report && <button className="ul-text-button" onClick={downloadReport}><ArrowDownToLine size={14}/> Export JSON</button>}</div>
         {!report ? <div className="ul-empty-evidence"><div className="ul-scan-illustration"><span/><span/><span/><i/></div><b>Waiting for source evidence</b><p>Run the detector to populate class counts, track metrics and a report tied to your uploaded footage.</p><div className="ul-empty-track"><span>01 Capture</span><i/><span>02 Detect</span><i/><span>03 Verify</span></div></div> : <>
-          <div className="ul-report-status"><span><CheckCircle2 size={16}/></span><div><b>Inference completed</b><small>{report.model || 'YOLO detector'} · {report.source_filename || file?.name}</small></div><em>MODEL OUTPUT</em></div>
+          <div className="ul-report-status"><span><CheckCircle2 size={16}/></span><div><b>{reportRestored ? 'Last successful analysis' : 'Inference completed'}</b><small>{report.model || 'YOLO detector'} · {report.source_filename || file?.name}</small></div><em>{reportRestored ? 'SAVED RESULT' : 'MODEL OUTPUT'}</em></div>
+          {reportRestored && <div className="ul-saved-report-note">Restored from this browser · {reportSavedAt ? new Date(reportSavedAt).toLocaleString() : 'Saved earlier'}. This is a previous analysis, not a new inference.</div>}
           <div className="ul-metric-grid">
-            <div className="ul-metric-card"><span>{report.tracking_ids_available ? 'Tracked vehicles' : mode === 'video' ? 'Peak vehicles' : 'Vehicles detected'}</span><strong>{vehicleTotal}</strong><small>{report.tracking_ids_available ? 'Unique IDs across sampled frames' : mode === 'video' ? 'IDs not returned by tracker' : 'From this frame only'}</small></div>
+            <div className="ul-metric-card"><span>{report.tracking_ids_available ? 'Tracked vehicles' : report.mode === 'video' ? 'Peak vehicles' : 'Vehicles detected'}</span><strong>{vehicleTotal}</strong><small>{report.tracking_ids_available ? 'Unique IDs across sampled frames' : report.mode === 'video' ? 'IDs not returned by tracker' : 'From this frame only'}</small></div>
             <div className="ul-metric-card"><span>Peak in frame</span><strong>{report.peak_vehicles_in_frame ?? report.total_vehicles ?? 0}</strong><small>Highest concurrent count</small></div>
             <div className="ul-metric-card"><span>Mean per frame</span><strong>{report.mean_vehicles_per_sampled_frame ?? report.total_vehicles ?? 0}</strong><small>{report.video?.sampled_frames ?? 1} sampled frames</small></div>
             <div className="ul-metric-card"><span>Scene density</span><strong className={`ul-density-${String(report.congestion_estimate || 'unknown').toLowerCase()}`}>{report.congestion_estimate || '—'}</strong><small>Count-based heuristic only</small></div>

@@ -22,7 +22,11 @@ def _demo_junction(client):
     return {}, junction_id
 
 
-def test_health_and_open_route_planning(client):
+def test_health_and_open_route_planning(client, monkeypatch):
+    # The API contract test is specifically for the no-provider distance estimate.
+    # Keep it deterministic and offline; mapped provider behavior is covered separately.
+    from app.services import routing as routing_service
+    monkeypatch.setattr(routing_service, '_network_routes', lambda *args, **kwargs: [])
     assert client.get("/healthz").status_code == 200
     assert client.get("/api/v1/auth/me").status_code == 404  # authentication routes are removed
     response = client.post("/api/v1/routing/plan", json={

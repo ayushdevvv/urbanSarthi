@@ -155,3 +155,8 @@
 @media(max-width:1100px){.route-carbon-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.route-carbon-grid{grid-template-columns:1fr;gap:11px}.route-carbon-card{padding:16px!important}.route-carbon-name h4{font-size:18px}.route-emission-value{font-size:32px}.route-carbon-badges{max-width:48%}}
 @media(prefers-reduced-motion:reduce){.route-carbon-card,.route-emission-track i{transition:none}.route-carbon-card:hover{transform:none}}
+
+/* Clear CO2 downside and green route selection hierarchy. */
+.traffic-route-options .traffic-route-co2{color:#557b3f;font-size:11px;font-weight:800}
+.dark .traffic-route-options .traffic-route-co2{color:#c3e79b}
+.route-carbon-insight{min-width:0}

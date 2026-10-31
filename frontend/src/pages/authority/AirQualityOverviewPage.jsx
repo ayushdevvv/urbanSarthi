@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, CloudSun, Droplets, MapPin, RefreshCw, RadioTower, Wind, Waves, Leaf, Camera, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api } from '../../services/api/client.js';
+import { loadLocationAirQuality } from '../../services/airQuality.js';
 import PageIntro from '../../components/shared/PageIntro.jsx';
 import './monitoring-pages.css';
 
@@ -77,13 +78,13 @@ export default function AirQualityOverviewPage() {
   const refresh = useCallback(async () => {
     setLoading(true); setError('');
     const [airResult, stationResult, hotspotResult] = await Promise.allSettled([
-      api.get(`/aqi/location-forecast?latitude=${area.lat}&longitude=${area.lon}`),
+      loadLocationAirQuality(area.lat, area.lon),
       api.get(`/aqi/nearby?latitude=${area.lat}&longitude=${area.lon}&radius_km=15`),
       api.get('/air-intelligence/hotspots?corridor_distance_km=0.5'),
     ]);
     if (airResult.status === 'fulfilled') setReport(airResult.value); else setError(airResult.reason?.message || 'Air quality feed is unavailable.');
-    if (stationResult.status === 'fulfilled') setNearby(stationResult.value); else setNearby(null);
-    if (hotspotResult.status === 'fulfilled') setHotspots(hotspotResult.value); else setHotspots(null);
+    if (stationResult.status === 'fulfilled') setNearby(stationResult.value);
+    if (hotspotResult.status === 'fulfilled') setHotspots(hotspotResult.value);
     setLoading(false);
   }, [area.lat, area.lon]);
   useEffect(() => { refresh(); }, [refresh]);

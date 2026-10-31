@@ -1,18 +1,21 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, Bell, Camera, ChevronRight, CloudSun, House, Leaf, Menu, Moon, RadioTower, Settings, Sun, Wind, Zap, Route } from 'lucide-react';
+import { Activity, BarChart3, Bell, Camera, ChevronRight, CloudSun, House, Leaf, Menu, Moon, RadioTower, Settings, Sun, Wind, Zap, Route } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 import FloatingAgentWidget from '../shared/FloatingAgentWidget.jsx';
+import DataStatusBanner from '../shared/DataStatusBanner.jsx';
 
 const navGroups = [
   { label: 'AIR QUALITY', items: [
     { label: 'AQI overview', to: '/authority/air-intelligence', icon: Wind },
+    { label: 'AQI forecast', to: '/authority/aqi-forecast', icon: CloudSun },
     { label: 'Carbon & emissions', to: '/authority/carbon', icon: Leaf },
   ]},
   { label: 'TRAFFIC', items: [
-    { label: 'Traffic conditions', to: '/authority/traffic', icon: Route },
-    { label: 'Traffic video analysis', to: '/authority/traffic-lab', icon: Camera },
+    { label: 'Traffic video lab', to: '/authority/traffic-lab', icon: Camera },
+    { label: 'Traffic simulation', to: '/authority/traffic-simulation', icon: Route },
+    { label: 'Traffic conditions', to: '/authority/traffic', icon: Activity },
     { label: 'Signal plans', to: '/authority/signals', icon: Zap },
   ]},
   { label: 'FIELD DATA', items: [
@@ -30,6 +33,8 @@ const meta = {
   '/authority/traffic-model': ['City operations', '60-minute outlook'],
   '/authority/traffic-lab': ['Traffic', 'Video analysis'],
   '/authority/air-intelligence': ['Air quality', 'AQI overview'],
+  '/authority/aqi-forecast': ['Air quality', 'AQI forecast'],
+  '/authority/traffic-simulation': ['Traffic', '60-minute traffic simulation'],
   '/authority/carbon': ['Air quality', 'Carbon & emissions'],
   '/authority/iot': ['Field network', 'IoT sensor network'],
   '/authority/analytics': ['Insights', 'City analytics'],
@@ -65,7 +70,7 @@ export default function AuthorityLayout() {
         <button className="utility" onClick={() => navigate('/')}><House size={15}/> Main portal</button>
         <button className="icon-btn" aria-label="Alerts" onClick={() => navigate('/authority/air-intelligence')}><Bell size={18}/></button>
       </div>
-    </header><div className="content"><Outlet /></div></main>
+    </header><div className="content"><DataStatusBanner/><Outlet /></div></main>
     <FloatingAgentWidget mode="authority" />
   </div>;
 }

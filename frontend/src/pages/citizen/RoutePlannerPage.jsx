@@ -11,7 +11,7 @@ const formatDuration = (seconds) => seconds == null ? '—' : seconds >= 3600 ? 
 const formatDistance = (meters) => meters == null ? '—' : meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
 const formatCO2 = (grams) => grams == null || !Number.isFinite(Number(grams)) ? 'Not available' : Number(grams) >= 1000 ? `${(Number(grams) / 1000).toFixed(2)} kg` : `${Math.round(Number(grams))} g`;
 
-const routePalette = ['#1f8a62', '#397ac4', '#9368c8'];
+const routePalette = ['#26764f', '#8b9f4e', '#b17b3d', '#497d78', '#806c98'];
 const routeIdentity = (route) => route?.id ?? `${route?.mode}-${route?.label}`;
 function buildGoogleMapsUrl(route, origin, destination, mode) {
   if (!origin?.resolved || !destination?.resolved) return '';
@@ -91,13 +91,13 @@ export default function RoutePlannerPage({ embedded = false }) {
   async function plan() {
     if (!origin.resolved) { await resolveLocation('origin'); return; }
     if (!destination.resolved) { await resolveLocation('destination'); return; }
-    setBusy(true); setError(''); setResult(null);
+    setBusy(true); setError('');
     try {
       const payload = await api.post('/routing/plan', {
         origin_latitude: Number(origin.latitude), origin_longitude: Number(origin.longitude),
         destination_latitude: Number(destination.latitude), destination_longitude: Number(destination.longitude),
         origin_label: origin.label, destination_label: destination.label, preference, modes: [mode],
-      });
+      }, { cacheResponse: true });
       setResult(payload); setSelectedRouteId(payload?.routes?.[0]?.id ?? null);
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
@@ -123,6 +123,12 @@ export default function RoutePlannerPage({ embedded = false }) {
     coordinates: route.geometry?.coordinates?.map?.(([lon, lat]) => ({ lat, lng: lon })) || [],
   }));
   const mappedRoutes = (result?.routes || []).filter((route) => (route.geometry?.coordinates || []).length > 1 && route.data_quality === 'road-network-route');
+  const emissionValues = (result?.routes || []).map((route) => Number(route.estimated_co2_grams)).filter((value) => Number.isFinite(value));
+  const lowestEmission = emissionValues.length ? Math.min(...emissionValues) : null;
+  const highestEmission = emissionValues.length ? Math.max(...emissionValues) : null;
+  const selectedEmission = selectedRoute?.estimated_co2_grams == null ? null : Number(selectedRoute.estimated_co2_grams);
+  const selectedEmissionDownside = selectedEmission == null || lowestEmission == null ? null : Math.max(0, selectedEmission - lowestEmission);
+  const carbonSpread = lowestEmission == null || highestEmission == null ? null : Math.max(0, highestEmission - lowestEmission);
   const googleMapsUrl = buildGoogleMapsUrl(selectedRoute, origin, destination, mode);
   return <>
     <PageIntro eyebrow={embedded ? 'CITY TRAVEL' : 'LIVE JOURNEY PLANNER'} title={embedded ? 'Where are you headed today?' : 'Plan a trip'} description="Compare mapped road alternatives by travel time, distance and estimated tailpipe CO₂, then open your chosen route in Google Maps." />
@@ -138,6 +144,10 @@ export default function RoutePlannerPage({ embedded = false }) {
     </section><section className="panel planner-map-panel"><div className="panel-head"><div><div className="eyebrow">ROUTE MAP</div><h3>{origin.label} → {destination.label}</h3></div><span className={`status-pill ${mappedRoutes.length >= 3 ? 'status-success' : ''}`}>{mappedRoutes.length >= 3 ? '3 road routes mapped' : result ? `${mappedRoutes.length} mapped route${mappedRoutes.length === 1 ? '' : 's'}` : 'Awaiting route'}</span></div><CityMap markers={markers} route={selectedRoute?.geometry?.coordinates?.map?.(([lon,lat]) => ({lat,lng:lon})) || []} routeOptions={routeOptions} zoom={12}/><div className="route-map-legend">{routeOptions.filter((item) => item.coordinates.length > 1).slice(0, 3).map((item) => <span key={item.id} className={item.selected ? 'active' : ''}><i style={{ background: item.color }} />{item.label}{item.selected && <small>Selected</small>}</span>)}</div><div className="map-foot"><span><MapPin size={13}/> Each line follows mapped roads</span><small>Map data © OpenStreetMap</small></div>{googleMapsUrl && <div className="route-map-actions"><span>{selectedRoute ? `Selected: ${selectedRoute.label || selectedRoute.mode}` : 'Choose a mapped route'}</span><a className="primary" href={googleMapsUrl} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Open selected route in Google Maps</a></div>}</section></div>
     <section className="route-results"><div className="section-heading"><div><div className="eyebrow">ROUTE OPTIONS</div><h3>{result ? `${mappedRoutes.length} mapped road routes` : 'Compare available journeys'}</h3></div>{result?.public_trip_id && <span className="status-pill">Trip ref {result.public_trip_id}</span>}</div>
       {result?.warnings?.length > 0 && <div className="warning-stack">{result.warnings.map((warning, i) => <div key={i}><ShieldAlert size={14}/>{warning}</div>)}</div>}
+      {result?.routes?.length > 0 && <div className="route-carbon-insight">
+        <div className="route-carbon-insight-copy"><span>CARBON TRADE-OFF</span><h4>{carbonSpread == null ? 'Compare the estimated footprint' : `${formatCO2(carbonSpread)} spread across these options`}</h4><p>{selectedEmissionDownside == null ? 'Choose a route to compare its estimated tailpipe impact with the lowest-footprint option.' : selectedEmissionDownside <= 0.5 ? 'Your selected route has the lowest estimated tailpipe footprint in this comparison.' : `Your selected route carries approximately ${formatCO2(selectedEmissionDownside)} more tailpipe CO₂ than the lowest-footprint option.`}</p></div>
+        <div className="route-carbon-insight-metric"><strong>{selectedEmissionDownside == null ? '—' : selectedEmissionDownside <= 0.5 ? 'Lowest' : `+${formatCO2(selectedEmissionDownside)}`}</strong><small>Selected route downside</small></div>
+      </div>}
       {result?.routes?.length ? <div className="route-carbon-grid">{result.routes.map((route, index) => {
         const key = routeIdentity(route);
         const active = key === routeIdentity(selectedRoute);
@@ -152,6 +162,7 @@ export default function RoutePlannerPage({ embedded = false }) {
         const isLowest = grams != null && lowest != null && grams <= lowest + 0.05;
         const isFastest = Number(route.duration_seconds) === fastest;
         const delta = grams != null && lowest != null && lowest > 0 ? Math.round(((grams - lowest) / lowest) * 100) : 0;
+        const downsideGrams = grams != null && lowest != null ? Math.max(0, grams - lowest) : null;
         const barWidth = grams == null || !highest ? 0 : Math.max(5, (grams / highest) * 100);
         return <article className={`panel route-carbon-card ${active ? 'route-carbon-card-selected' : ''}`} key={key} style={{ '--route-accent': color, '--route-accent-soft': `${color}17` }}>
           <div className="route-carbon-card-head">
@@ -163,7 +174,7 @@ export default function RoutePlannerPage({ embedded = false }) {
             <div className="route-emission-heading"><span>ESTIMATED TAILPIPE CO₂</span><span className="route-emission-leaf"><Leaf size={17}/></span></div>
             <div className="route-emission-value">{grams == null ? '—' : formatCO2(grams)}</div>
             <div className="route-emission-track"><i style={{ width: `${barWidth}%` }}/></div>
-            <div className="route-emission-compare"><span>Carbon footprint</span><b>{grams == null ? 'No estimate' : isLowest ? 'Lowest in this comparison' : lowest === 0 ? 'Higher than zero-tailpipe option' : `+${delta}% vs lowest`}</b></div>
+            <div className="route-emission-compare"><span>{isLowest ? 'Carbon advantage' : 'CO₂ downside vs lowest'}</span><b>{grams == null ? 'No estimate' : isLowest ? 'Lowest footprint' : `${formatCO2(downsideGrams)} more${lowest > 0 ? ` · +${delta}%` : ''}`}</b></div>
           </div>
           <div className="route-carbon-footnote">{mapped ? 'Road-network path' : 'Distance estimate'} · {route.mode === 'driving' ? 'Petrol car proxy · 6.5 L/100 km · ≈149 g/km' : route.mode === 'transit' ? 'Transit emissions unavailable' : 'Zero direct tailpipe emissions'}</div>
           {route.warnings?.length > 0 && <div className="route-carbon-warning">{route.warnings[0]}</div>}

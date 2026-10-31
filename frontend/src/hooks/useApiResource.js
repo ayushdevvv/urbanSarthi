@@ -8,11 +8,11 @@ export default function useApiResource(loader, dependencies = []) {
     setLoading(true);
     setError('');
     try { setData(await loader()); }
-    catch (err) { setError(err?.message || 'Unable to load data'); setData(null); }
+    catch (err) { setError(err?.message || 'Unable to load data'); }
     finally { setLoading(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, dependencies);
-  useEffect(() => { let active = true; setLoading(true); setError(''); Promise.resolve().then(loader).then((value) => { if (active) setData(value); }).catch((err) => { if (active) { setError(err?.message || 'Unable to load data'); setData(null); } }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { let active = true; setLoading(true); setError(''); Promise.resolve().then(loader).then((value) => { if (active) setData(value); }).catch((err) => { if (active) { setError(err?.message || 'Unable to load data'); } }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; // eslint-disable-next-line react-hooks/exhaustive-deps
   }, dependencies);
   return { data, loading, error, reload };
 }

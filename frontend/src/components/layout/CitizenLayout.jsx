@@ -3,10 +3,12 @@ import { Activity, Bus, Camera, House, MapPin, Moon, Route, Sun, Wind } from 'lu
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 import FloatingAgentWidget from '../shared/FloatingAgentWidget.jsx';
+import DataStatusBanner from '../shared/DataStatusBanner.jsx';
 
 const links = [
   { to: '/citizen', label: 'Home', icon: House, end: true },
   { to: '/citizen/air-quality', label: 'Air quality', icon: Activity },
+  { to: '/citizen/aqi-forecast', label: 'AQI forecast', icon: Wind },
   { to: '/citizen/aqi-vision', label: 'Predict AQI', icon: Wind },
   { to: '/citizen/traffic', label: 'Traffic conditions', icon: Camera },
   { to: '/citizen/transit', label: 'Public transport', icon: Bus },
@@ -26,7 +28,7 @@ export default function CitizenLayout() {
         <button className="citizen-avatar" title="UrbanSaarthi portal" onClick={() => navigate('/citizen')}>US</button>
       </div>
     </header>
-    <main className="citizen-content"><Outlet /></main>
+    <main className="citizen-content"><DataStatusBanner/><Outlet /></main>
     <footer className="citizen-footer"><span>UrbanSaarthi · India</span><span>Air quality & traffic monitoring</span><span>Emergency: 112</span></footer>
     <FloatingAgentWidget mode="citizen" />
   </div>;
