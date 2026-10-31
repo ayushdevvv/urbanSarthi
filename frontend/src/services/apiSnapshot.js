@@ -2,39 +2,16 @@ const PREFIX = 'urbansaarthi:api-snapshot:v2:';
 const MAX_ITEM_BYTES = 420_000;
 const MAX_ITEMS = 45;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-const STATUS_KEY = 'urbansaarthi:data-status:v1';
-const STATUS_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 function safeStorage() {
   try { return globalThis.localStorage; } catch { return null; }
 }
 
 export function publishDataStatus(detail) {
+  // Connection notices are session-scoped. Persisting them caused a stale
+  // fallback banner to appear on the next visit before the live API was checked.
   if (typeof window === 'undefined') return;
-  const storage = safeStorage();
-  const event = { ...detail, updatedAt: Date.now() };
-  if (storage && detail?.path) {
-    try {
-      const current = JSON.parse(storage.getItem(STATUS_KEY) || '{}');
-      if (detail.type === 'fresh') delete current[detail.path];
-      else current[detail.path] = event;
-      for (const [key, value] of Object.entries(current)) {
-        if (!value?.updatedAt || Date.now() - value.updatedAt > STATUS_MAX_AGE_MS) delete current[key];
-      }
-      storage.setItem(STATUS_KEY, JSON.stringify(current));
-    } catch { /* Status storage is optional; the in-memory event still works. */ }
-  }
-  window.dispatchEvent(new CustomEvent('urbansaarthi:data-status', { detail: event }));
-}
-
-export function readDataStatusEvents() {
-  const storage = safeStorage();
-  if (!storage) return {};
-  try {
-    const current = JSON.parse(storage.getItem(STATUS_KEY) || '{}');
-    const now = Date.now();
-    return Object.fromEntries(Object.entries(current).filter(([, value]) => value?.updatedAt && now - value.updatedAt <= STATUS_MAX_AGE_MS));
-  } catch { return {}; }
+  window.dispatchEvent(new CustomEvent('urbansaarthi:data-status', { detail: { ...detail, updatedAt: Date.now() } }));
 }
 
 export function storeApiSnapshot(path, payload) {

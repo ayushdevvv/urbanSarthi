@@ -439,13 +439,75 @@ def _network_routes(mode: str, origin: tuple[float, float], dest: tuple[float, f
                 if len(candidates) >= 3:
                     break
 
-    # Descriptive names survive the user's preference sort.
-    for index, route in enumerate(candidates):
-        label = str(route.get("label") or "").strip()
-        generic = not label or label == "Road-network route" or label.startswith(("Driving route ", "Walking route ", "Cycling route "))
-        if generic:
-            route["label"] = ("Fastest route", "Alternative route 2", "Alternative route 3")[index]
     return candidates[:3]
+
+
+def _normalised_score(value: float, low: float, high: float) -> float:
+    if not math.isfinite(value) or not math.isfinite(low) or not math.isfinite(high):
+        return 0.5
+    if high - low < 1e-9:
+        return 0.5
+    return max(0.0, min(1.0, (value - low) / (high - low)))
+
+
+def _sort_route_options(routes: list[dict], preference: str) -> list[dict]:
+    """Order routes deterministically using only metrics actually available."""
+    if not routes:
+        return []
+
+    def number(route: dict, key: str, missing: float = math.inf) -> float:
+        try:
+            value = float(route.get(key))
+            return value if math.isfinite(value) and value >= 0 else missing
+        except (TypeError, ValueError):
+            return missing
+
+    if preference == "fastest":
+        return sorted(routes, key=lambda route: (
+            number(route, "duration_seconds"),
+            number(route, "distance_meters"),
+            number(route, "estimated_co2_grams"),
+        ))
+
+    pollution_values = [number(route, "pollution_score") for route in routes]
+    has_pollution = any(math.isfinite(value) for value in pollution_values)
+    if preference == "cleanest":
+        if has_pollution:
+            return sorted(routes, key=lambda route: (
+                number(route, "pollution_score"),
+                number(route, "estimated_co2_grams"),
+                number(route, "duration_seconds"),
+            ))
+        return sorted(routes, key=lambda route: (
+            number(route, "estimated_co2_grams"),
+            number(route, "duration_seconds"),
+            number(route, "distance_meters"),
+        ))
+
+    durations = [number(route, "duration_seconds") for route in routes]
+    emissions = [number(route, "estimated_co2_grams") for route in routes]
+    valid_durations = [value for value in durations if math.isfinite(value)] or [0.0]
+    valid_emissions = [value for value in emissions if math.isfinite(value)] or [0.0]
+    valid_pollution = [value for value in pollution_values if math.isfinite(value)] or [0.0]
+    min_time, max_time = min(valid_durations), max(valid_durations)
+    min_co2, max_co2 = min(valid_emissions), max(valid_emissions)
+    min_pollution, max_pollution = min(valid_pollution), max(valid_pollution)
+
+    def balanced_key(route: dict):
+        time_score = _normalised_score(number(route, "duration_seconds"), min_time, max_time)
+        co2_value = number(route, "estimated_co2_grams")
+        co2_score = _normalised_score(co2_value, min_co2, max_co2)
+        pollution_value = number(route, "pollution_score")
+        if has_pollution:
+            # Missing station coverage is neutral, not an artificially clean score.
+            pollution_score = _normalised_score(pollution_value, min_pollution, max_pollution) if math.isfinite(pollution_value) else 0.5
+            total = 0.40 * time_score + 0.35 * pollution_score + 0.25 * co2_score
+        else:
+            total = 0.70 * time_score + 0.30 * co2_score
+        return (total, number(route, "duration_seconds"), co2_value, number(route, "distance_meters"))
+
+    return sorted(routes, key=balanced_key)
+
 
 def build_routes(db: Session, request, user_id: int | None = None) -> dict:
     origin = (request.origin_latitude, request.origin_longitude)
@@ -500,18 +562,22 @@ def build_routes(db: Session, request, user_id: int | None = None) -> dict:
         else:
             route["warnings"] = list(route.get("warnings", [])) + ["Recent location-relevant AQI is unavailable; pollution score omitted."]
 
-    if request.preference == "fastest":
-        routes.sort(key=lambda x: x["duration_seconds"])
-    elif request.preference == "cleanest":
-        routes.sort(key=lambda x: (x["pollution_score"] is None, x["pollution_score"] if x["pollution_score"] is not None else 9999, x["estimated_co2_grams"] if x["estimated_co2_grams"] is not None else 999999, x["duration_seconds"]))
-    else:
-        durations = [r["duration_seconds"] for r in routes] or [1]
-        max_duration = max(durations)
-        for route in routes:
-            time_cost = route["duration_seconds"] / max_duration
-            pollution = route["pollution_score"] / 100 if route["pollution_score"] is not None else time_cost
-            route["_rank"] = 0.65 * time_cost + 0.35 * pollution
-        routes.sort(key=lambda x: x.get("_rank", 0))
+    routes = _sort_route_options(routes, request.preference)
+    # Labels are applied AFTER sorting, so they always describe the selected
+    # preference order rather than the order returned by an external provider.
+    for index, route in enumerate(routes):
+        if route.get("data_quality") != "road-network-route":
+            route["label"] = route.get("label") or "Distance/time estimate"
+        elif index == 0:
+            if request.preference == "fastest":
+                route["label"] = "Fastest route"
+            elif request.preference == "cleanest":
+                route["label"] = "Lowest-impact route" if route.get("pollution_score") is not None else "Lowest CO₂ route"
+            else:
+                route["label"] = "Recommended balance"
+        else:
+            route["label"] = f"Alternative route {index + 1}"
+        route["preference_rank"] = f"{request.preference}-#{index + 1}"
     for mode in ("driving", "walking", "cycling"):
         mapped_routes = [route for route in routes if route.get("mode") == mode and route.get("data_quality") == "road-network-route"]
         for index, route in enumerate(mapped_routes):
@@ -520,8 +586,7 @@ def build_routes(db: Session, request, user_id: int | None = None) -> dict:
             if not existing_label or existing_label in {"Road-network route", "Driving route", "Walking route", "Cycling route"}:
                 route["label"] = ("Fastest route", "Alternative route 2", "Alternative route 3")[index]
             route["route_number"] = index + 1
-    for index, route in enumerate(routes):
-        route["preference_rank"] = f"{request.preference}-#{index + 1}"
+    for route in routes:
         route.pop("_rank", None)
     if not any(r["pollution_score"] is not None for r in routes):
         global_warnings.append("Clean-air comparison is limited because no recent AQI observations cover the route area.")

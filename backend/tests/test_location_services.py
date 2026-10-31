@@ -138,3 +138,29 @@ def test_osrm_search_merges_independent_driving_router_results(monkeypatch):
     assert len(routes) == 2
     assert all(item["data_quality"] == "road-network-route" for item in routes)
     assert routes[0]["geometry"]["coordinates"] != routes[1]["geometry"]["coordinates"]
+
+
+def test_route_sorting_respects_fastest_cleanest_and_balanced_preferences():
+    routes = [
+        {"label": "candidate a", "duration_seconds": 600, "distance_meters": 5000, "estimated_co2_grams": 900, "pollution_score": 70, "data_quality": "road-network-route"},
+        {"label": "candidate b", "duration_seconds": 720, "distance_meters": 4800, "estimated_co2_grams": 700, "pollution_score": 45, "data_quality": "road-network-route"},
+        {"label": "candidate c", "duration_seconds": 540, "distance_meters": 5500, "estimated_co2_grams": 1000, "pollution_score": 82, "data_quality": "road-network-route"},
+    ]
+
+    fastest = routing_service._sort_route_options(routes, "fastest")
+    cleanest = routing_service._sort_route_options(routes, "cleanest")
+    balanced = routing_service._sort_route_options(routes, "balanced")
+
+    assert [item["label"] for item in fastest] == ["candidate c", "candidate a", "candidate b"]
+    assert [item["label"] for item in cleanest] == ["candidate b", "candidate a", "candidate c"]
+    assert balanced[0]["label"] == "candidate b"
+    assert len({id(item) for item in balanced}) == 3
+
+
+def test_route_sorting_does_not_treat_missing_pollution_as_zero():
+    routes = [
+        {"duration_seconds": 700, "distance_meters": 4000, "estimated_co2_grams": 500, "pollution_score": None},
+        {"duration_seconds": 650, "distance_meters": 4200, "estimated_co2_grams": 600, "pollution_score": 55},
+    ]
+    cleanest = routing_service._sort_route_options(routes, "cleanest")
+    assert cleanest[0]["pollution_score"] == 55

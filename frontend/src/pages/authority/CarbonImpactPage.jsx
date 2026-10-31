@@ -4,7 +4,7 @@ import PageIntro from '../../components/shared/PageIntro.jsx';
 import { api } from '../../services/api/client.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { readLatestVisionEvidence } from '../../services/visionEvidence.js';
-import { saveLocalRecord, readLocalRecord } from '../../services/apiSnapshot.js';
+import { saveLocalRecord } from '../../services/apiSnapshot.js';
 import './monitoring-pages.css';
 
 const VEHICLES = [
@@ -50,7 +50,9 @@ export default function CarbonImpactPage() {
   const { notify } = useApp();
   const [counts, setCounts] = useState(() => { const evidence = readEvidence(); return { car: String(evidence?.counts?.car || 0), motorbike: String(evidence?.counts?.motorbike || 0), bus: String(evidence?.counts?.bus || 0), truck: String(evidence?.counts?.truck || 0), bicycle: String(evidence?.counts?.bicycle || 0) }; });
   const [distance, setDistance] = useState('0.5');
-  const [result, setResult] = useState(() => readLocalRecord('carbon-last-estimate')?.value || null);
+  // Never render an old local estimate as the initial result. A local calculation
+  // is created only when the current API request fails.
+  const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [evidence] = useState(readEvidence);
   const total = useMemo(() => Object.values(counts).reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0), [counts]);
@@ -63,6 +65,9 @@ export default function CarbonImpactPage() {
     notify('Latest vehicle counts imported.');
   }
   async function estimate() {
+    // Never keep an older result visible as though it belongs to this request.
+    // The current API result wins; a fresh local calculation is used only on error.
+    setResult(null);
     setBusy(true);
     try {
       const payload = { vehicle_counts: Object.fromEntries(Object.entries(counts).map(([key, value]) => [key, Math.max(0, Number(value) || 0)])), segment_distance_km: Math.max(0.001, Number(distance) || 0.5) };

@@ -49,6 +49,10 @@ assert(iot.includes('HTTP ingestion available') && iot.includes('does not curren
 console.log('✓ IoT observation ingestion and device registry verified');
 
 
+const trafficInfo = read('src/pages/citizen/TrafficInfoPage.jsx');
+assert(trafficInfo.includes('setScenarioData(null); setProvider(null); setLastUpdated(null);') && trafficInfo.includes('const isServiceFailure = !err?.status || err.status >= 500'), 'Old traffic scenario data is hidden during live refresh and local recovery is reserved for service failures');
+const carbonPage = read('src/pages/authority/CarbonImpactPage.jsx');
+assert(!carbonPage.includes('readLocalRecord(\'carbon-last-estimate\')') && carbonPage.includes('setResult(null);'), 'Old carbon results must not appear as initial fallback before the current estimate request');
 const traffic = read('src/pages/citizen/TrafficVisionPage.jsx');
 assert(traffic.includes('/traffic-detection/analyze-video'), 'Traffic Lab must call the video-analysis API');
 assert(traffic.includes('/traffic-detection/ops-workflow'), 'Traffic Lab must call the operations workflow');
@@ -67,6 +71,8 @@ assert(routePlanner.includes('buildGoogleMapsUrl') && routePlanner.includes('rou
 assert(routePlanner.includes('slice(0, 3)') && routePlanner.includes('3 road routes mapped'), 'Route planner must expose a three-route comparison state');
 assert(routePlanner.includes('String.fromCharCode(65 + index)') || routePlanner.includes('Route A'), 'Route planner should label distinct road alternatives');
 assert(routePlanner.includes('route-carbon-grid') && routePlanner.includes('route-emission-card'), 'Each route alternative must have a dedicated premium carbon card');
+assert(routePlanner.includes('sortRouteOptions') && routePlanner.includes('const displayRoutes'), 'Route cards and map must use one preference-sorted route order');
+assert(routePlanner.includes('setResult(null); setSelectedRouteId(null);') && routePlanner.includes('Checking live road-routing providers'), 'Old route data must be hidden while fresh route providers are queried');
 assert(routePlanner.includes('Lowest CO₂') && routePlanner.includes('vs lowest') && routePlanner.includes('formatCO2'), 'Route cards must compare route-specific CO2 estimates');
 const routeStyles = read('src/styles/citizen.css');
 assert(routeStyles.includes('.route-carbon-grid') && routeStyles.includes('.route-emission-card') && routeStyles.includes('@media(max-width:700px){.route-carbon-grid{grid-template-columns:1fr'), 'Route carbon cards must have responsive premium styling');
@@ -74,21 +80,59 @@ const cityMap = read('src/components/maps/CityMap.jsx');
 assert(cityMap.includes('routeOptions') && cityMap.includes('Polyline'), 'Map must render road-network route geometries');
 const apiClient = read('src/services/api/client.js');
 assert(apiClient.includes('cacheResponse') && apiClient.includes('readApiSnapshot'), 'API client must restore saved read responses during backend outages');
+assert(apiClient.includes('timeoutMs = 60000') && apiClient.includes('response.status >= 500'), 'Live backend gets a startup grace period and cache is only used after a transport/server failure');
 const dataBanner = read('src/components/shared/DataStatusBanner.jsx');
 assert(dataBanner.includes('Showing your last saved update'), 'Cached response state must be visible and timestamped');
+assert(dataBanner.includes('useState({})') && !dataBanner.includes('readDataStatusEvents'), 'Old outage banners must not appear before a request fails in the current session');
 const forecast = read('src/pages/shared/AqiForecastPage.jsx');
 assert(forecast.includes('loadLocationAirQuality'), 'Both portals must share the direct-provider AQI forecast fallback');
 const trafficCss = read('src/pages/citizen/traffic-lab-premium.css');
 assert(trafficCss.includes('--ul-panel:#101b13') && trafficCss.includes('--ul-green:#baf36b'), 'Traffic Lab must use the shared green palette');
 console.log('✓ PNG favicon, multi-route map, Google Maps, carbon cards and outage recovery verified');
 const apiSnapshots = read('src/services/apiSnapshot.js');
-assert(apiSnapshots.includes('readDataStatusEvents') && apiSnapshots.includes('STATUS_MAX_AGE_MS'), 'Offline status must survive layout remounts and stay time-bounded');
+assert(!apiSnapshots.includes('STATUS_KEY') && apiSnapshots.includes('MAX_AGE_MS'), 'Only data snapshots persist; connection notices are session-scoped');
 assert(apiSnapshots.includes('MAX_AGE_MS'), 'Local fallback records must expire instead of being treated as current forever');
 const airQualityService = read('src/services/airQuality.js');
 assert(airQualityService.includes('readApiSnapshot(apiPath)') && airQualityService.includes('savedApiSnapshot?.savedAt'), 'AQI fallback must preserve the original data timestamp');
 assert(traffic.includes('compactReport(analyzedReport)') && traffic.includes('Last successful analysis') && traffic.includes('reportRestored'), 'Traffic Lab must persist compact historical evidence and clearly label restored reports');
 assert(!traffic.includes("setReport(null); setWorkflow(null);"), 'Failed re-analysis must not erase the previous successful traffic report');
 assert(layout.indexOf("to: '/authority/air-intelligence'") < layout.indexOf("to: '/authority/aqi-forecast'") && layout.indexOf("to: '/authority/aqi-forecast'") < layout.indexOf("to: '/authority/traffic-lab'") && layout.indexOf("to: '/authority/traffic-lab'") < layout.indexOf("to: '/authority/traffic-simulation'") && layout.indexOf("to: '/authority/traffic-simulation'") < layout.indexOf("to: '/authority/iot'"), 'Authority navigation must order AQI, forecast, Traffic Lab, simulation and IoT');
-console.log('✓ Persistent outage status, honest historical reports, AQI provenance and workflow navigation verified');
+console.log('✓ Live-first loading, error-only fallback, route sorting, AQI provenance and workflow navigation verified');
+
+
+// Runtime check: the live server response must win even when a local snapshot exists.
+// The saved response is reachable only after a server/transport availability error.
+const apiClientSource = read('src/services/api/client.js')
+  .replace(/^import .*;\s*/gm, '')
+  .replaceAll('import.meta.env.DEV', 'false')
+  .replaceAll('import.meta.env.VITE_API_URL', 'undefined')
+  .replaceAll('import.meta.env.VITE_API_BASE_URL', 'undefined')
+  .replace(/^export /gm, '');
+let snapshotReads = 0;
+const runtimeFactory = new Function('readApiSnapshot', 'storeApiSnapshot', 'publishDataStatus', `${apiClientSource}\nreturn { request, ApiError };`);
+const runtimeClient = runtimeFactory(
+  () => { snapshotReads += 1; return { payload: { source: 'saved-snapshot' }, savedAt: Date.now() }; },
+  () => {},
+  () => {},
+);
+const originalFetch = globalThis.fetch;
+try {
+  globalThis.fetch = async () => new Response(JSON.stringify({ source: 'live-backend' }), { status: 200, headers: { 'content-type': 'application/json' } });
+  const liveResult = await runtimeClient.request('/healthz');
+  assert(liveResult.source === 'live-backend' && snapshotReads === 0, 'Live backend data must be used before any saved fallback is read');
+
+  globalThis.fetch = async () => new Response(JSON.stringify({ detail: 'backend unavailable' }), { status: 500, headers: { 'content-type': 'application/json' } });
+  const savedResult = await runtimeClient.request('/routing/plan', { method: 'POST', body: '{}', cacheResponse: true });
+  assert(savedResult.source === 'saved-snapshot' && snapshotReads === 1, 'A saved response must be used after a server error');
+
+  globalThis.fetch = async () => new Response(JSON.stringify({ detail: 'invalid request' }), { status: 422, headers: { 'content-type': 'application/json' } });
+  let validationRejected = false;
+  try { await runtimeClient.request('/routing/plan', { method: 'POST', body: '{}', cacheResponse: true }); }
+  catch (error) { validationRejected = error.status === 422; }
+  assert(validationRejected && snapshotReads === 1, 'Validation errors must not be hidden by saved fallback data');
+} finally {
+  globalThis.fetch = originalFetch;
+}
+console.log('✓ Runtime test confirms live-first API responses and error-only cached fallback');
 
 console.log('--- ALL URBANSAARTHI SMOKE TESTS PASSED ---');

@@ -68,6 +68,7 @@ export async function loadLocationAirQuality(latitude, longitude) {
     const apiPath = `/aqi/location-forecast?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}`;
     const data = await api.get(apiPath);
     if (data?.current && (data.current.us_aqi != null || data.current.openweather_index != null || data.current.pm25 != null || data.current.pm2_5 != null)) {
+      publishDataStatus({ type: 'fresh', path: 'air-quality-direct' });
       const savedApiSnapshot = readApiSnapshot(apiPath);
       saveLocalRecord(storageKey, data, savedApiSnapshot?.savedAt || Date.now());
       return data;

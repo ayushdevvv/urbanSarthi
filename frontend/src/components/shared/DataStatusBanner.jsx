@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Clock3, WifiOff, X } from 'lucide-react';
-import { readDataStatusEvents } from '../../services/apiSnapshot.js';
 
 export default function DataStatusBanner() {
-  const [events, setEvents] = useState(() => readDataStatusEvents());
+  // Do not hydrate outage notices from the previous browser session. A notice is
+  // shown only after a request in this session actually fails.
+  const [events, setEvents] = useState({});
   const [dismissed, setDismissed] = useState(false);
   useEffect(() => {
     const onStatus = (event) => {

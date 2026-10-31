@@ -75,6 +75,10 @@ export default function TrafficInfoPage({ adminMode = false }) {
     if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
       setError('Enter a valid location or choose one from the suggestions.'); return;
     }
+    // Do not leave a previous scenario on screen while a fresh server request
+    // is pending. The API client restores it only after a confirmed request error.
+    setScenarioData(null); setProvider(null); setLastUpdated(null);
+    setFrameIndex(0); setPlaying(false);
     setLoading(true); setError('');
     const params = new URLSearchParams({ minutes: '60', step_minutes: '5', scenario: overrideScenario });
     const scenarioPath = `/traffic/simulation/scenario?${params.toString()}`;
@@ -90,7 +94,8 @@ export default function TrafficInfoPage({ adminMode = false }) {
       if (current?.flow == null) setError('No location-specific live speed feed is configured for this point. The network scenario is shown separately.');
     } catch (err) {
       setProvider(null);
-      const saved = readLocalRecord(`traffic-simulation:${overrideScenario}`);
+      const isServiceFailure = !err?.status || err.status >= 500 || err.status === 408 || err.status === 429;
+      const saved = isServiceFailure ? readLocalRecord(`traffic-simulation:${overrideScenario}`) : null;
       if (saved?.value?.timeline?.length) {
         setScenarioData(saved.value); setFrameIndex(0); setPlaying(false);
         setLastUpdated(new Date(saved.savedAt).toISOString());

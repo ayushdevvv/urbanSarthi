@@ -31,6 +31,53 @@ function buildGoogleMapsUrl(route, origin, destination, mode) {
   if (waypoints.length) params.set('waypoints', waypoints.slice(0, 3).join('|'));
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
+
+function finiteMetric(route, key) {
+  if (route?.[key] == null || route?.[key] === '') return Number.POSITIVE_INFINITY;
+  const value = Number(route[key]);
+  return Number.isFinite(value) && value >= 0 ? value : Number.POSITIVE_INFINITY;
+}
+function sortRouteOptions(routes = [], preference = 'balanced') {
+  const source = routes.map((route, index) => ({ route, index }));
+  const co2Values = source.map(({ route }) => finiteMetric(route, 'estimated_co2_grams')).filter(Number.isFinite);
+  const timeValues = source.map(({ route }) => finiteMetric(route, 'duration_seconds')).filter(Number.isFinite);
+  const pollutionValues = source.map(({ route }) => finiteMetric(route, 'pollution_score')).filter(Number.isFinite);
+  const rangeScore = (value, values) => {
+    if (!Number.isFinite(value) || !values.length) return 0.5;
+    const low = Math.min(...values), high = Math.max(...values);
+    return high - low < 1e-9 ? 0.5 : (value - low) / (high - low);
+  };
+  source.sort((a, b) => {
+    const ar = a.route, br = b.route;
+    if (preference === 'fastest') {
+      return finiteMetric(ar, 'duration_seconds') - finiteMetric(br, 'duration_seconds')
+        || finiteMetric(ar, 'distance_meters') - finiteMetric(br, 'distance_meters') || a.index - b.index;
+    }
+    if (preference === 'cleanest') {
+      const ap = finiteMetric(ar, 'pollution_score'), bp = finiteMetric(br, 'pollution_score');
+      const pollutionOrder = pollutionValues.length ? ap - bp : 0;
+      return pollutionOrder || finiteMetric(ar, 'estimated_co2_grams') - finiteMetric(br, 'estimated_co2_grams')
+        || finiteMetric(ar, 'duration_seconds') - finiteMetric(br, 'duration_seconds') || a.index - b.index;
+    }
+    const score = (route) => {
+      const time = rangeScore(finiteMetric(route, 'duration_seconds'), timeValues);
+      const co2 = rangeScore(finiteMetric(route, 'estimated_co2_grams'), co2Values);
+      const pollution = rangeScore(finiteMetric(route, 'pollution_score'), pollutionValues);
+      return pollutionValues.length ? 0.40 * time + 0.35 * pollution + 0.25 * co2 : 0.70 * time + 0.30 * co2;
+    };
+    return score(ar) - score(br) || finiteMetric(ar, 'duration_seconds') - finiteMetric(br, 'duration_seconds') || a.index - b.index;
+  });
+  return source.map(({ route }, index) => ({
+    ...route,
+    label: route.data_quality !== 'road-network-route'
+      ? (route.label || 'Distance/time estimate')
+      : index === 0
+        ? (preference === 'fastest' ? 'Fastest route' : preference === 'cleanest' ? (route.pollution_score == null ? 'Lowest CO₂ route' : 'Lowest-impact route') : 'Recommended balance')
+        : `Alternative route ${index + 1}`,
+    preference_rank: `${preference}-#${index + 1}`,
+  }));
+}
+
 function initialPoint(label) { const [lat, lon] = getLocationCoordinates(label); const known = ['New Delhi Railway Station', 'India Gate', 'Delhi NCR', 'New Delhi', 'Rajiv Chowk', 'Akshardham', 'Connaught Place', 'ITO Crossing', 'Mumbai', 'Bengaluru', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Lucknow', 'Ahmedabad', 'Jaipur'].includes(label); return { label, latitude: lat, longitude: lon, resolved: known }; }
 export default function RoutePlannerPage({ embedded = false }) {
   const { notify } = useApp(); const location = useLocation(); const navigate = useNavigate();
@@ -91,6 +138,10 @@ export default function RoutePlannerPage({ embedded = false }) {
   async function plan() {
     if (!origin.resolved) { await resolveLocation('origin'); return; }
     if (!destination.resolved) { await resolveLocation('destination'); return; }
+    // Hide the previous result while the selected request is checked live.
+    // If the request actually fails, api.post may restore the exact matching
+    // last-good snapshot; otherwise no stale route remains on screen.
+    setResult(null); setSelectedRouteId(null);
     setBusy(true); setError('');
     try {
       const payload = await api.post('/routing/plan', {
@@ -98,7 +149,8 @@ export default function RoutePlannerPage({ embedded = false }) {
         destination_latitude: Number(destination.latitude), destination_longitude: Number(destination.longitude),
         origin_label: origin.label, destination_label: destination.label, preference, modes: [mode],
       }, { cacheResponse: true });
-      setResult(payload); setSelectedRouteId(payload?.routes?.[0]?.id ?? null);
+      const orderedPayload = { ...payload, routes: sortRouteOptions(payload?.routes || [], preference) };
+      setResult(orderedPayload); setSelectedRouteId(orderedPayload.routes?.[0]?.id ?? null);
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   }
@@ -114,16 +166,17 @@ export default function RoutePlannerPage({ embedded = false }) {
   }, [origin.latitude, origin.longitude, origin.resolved, destination.latitude, destination.longitude, destination.resolved, mode, preference]);
   useEffect(() => { loadNearbyPlaces(); }, [loadNearbyPlaces]);
   function selectRoute(route) { setSelectedRouteId(route.id ?? `${route.mode}-${route.label}`); notify(`Selected ${route.label || route.mode} route. The map and Google Maps handoff now use this option.`); }
-  const selectedRoute = result?.routes?.find((route) => routeIdentity(route) === selectedRouteId) || result?.routes?.[0] || null;
-  const routeOptions = (result?.routes || []).map((route, index) => ({
+  const displayRoutes = useMemo(() => sortRouteOptions(result?.routes || [], preference), [result, preference]);
+  const selectedRoute = displayRoutes.find((route) => routeIdentity(route) === selectedRouteId) || displayRoutes[0] || null;
+  const routeOptions = displayRoutes.map((route, index) => ({
     id: routeIdentity(route),
     label: route.label || `Route ${String.fromCharCode(65 + index)}`,
     color: routePalette[index % routePalette.length],
     selected: routeIdentity(route) === routeIdentity(selectedRoute),
     coordinates: route.geometry?.coordinates?.map?.(([lon, lat]) => ({ lat, lng: lon })) || [],
   }));
-  const mappedRoutes = (result?.routes || []).filter((route) => (route.geometry?.coordinates || []).length > 1 && route.data_quality === 'road-network-route');
-  const emissionValues = (result?.routes || []).map((route) => Number(route.estimated_co2_grams)).filter((value) => Number.isFinite(value));
+  const mappedRoutes = displayRoutes.filter((route) => (route.geometry?.coordinates || []).length > 1 && route.data_quality === 'road-network-route');
+  const emissionValues = displayRoutes.map((route) => Number(route.estimated_co2_grams)).filter((value) => Number.isFinite(value));
   const lowestEmission = emissionValues.length ? Math.min(...emissionValues) : null;
   const highestEmission = emissionValues.length ? Math.max(...emissionValues) : null;
   const selectedEmission = selectedRoute?.estimated_co2_grams == null ? null : Number(selectedRoute.estimated_co2_grams);
@@ -141,24 +194,24 @@ export default function RoutePlannerPage({ embedded = false }) {
       <div className="field-label">ROUTE PREFERENCE</div><div className="route-pref-options">{[['fastest','Fastest',Clock],['balanced','Balanced',Route],['cleanest','Cleanest',Leaf]].map(([value,label,Icon])=><button key={value} className={preference===value?'selected':''} onClick={()=>setPreference(value)}><Icon size={14}/>{label}</button>)}</div>
       <label className="mode-select">Travel mode<select value={mode} onChange={(e)=>setMode(e.target.value)}><option value="driving">Driving</option><option value="walking">Walking</option><option value="cycling">Cycling</option><option value="transit">Public transport</option></select></label>
       <button className="primary full plan-submit" onClick={plan} disabled={busy || resolving !== ''}><Navigation size={16}/>{busy ? 'Updating route…' : 'Show route options'}</button><small className="route-auto-note">Route and nearby recommendations refresh when a location is resolved or travel mode changes.</small>
-    </section><section className="panel planner-map-panel"><div className="panel-head"><div><div className="eyebrow">ROUTE MAP</div><h3>{origin.label} → {destination.label}</h3></div><span className={`status-pill ${mappedRoutes.length >= 3 ? 'status-success' : ''}`}>{mappedRoutes.length >= 3 ? '3 road routes mapped' : result ? `${mappedRoutes.length} mapped route${mappedRoutes.length === 1 ? '' : 's'}` : 'Awaiting route'}</span></div><CityMap markers={markers} route={selectedRoute?.geometry?.coordinates?.map?.(([lon,lat]) => ({lat,lng:lon})) || []} routeOptions={routeOptions} zoom={12}/><div className="route-map-legend">{routeOptions.filter((item) => item.coordinates.length > 1).slice(0, 3).map((item) => <span key={item.id} className={item.selected ? 'active' : ''}><i style={{ background: item.color }} />{item.label}{item.selected && <small>Selected</small>}</span>)}</div><div className="map-foot"><span><MapPin size={13}/> Each line follows mapped roads</span><small>Map data © OpenStreetMap</small></div>{googleMapsUrl && <div className="route-map-actions"><span>{selectedRoute ? `Selected: ${selectedRoute.label || selectedRoute.mode}` : 'Choose a mapped route'}</span><a className="primary" href={googleMapsUrl} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Open selected route in Google Maps</a></div>}</section></div>
+    </section><section className="panel planner-map-panel"><div className="panel-head"><div><div className="eyebrow">ROUTE MAP</div><h3>{origin.label} → {destination.label}</h3></div><span className={`status-pill ${mappedRoutes.length >= 3 ? 'status-success' : ''}`}>{busy ? 'Checking live routes…' : mappedRoutes.length >= 3 ? '3 road routes mapped' : result ? `${mappedRoutes.length} mapped route${mappedRoutes.length === 1 ? '' : 's'}` : 'Awaiting route'}</span></div><CityMap markers={markers} route={selectedRoute?.geometry?.coordinates?.map?.(([lon,lat]) => ({lat,lng:lon})) || []} routeOptions={routeOptions} zoom={12}/><div className="route-map-legend">{routeOptions.filter((item) => item.coordinates.length > 1).slice(0, 3).map((item) => <span key={item.id} className={item.selected ? 'active' : ''}><i style={{ background: item.color }} />{item.label}{item.selected && <small>Selected</small>}</span>)}</div><div className="map-foot"><span><MapPin size={13}/> Each line follows mapped roads</span><small>Map data © OpenStreetMap</small></div>{googleMapsUrl && <div className="route-map-actions"><span>{selectedRoute ? `Selected: ${selectedRoute.label || selectedRoute.mode}` : 'Choose a mapped route'}</span><a className="primary" href={googleMapsUrl} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Open selected route in Google Maps</a></div>}</section></div>
     <section className="route-results"><div className="section-heading"><div><div className="eyebrow">ROUTE OPTIONS</div><h3>{result ? `${mappedRoutes.length} mapped road routes` : 'Compare available journeys'}</h3></div>{result?.public_trip_id && <span className="status-pill">Trip ref {result.public_trip_id}</span>}</div>
       {result?.warnings?.length > 0 && <div className="warning-stack">{result.warnings.map((warning, i) => <div key={i}><ShieldAlert size={14}/>{warning}</div>)}</div>}
-      {result?.routes?.length > 0 && <div className="route-carbon-insight">
+      {displayRoutes.length > 0 && <div className="route-carbon-insight">
         <div className="route-carbon-insight-copy"><span>CARBON TRADE-OFF</span><h4>{carbonSpread == null ? 'Compare the estimated footprint' : `${formatCO2(carbonSpread)} spread across these options`}</h4><p>{selectedEmissionDownside == null ? 'Choose a route to compare its estimated tailpipe impact with the lowest-footprint option.' : selectedEmissionDownside <= 0.5 ? 'Your selected route has the lowest estimated tailpipe footprint in this comparison.' : `Your selected route carries approximately ${formatCO2(selectedEmissionDownside)} more tailpipe CO₂ than the lowest-footprint option.`}</p></div>
         <div className="route-carbon-insight-metric"><strong>{selectedEmissionDownside == null ? '—' : selectedEmissionDownside <= 0.5 ? 'Lowest' : `+${formatCO2(selectedEmissionDownside)}`}</strong><small>Selected route downside</small></div>
       </div>}
-      {result?.routes?.length ? <div className="route-carbon-grid">{result.routes.map((route, index) => {
+      {busy ? <div className="panel route-options-loading"><div className="loading-lines">Checking live road-routing providers and sorting alternatives…</div></div> : displayRoutes.length ? <div className="route-carbon-grid">{displayRoutes.map((route, index) => {
         const key = routeIdentity(route);
         const active = key === routeIdentity(selectedRoute);
         const mapped = (route.geometry?.coordinates || []).length > 1 && route.data_quality === 'road-network-route';
         const mapsUrl = buildGoogleMapsUrl(route, origin, destination, mode);
         const color = routePalette[index % routePalette.length];
         const grams = route.estimated_co2_grams == null || !Number.isFinite(Number(route.estimated_co2_grams)) ? null : Number(route.estimated_co2_grams);
-        const emissions = (result.routes || []).filter((item) => item.estimated_co2_grams != null).map((item) => Number(item.estimated_co2_grams)).filter((value) => Number.isFinite(value));
+        const emissions = displayRoutes.filter((item) => item.estimated_co2_grams != null).map((item) => Number(item.estimated_co2_grams)).filter((value) => Number.isFinite(value));
         const lowest = emissions.length ? Math.min(...emissions) : null;
         const highest = emissions.length ? Math.max(...emissions) : null;
-        const fastest = Math.min(...(result.routes || []).map((item) => Number(item.duration_seconds) || Infinity));
+        const fastest = Math.min(...displayRoutes.map((item) => Number(item.duration_seconds) || Infinity));
         const isLowest = grams != null && lowest != null && grams <= lowest + 0.05;
         const isFastest = Number(route.duration_seconds) === fastest;
         const delta = grams != null && lowest != null && lowest > 0 ? Math.round(((grams - lowest) / lowest) * 100) : 0;
@@ -181,7 +234,7 @@ export default function RoutePlannerPage({ embedded = false }) {
           <div className="route-carbon-actions"><button className={active ? 'secondary' : 'primary'} onClick={() => selectRoute(route)}>{active ? 'On map' : 'View route'} <ArrowRight size={14}/></button>{mapped && <a className="route-google-link" href={mapsUrl} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Google Maps</a>}</div>
         </article>;
       })}</div> : <div className="panel"><EmptyState title={result ? 'No route options returned' : 'Your route options will appear here'} description={result ? 'The routing provider did not return a usable road path for these inputs. No straight-line route is drawn.' : 'Enter your journey preferences and request a route. Mapped alternatives appear here with Google Maps handoff.'}/></div>}
-      {result?.routes?.length > 0 && <p className="route-emissions-disclaimer">CO₂ values are estimates for route comparison, not live measurements. Driving estimates use UrbanSaarthi’s passenger petrol-car fuel-use assumption; actual emissions vary by vehicle, fuel, load, speed and traffic. Walking and cycling show zero direct tailpipe emissions.</p>}
+      {displayRoutes.length > 0 && <p className="route-emissions-disclaimer">CO₂ values are estimates for route comparison, not live measurements. Driving estimates use UrbanSaarthi’s passenger petrol-car fuel-use assumption; actual emissions vary by vehicle, fuel, load, speed and traffic. Walking and cycling show zero direct tailpipe emissions.</p>}
     </section>
     <section className="route-nearby-section"><div className="section-heading"><div><div className="eyebrow">AROUND YOUR DESTINATION</div><h3>Useful places along your trip</h3><p>Real mapped places near {destination.label || 'your destination'}.</p></div><select value={nearbyKind} onChange={(e) => setNearbyKind(e.target.value)} aria-label="Nearby place category"><option value="all">All useful places</option><option value="food">Food and cafés</option><option value="health">Health</option><option value="sights">Places to visit</option><option value="essentials">Essentials</option></select></div>
       {nearbyBusy ? <div className="panel nearby-empty">Finding nearby places…</div> : nearbyPlaces.length ? <div className="route-nearby-grid">{nearbyPlaces.slice(0, 8).map((place) => <article className="panel nearby-place-card" key={place.id}><span className="nearby-place-icon">{['restaurant','cafe','fast_food'].includes(place.category) ? <Utensils size={17}/> : ['hospital','clinic','pharmacy'].includes(place.category) ? <HeartPulse size={17}/> : ['fuel','toilets','bank','atm'].includes(place.category) ? <Fuel size={17}/> : <Landmark size={17}/>}</span><div><b>{place.name}</b><small>{String(place.category || 'place').replaceAll('_', ' ')} · {(place.distance_meters / 1000).toFixed(1)} km</small>{place.opening_hours && <small>{place.opening_hours}</small>}</div><a href={`https://www.openstreetmap.org/?mlat=${place.latitude}&mlon=${place.longitude}#map=17/${place.latitude}/${place.longitude}`} target="_blank" rel="noreferrer" aria-label={`Open ${place.name} in map`}><ExternalLink size={15}/></a></article>)}</div> : <div className="panel nearby-empty">No mapped places were returned for this area. Try another category or destination.</div>}
