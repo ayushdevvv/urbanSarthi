@@ -42,7 +42,11 @@ assert(app.includes('RouteScrollReset') && app.includes('window.scrollTo'), 'Nav
 const aqi = read('src/pages/authority/AirQualityOverviewPage.jsx');
 assert(aqi.includes('loadLocationAirQuality'), 'AQI overview must use the API plus direct provider fallback');
 for (const endpoint of ['/aqi/nearby', '/air-intelligence/hotspots']) assert(aqi.includes(endpoint), `AQI overview must use ${endpoint}`);
-for (const feature of ['AqiDial', 'AirTrend', 'PM2.5', 'Nearby sensor network', 'Priority locations']) assert(aqi.includes(feature), `AQI overview must include ${feature}`);
+for (const feature of ['AqiDial', 'AqiForecastTrend', '24-hour AQI forecast', 'Expected peak', '24h average', 'Nearby sensor network', 'Priority locations']) assert(aqi.includes(feature), `AQI overview must include ${feature}`);
+assert(app.includes('path="aqi-forecast" element={<AirQualityOverviewPage forecastFocus />}'), 'Authority must provide a dedicated AQI forecast view without adding another sidebar item');
+const airService = read('src/services/airQuality.js');
+assert(airService.includes('hasUsAqiForecast') && airService.includes('forecast_provider') && airService.includes('fetchOpenMeteoAirQuality') && airService.includes("forecast_hours: '24'"), 'AQI service must supplement a non-US-AQI forecast with a comparable 24-hour US AQI timeline when available');
+assert(aqi.includes('US AQI · 0–500') && aqi.includes('OpenWeather AQI · 1–5') && aqi.includes('matchingCurrentValue'), 'AQI forecast must keep provider index scales separate');
 console.log('✓ AQI-centred overview and visualisations verified');
 
 const carbon = read('src/pages/authority/CarbonImpactPage.jsx');
@@ -98,7 +102,8 @@ const apiClient = read('src/services/api/client.js');
 assert(apiClient.includes('cacheResponse') && apiClient.includes('readApiSnapshot'), 'API client must restore saved read responses during backend outages');
 assert(apiClient.includes('DEFAULT_REQUEST_TIMEOUT_MS = 70_000') && apiClient.includes('FALLBACK_GRACE_MS = 40_000') && apiClient.includes('ATTEMPT_TIMEOUT_MS = 9_000') && apiClient.includes('fallbackDeadline') && apiClient.includes('waitForFallbackGrace(requestStartedAt, fallbackGraceMs)') && apiClient.includes("type: 'pending'"), 'Live backend is retried throughout the 40-second window before any saved snapshot is restored');
 const dataBanner = read('src/components/shared/DataStatusBanner.jsx');
-assert(dataBanner.includes('Showing the last successful update'), 'Cached response state must be visible and timestamped');
+assert(dataBanner.includes('Showing the latest saved information'), 'Cached response state must be visible and timestamped');
+assert(dataBanner.includes('Live data is temporarily delayed') && dataBanner.includes("location.pathname === '/authority/aqi-forecast'"), 'Connection copy must be neutral and the AQI workspace must use its own source status');
 assert(dataBanner.includes("detail.type === 'pending'") && dataBanner.includes('latestRequestByPath') && dataBanner.includes('setStatuses') && !dataBanner.includes('readDataStatusEvents'), 'Outage banner must track each endpoint separately and ignore out-of-order responses');
 assert(!fs.existsSync(path.join(root, 'src/pages/shared/AqiForecastPage.jsx')), 'The duplicate standalone AQI forecast page must be removed');
 const airQualitySource = read('src/pages/citizen/AirQualityPage.jsx');
@@ -128,8 +133,15 @@ assert(!traffic.includes("setReport(null); setWorkflow(null);"), 'Failed re-anal
 assert(!layout.includes("to: '/authority/aqi-forecast'"), 'Authority forecast should stay integrated in the single AQI overview');
 const airQualityPage = read('src/pages/citizen/AirQualityPage.jsx');
 assert(airQualityPage.includes('air-aqi-outlook') && airQualityPage.includes('AirQualityTrend'), 'Citizen AQI page must combine current readings and the 24-hour outlook');
-assert(!citizenLayout.includes("to: '/citizen/aqi-forecast'"), 'Citizen navigation must not show a separate duplicate AQI forecast destination');
-assert(app.includes('path="aqi-forecast" element={<Navigate to="/citizen/air-quality"'), 'The old citizen AQI forecast URL must redirect into the combined AQI page');
+assert(citizenLayout.includes("to: '/citizen/aqi-forecast'") && citizenLayout.includes("label: 'AQI forecast'"), 'Citizen navigation must expose a dedicated AQI forecast destination');
+assert(app.includes('path="aqi-forecast" element={<AirQualityPage forecastFocus />}'), 'Citizen AQI forecast URL must open its focused forecast workspace');
+assert(airQualityPage.includes('autoLoadStarted') && airQualityPage.includes('void search()') && airQualityPage.includes('forecast-first'), 'Citizen forecast must load its default location on entry and prioritize the outlook on the forecast route');
+assert(airQualityPage.includes('forecastAverage') && airQualityPage.includes('forecastIntervalLabel') && airQualityPage.includes('forecastCategory(row)'), 'Citizen forecast must show correctly scaled summary metrics and provider-aware time intervals');
+const signalUi = read('src/pages/authority/SignalPlansPage.jsx');
+const signalApi = fs.readFileSync(path.join(root, '../backend/app/api/signals.py'), 'utf8');
+const signalService = fs.readFileSync(path.join(root, '../backend/app/services/signal_planning.py'), 'utf8');
+assert(signalUi.includes('Signal plans') && signalApi.includes('/signals/plans') && signalService.includes('generate_recommendation'), 'Signal plan UI, API routes and planning service must remain in the release');
+console.log('✓ Signal planning source files retained');
 console.log('✓ Live-first loading, error-only fallback, route sorting, AQI provenance and workflow navigation verified');
 
 

@@ -36,6 +36,9 @@ export default function DataStatusBanner() {
   }, [location.pathname]);
 
   const status = Object.values(statuses).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0))[0];
+  // The authority AQI workspace has its own provider fallback and per-source states.
+  // Avoid surfacing unrelated station/hotspot API retries as a page-wide outage.
+  if (location.pathname === '/authority/air-intelligence' || location.pathname === '/authority/aqi-forecast') return null;
   if (!status || dismissed) return null;
   const hasSnapshot = status.type === 'snapshot';
   const hasProvider = status.type === 'provider';
@@ -46,12 +49,12 @@ export default function DataStatusBanner() {
   return <div className={`data-status-banner ${hasSnapshot ? 'is-snapshot' : hasProvider ? 'is-provider' : 'is-offline'}`} role="status" aria-live="polite">
     {hasSnapshot || hasProvider ? <Clock3 size={17} /> : <WifiOff size={17} />}
     <span>
-      <b>{hasSnapshot ? 'Showing the last successful update' : hasProvider ? 'Using the direct air-quality source' : 'Unable to refresh this page'}</b>
+      <b>{hasSnapshot ? 'Showing the latest saved information' : hasProvider ? 'Air-quality outlook available' : 'Live data is temporarily delayed'}</b>
       <small>{hasSnapshot
         ? `Saved ${timestamp || 'earlier'}. Live updates will resume when the service reconnects.`
         : hasProvider
-          ? 'The platform API was unavailable, so the forecast was retrieved directly from its configured provider.'
-          : 'The latest request could not be completed. Existing page content has been kept where available.'}</small>
+          ? 'The outlook is sourced directly from the configured air-quality provider. Model values are not ground-station measurements.'
+          : 'The latest feed could not be refreshed. Previously loaded information remains visible where available.'}</small>
     </span>
     <button type="button" onClick={() => setDismissed(true)} aria-label="Dismiss connection message"><X size={16} /></button>
   </div>;

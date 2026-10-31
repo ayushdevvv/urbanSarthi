@@ -77,7 +77,7 @@ function makeLocalPreview(report, scenario, cycleSeconds, segmentDistanceKm) {
     agent: {
       agent_mode: 'local_illustrative_preview',
       response: `Prepared an illustrative ${cycle}s four-phase signal draft from ${vehicles} vehicles in the selected evidence. The forecast is a local preview to keep the workspace usable while the service is unavailable. It is not a live run or a validated intervention.`,
-      llm_note: 'The backend did not return a workflow result. This preview was calculated locally and has not been saved to the authority system.',
+      llm_note: 'No verified workflow result was returned. This preview remains local and has not been saved to the authority system.',
       human_review_required: true, physical_dispatch_enabled: false,
     },
     tools: ['inspect_video_evidence', 'calculate_video_emissions', 'draft_signal_timing', 'run_60_minute_traffic_forecast'],

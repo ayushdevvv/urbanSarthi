@@ -277,7 +277,7 @@ export default function RoutePlannerPage({ embedded = false }) {
         warnings: [...(payload?.warnings || []), ...(estimateOnly
           ? ['No mapped road path is available right now. The shown distance, time and CO₂ are estimates only.']
           : orderedRoutes.length < 3 ? [`${orderedRoutes.length} distinct mapped route(s) were available for this journey.`] : []),
-        ...(!payload && !estimateOnly ? ['Road geometry was returned directly by OpenStreetMap routing; live AQI and traffic enrichment are unavailable while the backend is offline.'] : [])],
+        ...(!payload && !estimateOnly ? ['Road geometry was returned directly by OpenStreetMap routing; live AQI and traffic enrichment could not be retrieved for this route.'] : [])],
         route_source: estimateOnly ? (payload ? 'UrbanSaarthi estimate' : 'Local distance/time estimate') : backendRoadRoutes.length ? 'UrbanSaarthi + OpenStreetMap routing' : 'OpenStreetMap routing',
       };
       setResult(orderedPayload);

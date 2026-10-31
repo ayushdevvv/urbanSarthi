@@ -27,6 +27,7 @@ const meta = {
   '/authority/traffic-lab': ['Traffic', 'Camera system'],
   '/authority/traffic-agent': ['Traffic', 'Traffic agent'],
   '/authority/air-intelligence': ['Air quality', 'AQI overview'],
+  '/authority/aqi-forecast': ['Air quality', 'AQI forecasting'],
   '/authority/traffic-simulation': ['Traffic', '60-minute traffic simulation'],
   '/authority/iot': ['Field network', 'IoT sensor network'],
   '/authority/analytics': ['Insights', 'City analytics'],
@@ -46,7 +47,7 @@ export default function AuthorityLayout() {
       <BrandMark />
       <nav className="nav-area" aria-label="Authority navigation">{navGroups.map((group) => <section key={group.label}>
         <div className="nav-label">{group.label}</div>
-        {group.items.map(({ label, to, icon: Icon }) => <NavLink end key={to} to={to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setMobileOpen(false)}>
+        {group.items.map(({ label, to, icon: Icon }) => <NavLink end key={to} to={to} className={({ isActive }) => `nav-item ${isActive || (to === '/authority/air-intelligence' && location.pathname === '/authority/aqi-forecast') ? 'active' : ''}`} onClick={() => setMobileOpen(false)}>
           <Icon size={17} strokeWidth={1.8} /><span>{label}</span>
         </NavLink>)}
       </section>)}</nav>

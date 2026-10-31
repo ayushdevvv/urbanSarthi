@@ -44,7 +44,7 @@ export default function App() {
         <Route path="control" element={<CommandCenterPage />} />
         <Route path="agent" element={<Navigate to="/authority/traffic-agent" replace />} />
         <Route path="air-intelligence" element={<AirQualityOverviewPage />} />
-        <Route path="aqi-forecast" element={<Navigate to="/authority/air-intelligence" replace />} />
+        <Route path="aqi-forecast" element={<AirQualityOverviewPage forecastFocus />} />
         <Route path="traffic-simulation" element={<TrafficInfoPage adminMode />} />
         <Route path="carbon" element={<CarbonImpactPage />} />
         <Route path="traffic" element={<Navigate to="/authority/traffic-lab" replace />} />
@@ -66,7 +66,7 @@ export default function App() {
         <Route path="plan" element={<Navigate to="/citizen" replace />} />
         <Route path="agent" element={<Navigate to="/citizen" replace />} />
         <Route path="air-quality" element={<AirQualityPage />} />
-        <Route path="aqi-forecast" element={<Navigate to="/citizen/air-quality" replace />} />
+        <Route path="aqi-forecast" element={<AirQualityPage forecastFocus />} />
         <Route path="aqi-vision" element={<Navigate to="/citizen/air-quality" replace />} />
         <Route path="transit" element={<TransitPage />} />
         <Route path="traffic" element={<TrafficInfoPage />} />

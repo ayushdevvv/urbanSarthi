@@ -51,12 +51,12 @@ export default function CommandCenterPage() {
     <PageIntro eyebrow="INTEGRATED COMMAND & CONTROL CENTRE" title="Authority operations" description="Your integrated command centre for traffic, air quality, junctions and citywide mobility." action={<button className="live-pill" onClick={reload}><i/>{loading ? 'Refreshing…' : 'Refresh overview'} <RefreshCw size={13}/></button>} />
     {!overview ? <section className="panel us-connection-card" aria-live="polite">
       <div className="us-connection-icon"><Activity size={22}/></div>
-      <h3>{loading ? 'Connecting to city services' : 'City operations data is unavailable'}</h3>
-      <p>{loading ? 'Requesting the latest junction, traffic and air-quality records from the backend.' : `${error || 'The latest request did not return usable data.'} Retry the live request; an illustrative preview is only unlocked after the service recovery window.`}</p>
+      <h3>{loading ? 'Connecting to city services' : 'City overview is temporarily unavailable'}</h3>
+      <p>{loading ? 'Loading the latest junction, traffic and air-quality information.' : 'Live city information could not be refreshed just now. Retry to check for the latest records. Any reference values are clearly labelled.'}</p>
       <button className="primary" onClick={reload} disabled={loading}><RefreshCw size={15}/>{loading ? 'Checking live services…' : 'Retry live data'}</button>
     </section> : <>
-      {previewMode && <div className="notice scenario-notice"><Activity size={14}/>Illustrative operations preview · live service did not respond within 40 seconds</div>}
-      {!previewMode && <div className="notice scenario-notice"><Activity size={14}/>Live city operations overview</div>}
+      {previewMode && <div className="notice scenario-notice"><Activity size={14}/>Illustrative operations preview · reference values only</div>}
+      {!previewMode && <div className="notice scenario-notice"><Activity size={14}/>Live city operations</div>}
       <div className="kpi-grid">
         <Kpi icon={Activity} label="Congestion index" value={display(overview?.traffic?.mean_congestion_score)} caption={previewMode ? 'Illustrative reference value' : 'Mean score from recent observations'} />
         <Kpi icon={Navigation} label="Online junctions" value={display(overview?.network?.junctions_online, ` / ${overview?.network?.junctions_total ?? '—'}`)} caption={previewMode ? 'Illustrative network profile' : 'Reported junction status'} />

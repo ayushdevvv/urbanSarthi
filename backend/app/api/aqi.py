@@ -84,7 +84,14 @@ def location_aqi_forecast(latitude: float = Query(ge=-90, le=90), longitude: flo
                     headers={"User-Agent": "UrbanSaarthi/1.0 (location air quality)"}, timeout=8.0,
                 )
                 forecast_response.raise_for_status()
-                for item in (forecast_response.json().get("list") or [])[:24]:
+                current_epoch = float(current_item.get("dt") or 0)
+                # OpenWeather returns samples at three-hour intervals. Keep only
+                # the next 24 hours instead of treating 24 records as 24 hours.
+                next_day_items = [
+                    item for item in (forecast_response.json().get("list") or [])
+                    if item.get("dt") is not None and current_epoch <= float(item["dt"]) <= current_epoch + 24 * 60 * 60
+                ]
+                for item in next_day_items:
                     main = item.get("main") or {}
                     components = item.get("components") or {}
                     index = main.get("aqi")

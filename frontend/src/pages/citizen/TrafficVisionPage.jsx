@@ -87,7 +87,7 @@ export default function TrafficVisionPage() {
     api.get('/traffic-detection/video-status', { timeoutMs: 40000 }).then((result) => {
       if (alive) setSystemStatus(result);
     }).catch((reason) => {
-      if (alive) setSystemStatus({ ready: false, opencv_available: false, video_analysis_ready: false, note: reason?.message || 'Backend is unreachable.' });
+      if (alive) setSystemStatus({ ready: false, opencv_available: false, video_analysis_ready: false, note: 'Live video-analysis capability is temporarily unavailable. Try again after the service reconnects.' });
     });
     return () => { alive = false; };
   }, []);

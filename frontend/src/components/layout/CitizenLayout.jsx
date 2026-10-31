@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Activity, Bus, Camera, House, MapPin, Moon, Sun } from 'lucide-react';
+import { Activity, Bus, Camera, House, MapPin, Moon, Sun, TrendingUp } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 import FloatingAgentWidget from '../shared/FloatingAgentWidget.jsx';
@@ -8,6 +8,7 @@ import DataStatusBanner from '../shared/DataStatusBanner.jsx';
 const links = [
   { to: '/citizen', label: 'Home', icon: House, end: true },
   { to: '/citizen/air-quality', label: 'Air quality', icon: Activity },
+  { to: '/citizen/aqi-forecast', label: 'AQI forecast', icon: TrendingUp },
   { to: '/citizen/traffic', label: 'Traffic conditions', icon: Camera },
   { to: '/citizen/transit', label: 'Public transport', icon: Bus },
   { to: '/citizen/trips', label: 'My trips', icon: MapPin },

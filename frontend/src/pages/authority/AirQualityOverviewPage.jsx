@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, CloudSun, Droplets, MapPin, RefreshCw, RadioTower, Wind, Waves, Leaf, Camera, ChevronRight } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, CloudSun, MapPin, RefreshCw, RadioTower, Wind, Waves, Leaf, Camera, ChevronRight, Minus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api } from '../../services/api/client.js';
 import { loadLocationAirQuality } from '../../services/airQuality.js';
@@ -15,7 +15,9 @@ const AREAS = {
 const fmt = (value, digits = 1) => value == null || !Number.isFinite(Number(value)) ? '—' : Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
 const age = (value) => {
   if (!value) return 'Time unavailable';
-  const seconds = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 1000));
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return 'Time unavailable';
+  const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
   return seconds < 60 ? 'Just now' : seconds < 3600 ? `${Math.floor(seconds / 60)} min ago` : `${Math.floor(seconds / 3600)} hr ago`;
 };
 function indexValue(current = {}) {
@@ -41,61 +43,88 @@ function AqiDial({ value, max, tone }) {
     <div className="aqi-dial-copy"><small>LIVE AQI</small><strong>{value == null ? '—' : Math.round(value)}</strong><span>{value == null ? 'No reading' : 'Current index'}</span></div>
   </div>;
 }
-function AirTrend({ rows, max }) {
+function AqiForecastTrend({ rows, field, scaleLabel, scaleMax }) {
   const points = useMemo(() => {
-    const valid = (rows || []).filter((row) => Number.isFinite(Number(row.pm25 ?? row.pm2_5)));
+    const valid = (rows || []).filter((row) => row?.[field] != null && Number.isFinite(Number(row[field])));
     if (valid.length < 2) return [];
-    const vals = valid.map((row) => Number(row.pm25 ?? row.pm2_5));
-    const upper = Math.max(10, ...vals) * 1.12;
-    return valid.map((row, index) => ({ x: 8 + index / (valid.length - 1) * 484, y: 126 - (Number(row.pm25 ?? row.pm2_5) / upper) * 98, value: Number(row.pm25 ?? row.pm2_5), time: row.time }));
-  }, [rows]);
-  if (points.length < 2) return <div className="monitor-empty-chart"><Activity size={20}/><span>Hourly particulate trend appears when forecast data is available.</span></div>;
-  const line = points.map((p) => `${p.x},${p.y}`).join(' ');
-  return <div className="air-trend-chart">
-    <div className="chart-legend"><span><i/> PM2.5 · µg/m³</span><small>24-hour outlook</small></div>
-    <svg viewBox="0 0 500 150" preserveAspectRatio="none" aria-label="PM2.5 forecast trend">
+    const values = valid.map((row) => Number(row[field]));
+    const ceiling = scaleMax === 5 ? 5 : Math.max(100, Math.ceil(Math.max(...values) / 25) * 25);
+    return valid.map((row, index) => ({
+      x: 8 + index / (valid.length - 1) * 484,
+      y: 126 - (Number(row[field]) / ceiling) * 98,
+      value: Number(row[field]),
+      time: row.time,
+    }));
+  }, [rows, field, scaleMax]);
+
+  if (points.length < 2) return <div className="monitor-empty-chart"><Activity size={20}/><b>AQI forecast is preparing</b><span>Hourly forecast values will appear as soon as the selected provider returns a complete outlook. No values are being fabricated.</span></div>;
+  const line = points.map((point) => `${point.x},${point.y}`).join(' ');
+  const timeLabel = (value) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? String(value || '').slice(11, 16) : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+  return <div className="aqi-forecast-chart">
+    <div className="aqi-forecast-chart-meta"><span><i/> {scaleLabel}</span><small>Hourly model outlook · next 24 hours</small></div>
+    <svg viewBox="0 0 500 150" preserveAspectRatio="none" role="img" aria-label={`${scaleLabel} hourly forecast trend`}>
       {[28, 58, 88, 118].map((y) => <line key={y} x1="5" x2="495" y1={y} y2={y} className="monitor-gridline"/>)}
       <polygon points={`8,136 ${line} 492,136`} className="monitor-chart-fill"/>
       <polyline points={line} className="monitor-chart-line"/>
-      {points.filter((_, i) => i % Math.max(1, Math.floor(points.length / 5)) === 0).map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="3" className="monitor-chart-point"/>)}
+      {points.filter((_, index) => index % Math.max(1, Math.floor(points.length / 5)) === 0).map((point, index) => <circle key={index} cx={point.x} cy={point.y} r="3.2" className="monitor-chart-point"><title>{`${timeLabel(point.time)} · ${fmt(point.value, 0)}`}</title></circle>)}
     </svg>
-    <div className="chart-time-axis"><span>{new Date(points[0].time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span><span>Now</span><span>{new Date(points.at(-1).time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>
+    <div className="chart-time-axis"><span>{timeLabel(points[0].time)}</span><span>Forecast window</span><span>{timeLabel(points.at(-1).time)}</span></div>
   </div>;
 }
+
 function Pollutant({ name, value, unit, limit, note }) {
   const pct = value == null ? 0 : Math.min(100, Math.max(3, Number(value) / limit * 100));
   return <article className="pollutant-card"><div className="pollutant-top"><span>{name}</span><b>{fmt(value, 1)} <small>{unit}</small></b></div><div className="pollutant-track"><i style={{ width: `${pct}%` }}/></div><small>{note}</small></article>;
 }
 
-export default function AirQualityOverviewPage() {
+export default function AirQualityOverviewPage({ forecastFocus = false }) {
   const [areaKey, setAreaKey] = useState('Lucknow');
   const [report, setReport] = useState(null);
   const [nearby, setNearby] = useState(null);
   const [hotspots, setHotspots] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const requestSequence = useRef(0);
   const area = AREAS[areaKey];
   const refresh = useCallback(async () => {
+    const requestId = ++requestSequence.current;
     setLoading(true); setError('');
+    setNearby(null); setHotspots(null);
     const [airResult, stationResult, hotspotResult] = await Promise.allSettled([
       loadLocationAirQuality(area.lat, area.lon),
       api.get(`/aqi/nearby?latitude=${area.lat}&longitude=${area.lon}&radius_km=15`),
       api.get('/air-intelligence/hotspots?corridor_distance_km=0.5'),
     ]);
-    if (airResult.status === 'fulfilled') setReport(airResult.value); else setError(airResult.reason?.message || 'Air quality feed is unavailable.');
+    if (requestId !== requestSequence.current) return;
+    if (airResult.status === 'fulfilled') setReport({ ...airResult.value, _areaKey: areaKey });
+    else setError('The air-quality outlook could not be refreshed. Please try again in a moment.');
     if (stationResult.status === 'fulfilled') setNearby(stationResult.value);
     if (hotspotResult.status === 'fulfilled') setHotspots(hotspotResult.value);
     setLoading(false);
-  }, [area.lat, area.lon]);
+  }, [area.lat, area.lon, areaKey]);
   useEffect(() => { refresh(); }, [refresh]);
 
-  const current = report?.current || {};
+  const visibleReport = report?._areaKey === areaKey ? report : null;
+  const current = visibleReport?.current || {};
   const index = indexValue(current);
   const band = bandFor(index.value, index.max);
-  const forecast = report?.forecast || [];
+  const forecast = visibleReport?.forecast || [];
+  const forecastField = forecast.some((row) => row?.us_aqi != null) ? 'us_aqi' : forecast.some((row) => row?.openweather_index != null) ? 'openweather_index' : null;
+  const forecastRows = forecastField ? forecast.filter((row) => row?.[forecastField] != null && Number.isFinite(Number(row[forecastField]))) : [];
+  const forecastValues = forecastRows.map((row) => Number(row[forecastField]));
+  const peakForecast = forecastRows.length ? forecastRows.reduce((best, row) => Number(row[forecastField]) > Number(best[forecastField]) ? row : best) : null;
+  const averageForecast = forecastValues.length ? forecastValues.reduce((sum, value) => sum + value, 0) / forecastValues.length : null;
+  const forecastScaleMax = forecastField === 'openweather_index' ? 5 : 500;
+  const forecastScaleLabel = forecastField === 'openweather_index' ? 'OpenWeather AQI · 1–5' : forecastField === 'us_aqi' ? 'US AQI · 0–500' : 'AQI scale pending';
+  const matchingCurrentValue = forecastField === 'openweather_index' ? current.openweather_index : current.us_aqi;
+  const forecastDelta = matchingCurrentValue != null && forecastValues.length ? forecastValues.at(-1) - Number(matchingCurrentValue) : null;
+  const forecastDirection = forecastRows.length < 2 || forecastDelta == null ? 'unavailable' : Math.abs(forecastDelta) < (forecastScaleMax === 5 ? 0.25 : 5) ? 'steady' : forecastDelta > 0 ? 'rising' : 'easing';
   const stationRows = nearby?.stations || [];
   const hotspotRows = hotspots?.items || [];
-  const updated = report?.updated_at || report?.forecast?.[0]?.time;
+  const updated = visibleReport?.updated_at || forecast?.[0]?.time;
   const pollutants = [
     ['PM2.5', current.pm25 ?? current.pm2_5, 'µg/m³', 60, 'Fine particles'],
     ['PM10', current.pm10, 'µg/m³', 100, 'Coarse particles'],
@@ -107,9 +136,11 @@ export default function AirQualityOverviewPage() {
     return values.length ? values.reduce((sum, n) => sum + n, 0) / values.length : null;
   }, [stationRows]);
 
-  return <main className="monitor-page air-overview-page">
-    <PageIntro eyebrow="AIR QUALITY" title="Air quality overview" description="A city-wide view of ambient air, pollutant levels and the places that need attention." action={<><label className="area-select-wrap"><MapPin size={15}/><select value={areaKey} onChange={(event) => setAreaKey(event.target.value)}>{Object.entries(AREAS).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label><button className="monitor-button" onClick={refresh} disabled={loading}><RefreshCw size={14} className={loading ? 'monitor-spin' : ''}/>{loading ? 'Updating' : 'Refresh'}</button></>} />
-    {error && <div className="monitor-alert"><AlertTriangle size={15}/>{error}</div>}
+  const DirectionIcon = forecastDirection === 'rising' ? ArrowUpRight : forecastDirection === 'easing' ? ArrowDownRight : Minus;
+  const peakBand = peakForecast ? bandFor(Number(peakForecast[forecastField]), forecastScaleMax).label : 'No peak available';
+  return <main className={`monitor-page air-overview-page ${forecastFocus ? 'forecast-focus' : ''}`}>
+    <PageIntro eyebrow={forecastFocus ? 'AIR QUALITY / FORECAST' : 'AIR QUALITY'} title={forecastFocus ? 'AQI forecasting' : 'Air quality overview'} description={forecastFocus ? 'Review the next 24 hours of modelled air-quality conditions for the selected city.' : 'Live air conditions, hourly AQI forecasts, pollutant levels and locations that need attention.'} action={<><label className="area-select-wrap"><MapPin size={15}/><select value={areaKey} onChange={(event) => setAreaKey(event.target.value)}>{Object.entries(AREAS).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label><button className="monitor-button" onClick={refresh} disabled={loading}><RefreshCw size={14} className={loading ? 'monitor-spin' : ''}/>{loading ? 'Updating' : 'Refresh'}</button></>} />
+    {error && <div className="monitor-soft-notice" role="status"><AlertTriangle size={15}/><span>{error}{report?._areaKey === areaKey ? ' The last available outlook remains on screen.' : ''}</span></div>}
 
     <section className="aqi-command-hero">
       <div className="aqi-hero-orbit orbit-a"/><div className="aqi-hero-orbit orbit-b"/><div className="aqi-hero-orbit orbit-c"/>
@@ -117,11 +148,11 @@ export default function AirQualityOverviewPage() {
         <div className="aqi-hero-copy"><div className="monitor-overline"><span className="status-pulse"/> CITY AIR STATUS <i/> {area.label.toUpperCase()}</div>
           <h2>Understand the air.<br/><em>Act before it worsens.</em></h2>
           <p>Track the current air-quality outlook, identify rising pollutants and focus attention on affected corridors.</p>
-          <div className="aqi-hero-meta"><span><CloudSun size={14}/>{report?.provider || 'Waiting for air-quality feed'}</span><span><Activity size={14}/>{updated ? `Updated ${age(updated)}` : 'No recent update'}</span></div>
+          <div className="aqi-hero-meta"><span><CloudSun size={14}/>{visibleReport?.provider || 'Waiting for air-quality feed'}</span><span><Activity size={14}/>{updated ? `Updated ${age(updated)}` : 'No recent update'}</span></div>
         </div>
         <div className="aqi-hero-index"><AqiDial value={index.value} max={index.max} tone={band.tone}/><div className={`aqi-status-label status-${band.tone}`}>{band.label}</div><small>{index.scale} · {index.unit || '—'}</small></div>
       </div>
-      <div className="aqi-hero-bottom"><span><MapPin size={13}/>{area.label}</span><span>{report?.note || 'Provider model outlook. Ground-station observations are displayed separately below.'}</span></div>
+      <div className="aqi-hero-bottom"><span><MapPin size={13}/>{area.label}</span><span>{visibleReport?.note || 'Forecast values are modelled outlooks. Ground-station observations are displayed separately below.'}</span></div>
     </section>
 
     <section className="monitor-kpis">
@@ -132,8 +163,17 @@ export default function AirQualityOverviewPage() {
     </section>
 
     <section className="monitor-grid monitor-grid-primary">
-      <article className="monitor-panel pollutant-panel"><div className="monitor-panel-heading"><div><span className="monitor-kicker">POLLUTANT PROFILE</span><h3>What is in the air?</h3><p>Each pollutant is shown in its own concentration unit.</p></div><span className="monitor-live-badge"><i/> {report?.status === 'available' ? 'Feed available' : report?.status || 'Awaiting feed'}</span></div><div className="pollutant-grid">{pollutants.map(([name, value, unit, limit, note]) => <Pollutant key={name} name={name} value={value} unit={unit} limit={limit} note={note}/>)}</div><div className="pollutant-footnote">Concentration indicators are not interchangeable with the overall AQI index.</div></article>
-      <article className="monitor-panel trend-panel"><div className="monitor-panel-heading"><div><span className="monitor-kicker">NEXT 24 HOURS</span><h3>Fine particle outlook</h3><p>Hourly PM2.5 forecast for the selected area.</p></div><Activity size={18}/></div><AirTrend rows={forecast} max={60}/><div className="trend-footer"><span>Forecast points <b>{forecast.length}</b></span><span>Source <b>{report?.provider || 'Unavailable'}</b></span></div></article>
+      <article className="monitor-panel pollutant-panel"><div className="monitor-panel-heading"><div><span className="monitor-kicker">POLLUTANT PROFILE</span><h3>What is in the air?</h3><p>Each pollutant is shown in its own concentration unit.</p></div><span className="monitor-live-badge"><i/> {visibleReport?.status === 'available' || visibleReport?.status === 'provider_fallback' ? 'Outlook available' : visibleReport?.status === 'unavailable' ? 'Awaiting provider' : 'Awaiting feed'}</span></div><div className="pollutant-grid">{pollutants.map(([name, value, unit, limit, note]) => <Pollutant key={name} name={name} value={value} unit={unit} limit={limit} note={note}/>)}</div><div className="pollutant-footnote">Concentration indicators are not interchangeable with the overall AQI index.</div></article>
+      <article className="monitor-panel aqi-forecast-panel" id="aqi-forecast"><div className="monitor-panel-heading"><div><span className="monitor-kicker">PREDICTIVE AIR INTELLIGENCE</span><h3>24-hour AQI forecast</h3><p>Hourly modelled AQI outlook for {area.label}.</p></div><div className="forecast-panel-actions">{forecastFocus ? <Link to="/authority/air-intelligence" className="monitor-text-link">Back to overview <ChevronRight size={14}/></Link> : <Link to="/authority/aqi-forecast" className="monitor-text-link">Full forecast <ChevronRight size={14}/></Link>}<span className="forecast-window-pill">24H OUTLOOK</span></div></div>
+        <div className="aqi-forecast-summary">
+          <article><span>Expected peak</span><strong>{fmt(peakForecast ? peakForecast[forecastField] : null, 0)}</strong><small>{peakForecast?.time ? `${new Date(peakForecast.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${peakBand}` : peakBand}</small></article>
+          <article><span>24h average</span><strong>{fmt(averageForecast, 0)}</strong><small>{forecastScaleLabel}</small></article>
+          <article className={`forecast-direction ${forecastDirection}`}><span>Outlook trend</span><strong><DirectionIcon size={17}/>{forecastDirection === 'rising' ? 'Rising' : forecastDirection === 'easing' ? 'Easing' : forecastDirection === 'steady' ? 'Steady' : 'Awaiting'}</strong><small>{forecastDelta == null ? 'Matched current + forecast values needed' : `${forecastDelta > 0 ? '+' : ''}${fmt(forecastDelta, 0)} over forecast window`}</small></article>
+        </div>
+        <AqiForecastTrend rows={forecastRows} field={forecastField || 'us_aqi'} scaleLabel={forecastScaleLabel} scaleMax={forecastScaleMax}/>
+        <div className="trend-footer"><span>Valid forecast points <b>{forecastRows.length}</b></span><span>Source <b>{visibleReport?.forecast_provider || visibleReport?.provider || 'Awaiting data'}</b></span></div>
+        <div className="aqi-forecast-footnote">Forecast values are model estimates, not ground-station measurements. US AQI (0–500) and OpenWeather index (1–5) are kept on separate scales.</div>
+      </article>
     </section>
 
     <section className="monitor-grid monitor-grid-lower">

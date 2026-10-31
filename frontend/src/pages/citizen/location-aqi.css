@@ -49,3 +49,8 @@
 .air-aqi-forecast-note b{color:#486844}
 @media(max-width:900px){.air-aqi-outlook-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.air-aqi-outlook-grid{grid-template-columns:1fr}}
 @media(max-width:560px){.air-aqi-outlook-header{align-items:flex-start;flex-direction:column}.air-aqi-outlook-kpis{gap:8px}.air-aqi-outlook-kpis article{padding:13px}.air-aqi-trend-panel,.air-aqi-hourly-panel{padding:14px}.air-aqi-hourly-list>div{grid-template-columns:52px 32px 1fr 80px;gap:7px}}
+
+/* Citizen forecast route: make the outlook the primary workspace. */
+.air-quality-body{display:flex;flex-direction:column;gap:18px;min-width:0}.air-quality-body.forecast-first .air-aqi-outlook{order:1}.air-quality-body.forecast-first .air-quality-summary-grid{order:2}.air-quality-body.forecast-first .air-quality-lower-grid{order:3}.air-loading-state{min-height:220px;gap:10px}.air-loading-state>span{background:#edf5df;color:#4c7940}.air-loading-track{width:min(340px,75%);height:6px;border-radius:99px;background:#e8eee2;overflow:hidden;margin-top:7px}.air-loading-track i{display:block;width:42%;height:100%;border-radius:99px;background:#78a45b;animation:air-loading-sweep 1.25s ease-in-out infinite alternate}@keyframes air-loading-sweep{from{transform:translateX(-5%)}to{transform:translateX(145%)}}.air-aqi-hourly-band.very-poor{background:#963f62}
+
+.air-aqi-forecast-unavailable{padding:19px 20px;border:1px dashed #d7e3d0!important;background:#fbfdf9!important}.air-aqi-forecast-unavailable p{max-width:760px;color:#778477;font-size:12px;line-height:1.65;margin:0 0 14px}.air-aqi-forecast-unavailable .secondary{display:inline-flex;align-items:center;gap:7px;border:1px solid #dbe5d7;border-radius:9px;background:#fff;padding:9px 12px;color:#426c43;font-size:11px;font-weight:700}

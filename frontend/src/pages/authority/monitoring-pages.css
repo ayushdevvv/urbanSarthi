@@ -29,3 +29,47 @@
 .aqi-forecast-source{display:flex;gap:10px;align-items:flex-start;padding:14px 16px;border:1px solid var(--m-line);border-radius:12px;background:var(--m-soft);color:var(--m-muted);font-size:11px;line-height:1.6}.aqi-forecast-source svg{flex:none;color:#6f984d}.aqi-forecast-source b{color:var(--m-ink)}
 @media(max-width:1000px){.aqi-forecast-main-grid{grid-template-columns:1fr}.aqi-forecast-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.aqi-forecast-hero{grid-template-columns:1fr;padding:20px;gap:15px}.aqi-forecast-current{grid-template-columns:auto 1fr;justify-items:start;align-items:center;padding:14px 16px}.aqi-forecast-current small{grid-column:1/-1}.aqi-forecast-current strong{font-size:41px;grid-row:2/4}.aqi-forecast-current b,.aqi-forecast-current span{align-self:center}.aqi-forecast-kpis{gap:8px}.aqi-forecast-kpis article{padding:13px}.aqi-forecast-kpis strong{font-size:23px}.aqi-forecast-hour-list{padding:3px 10px 10px}.aqi-forecast-hour-list>div{grid-template-columns:54px 32px 1fr minmax(72px,.7fr);gap:5px}.aqi-forecast-hour-list em{display:none}.aqi-forecast-chart{padding:14px 12px;height:230px}.aqi-forecast-chart svg{height:180px}}
+
+/* Authority AQI forecast refinement */
+.aqi-forecast-panel{background:linear-gradient(180deg,#fff 0%,#fbfdf9 100%);border-color:#dce8d6;box-shadow:0 14px 34px #24462c0a}
+.aqi-forecast-panel .monitor-panel-heading{align-items:flex-start;padding:18px 19px 15px}
+.aqi-forecast-panel .monitor-panel-heading h3{font-size:18px;letter-spacing:-.55px}
+.aqi-forecast-panel .monitor-panel-heading p{font-size:11px}
+.forecast-panel-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.forecast-window-pill{display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;padding:7px 10px;border-radius:999px;background:#edf5e6;color:#557b42;font-size:9px;font-weight:850;letter-spacing:.7px}
+.aqi-forecast-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;padding:14px 18px 4px}
+.aqi-forecast-summary article{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-width:0;padding:12px 13px;border:1px solid #e6eee1;border-radius:11px;background:#f7faf4}
+.aqi-forecast-summary article>span{font-size:10px;font-weight:700;color:#738271}
+.aqi-forecast-summary article>strong{display:flex;align-items:center;gap:5px;font:800 23px/1.15 Manrope,sans-serif;letter-spacing:-.8px;color:#263c2e}
+.aqi-forecast-summary article>strong svg{width:17px;height:17px}
+.aqi-forecast-summary article>small{font-size:9px;color:#849184;line-height:1.4}
+.aqi-forecast-summary .forecast-direction.rising>strong{color:#ba7546}
+.aqi-forecast-summary .forecast-direction.easing>strong{color:#4e936b}
+.aqi-forecast-summary .forecast-direction.steady>strong{color:#72816f}
+.aqi-forecast-chart{padding:12px 19px 10px}
+.aqi-forecast-chart-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:10px;color:#627364}
+.aqi-forecast-chart-meta>span{display:flex;align-items:center;gap:7px;font-weight:800}
+.aqi-forecast-chart-meta>span i{width:8px;height:8px;border-radius:50%;background:#77a65b;box-shadow:0 0 0 4px #77a65b1b}
+.aqi-forecast-chart-meta>small{font-size:9px;color:#8b9789}
+.aqi-forecast-chart svg{width:100%;height:190px;margin-top:9px;overflow:visible}
+.aqi-forecast-chart .monitor-chart-line{stroke:#75a65a;stroke-width:2.8}
+.aqi-forecast-chart .monitor-chart-fill{fill:#a8c8792e}
+.aqi-forecast-chart .monitor-chart-point{stroke:#6f9d55;stroke-width:2.1}
+.aqi-forecast-footnote{padding:0 19px 14px;color:#7b897b;font-size:9px;line-height:1.55}
+.monitor-soft-notice{display:flex;align-items:center;gap:9px;padding:11px 14px;border:1px solid #e2eadb;background:#f7faf4;color:#60745e;border-radius:11px;font-size:11px;line-height:1.5}
+.monitor-soft-notice svg{flex-shrink:0;color:#8c9d78}
+.air-overview-page .monitor-kpi>span{font-size:11px}
+.air-overview-page .monitor-kpi>strong{font-size:25px}
+.air-overview-page .monitor-kpi>em{font-size:10px}
+.air-overview-page .pollutant-top>span{font-size:12px}
+.air-overview-page .pollutant-top>b{font-size:18px}
+.air-overview-page .pollutant-card>small{font-size:10px}
+.air-overview-page .monitor-panel-heading h3{font-size:17px}
+.air-overview-page .monitor-panel-heading p{font-size:11px}
+.air-overview-page.forecast-focus .aqi-forecast-panel{grid-column:1/-1;order:-1}
+.air-overview-page.forecast-focus .aqi-forecast-chart svg{height:250px}
+.air-overview-page.forecast-focus .aqi-forecast-summary article{padding:16px}
+.air-overview-page.forecast-focus .aqi-forecast-summary article>strong{font-size:28px}
+@media(max-width:800px){.aqi-forecast-summary{padding:11px 13px 3px}.aqi-forecast-chart{padding:10px 13px}.aqi-forecast-footnote{padding:0 13px 12px}.aqi-forecast-chart svg{height:160px}}
+@media(max-width:560px){.aqi-forecast-panel .monitor-panel-heading{flex-direction:column}.forecast-panel-actions{width:100%;justify-content:space-between}.aqi-forecast-summary{grid-template-columns:1fr 1fr;gap:7px}.aqi-forecast-summary article:last-child{grid-column:1/-1}.aqi-forecast-summary article>strong{font-size:20px}.aqi-forecast-chart-meta{align-items:flex-start;flex-direction:column}.aqi-forecast-chart svg{height:145px}.air-overview-page .monitor-panel-heading h3{font-size:15px}}
+.aqi-forecast-summary .forecast-direction.unavailable>strong{color:#849184}

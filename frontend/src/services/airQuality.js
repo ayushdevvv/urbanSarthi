@@ -17,7 +17,7 @@ export async function fetchOpenMeteoAirQuality(latitude, longitude, statusContex
     latitude: String(latitude), longitude: String(longitude),
     current: 'us_aqi,pm2_5,pm10,ozone,nitrogen_dioxide',
     hourly: 'us_aqi,pm2_5,pm10,ozone,nitrogen_dioxide',
-    timezone: 'auto', forecast_days: '1',
+    timezone: 'auto', forecast_hours: '24',
   });
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 9000);
@@ -29,13 +29,18 @@ export async function fetchOpenMeteoAirQuality(latitude, longitude, statusContex
     const payload = await response.json();
     const currentRaw = payload.current || {};
     const hourly = payload.hourly || {};
+    const currentTime = currentRaw.time || null;
+    const currentHourIndex = currentTime && Array.isArray(hourly.time)
+      ? Math.max(0, hourly.time.findIndex((time) => time >= currentTime))
+      : 0;
+    const atCurrentHour = (field) => hourly[field]?.[currentHourIndex] ?? null;
     const current = {
-      us_aqi: currentRaw.us_aqi ?? hourly.us_aqi?.[0] ?? null,
-      pm25: currentRaw.pm2_5 ?? hourly.pm2_5?.[0] ?? null,
-      pm2_5: currentRaw.pm2_5 ?? hourly.pm2_5?.[0] ?? null,
-      pm10: currentRaw.pm10 ?? hourly.pm10?.[0] ?? null,
-      ozone: currentRaw.ozone ?? hourly.ozone?.[0] ?? null,
-      nitrogen_dioxide: currentRaw.nitrogen_dioxide ?? hourly.nitrogen_dioxide?.[0] ?? null,
+      us_aqi: currentRaw.us_aqi ?? atCurrentHour('us_aqi'),
+      pm25: currentRaw.pm2_5 ?? atCurrentHour('pm2_5'),
+      pm2_5: currentRaw.pm2_5 ?? atCurrentHour('pm2_5'),
+      pm10: currentRaw.pm10 ?? atCurrentHour('pm10'),
+      ozone: currentRaw.ozone ?? atCurrentHour('ozone'),
+      nitrogen_dioxide: currentRaw.nitrogen_dioxide ?? atCurrentHour('nitrogen_dioxide'),
     };
     current.category = categoryFor(current.us_aqi);
     const forecast = (hourly.time || []).map((time, index) => {
@@ -49,12 +54,12 @@ export async function fetchOpenMeteoAirQuality(latitude, longitude, statusContex
         nitrogen_dioxide: hourly.nitrogen_dioxide?.[index] ?? null,
         category: categoryFor(us_aqi),
       };
-    }).filter((row) => row.us_aqi != null || row.pm25 != null);
+    }).filter((row) => (!currentTime || row.time >= currentTime) && (row.us_aqi != null || row.pm25 != null)).slice(0, 24);
     if (current.us_aqi == null && current.pm25 == null && forecast.length === 0) throw new Error('The air-quality provider did not return usable readings for this coordinate.');
     const result = {
-      status: 'provider_fallback', provider: 'Open-Meteo Air Quality', current, forecast,
+      status: 'provider_fallback', provider: 'Open-Meteo Air Quality', aqi_scale: 'US AQI 0–500', current, forecast,
       updated_at: currentRaw.time || forecast[0]?.time || new Date().toISOString(),
-      note: 'Retrieved directly from Open-Meteo because the UrbanSaarthi API was unavailable. These are forecast-grid values, not ground-station measurements.',
+      note: 'Provider-sourced atmospheric outlook from Open-Meteo. These are forecast-grid values, not ground-station measurements.',
       source: 'Open-Meteo Air Quality API',
     };
     publishDataStatus({ type: 'provider', path: 'air-quality-direct', provider: 'Open-Meteo' }, statusContext);
@@ -80,6 +85,25 @@ export async function loadLocationAirQuality(latitude, longitude) {
   }
 
   if (data?.current && (data.current.us_aqi != null || data.current.openweather_index != null || data.current.pm25 != null || data.current.pm2_5 != null)) {
+    // Prefer a comparable US AQI timeline for users. OpenWeather's 1–5
+    // values are a valid backup, but must never be drawn as if they were US AQI.
+    const hasUsAqiForecast = Array.isArray(data.forecast) && data.forecast.some((row) => row?.us_aqi != null);
+    if (!hasUsAqiForecast) {
+      try {
+        const providerForecast = await fetchOpenMeteoAirQuality(latitude, longitude, createDataStatusContext(routePath));
+        if (providerForecast.forecast.some((row) => row?.us_aqi != null)) {
+          data = {
+            ...data,
+            forecast: providerForecast.forecast,
+            forecast_provider: providerForecast.provider,
+            forecast_scale: providerForecast.aqi_scale || 'US AQI 0–500',
+            note: `${data.note || 'Current air-quality conditions are available.'} The hourly US AQI outlook is supplied separately by ${providerForecast.provider}.`,
+          };
+        }
+      } catch {
+        // Keep the available current reading even when a secondary forecast source is unavailable.
+      }
+    }
     const savedApiSnapshot = readApiSnapshot(apiPath);
     saveLocalRecord(storageKey, data, savedApiSnapshot?.savedAt || Date.now());
     return data;
