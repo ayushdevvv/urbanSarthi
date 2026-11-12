@@ -1,56 +1,63 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from pydantic import BaseModel, EmailStr, Field
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.config import settings
+from app.core.security import needs_rehash, hash_password, verify_password
+from app.core.tokens import create_access_token
 from app.db import get_db
 from app.dependencies import get_current_user
 from app.models import User
-from app.schemas import LoginIn, RegisterIn, TokenOut, UserOut, UserUpdateIn
-from app.services.common import audit
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterIn, request: Request, db: Session = Depends(get_db)):
-    email = str(payload.email).strip().lower()
-    if db.scalar(select(User.id).where(User.email == email)):
-        raise HTTPException(status_code=409, detail="An account with this email already exists")
-    user = User(email=email, full_name=payload.full_name.strip(), password_hash=hash_password(payload.password), role="citizen")
-    db.add(user)
-    db.flush()
-    audit(db, user.id, "user.registered", "user", str(user.id), {"role": user.role}, request.client.host if request.client else None)
-    db.commit()
-    db.refresh(user)
-    return user
+class LoginInput(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=256)
 
 
-@router.post("/login", response_model=TokenOut)
-def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
-    email = str(payload.email).strip().lower()
-    user = db.scalar(select(User).where(User.email == email))
-    if not user or not verify_password(payload.password, user.password_hash) or not user.is_active:
-        # Same response for unknown email and wrong password avoids account enumeration.
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password", headers={"WWW-Authenticate": "Bearer"})
-    token, expires_at = create_access_token(user.id, user.role)
-    audit(db, user.id, "user.login", "user", str(user.id), {}, request.client.host if request.client else None)
-    db.commit()
-    return TokenOut(access_token=token, expires_at=expires_at, user=user)
+@router.post("/login")
+def login(payload: LoginInput, db: Session = Depends(get_db)):
+    if not settings.auth_enabled and settings.app_env.lower() == "production":
+        raise HTTPException(status_code=503, detail="Authentication is not configured.")
+    user = db.scalar(select(User).where(func.lower(User.email) == str(payload.email).lower()))
+    if not user or not user.is_active or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email or password is incorrect.", headers={"WWW-Authenticate": "Bearer"})
+    if needs_rehash(user.password_hash):
+        user.password_hash = hash_password(payload.password)
+        db.commit()
+    if not settings.auth_enabled:
+        raise HTTPException(status_code=409, detail="Authentication is disabled in local demo mode. Enable AUTH_ENABLED to use account sign-in.")
+    token, expires_in = create_access_token(user.id, user.email, user.role)
+    return {"access_token": token, "token_type": "bearer", "expires_in": expires_in,
+            "user": {"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role}}
 
 
-@router.get("/me", response_model=UserOut)
+@router.get("/me")
 def me(user: User = Depends(get_current_user)):
-    return user
+    return {"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role}
 
 
-@router.patch("/me", response_model=UserOut)
-def update_me(payload: UserUpdateIn, request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    changes = payload.model_dump(exclude_unset=True)
-    if "full_name" in changes and changes["full_name"] is not None:
-        user.full_name = changes["full_name"].strip()
-    if "preferences" in changes and changes["preferences"] is not None:
-        user.preferences = {**(user.preferences or {}), **changes["preferences"]}
-    audit(db, user.id, "user.profile_updated", "user", str(user.id), {"fields": sorted(changes)}, request.client.host if request.client else None)
+class RegisterInput(BaseModel):
+    email: EmailStr
+    full_name: str = Field(min_length=2, max_length=120)
+    password: str = Field(min_length=12, max_length=256)
+
+
+@router.post("/register", status_code=201)
+def register(payload: RegisterInput, db: Session = Depends(get_db)):
+    """Create a citizen account. Privileged roles are never accepted from public input."""
+    if not settings.auth_enabled:
+        raise HTTPException(status_code=409, detail="Account registration is available when AUTH_ENABLED=true.")
+    email = str(payload.email).strip().lower()
+    existing = db.scalar(select(User.id).where(func.lower(User.email) == email))
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="An account with this email already exists.")
+    user = User(email=email, full_name=payload.full_name.strip(), password_hash=hash_password(payload.password), role="citizen", is_active=True)
+    db.add(user)
     db.commit()
     db.refresh(user)
-    return user
+    token, expires_in = create_access_token(user.id, user.email, user.role)
+    return {"access_token": token, "token_type": "bearer", "expires_in": expires_in,
+            "user": {"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role}}

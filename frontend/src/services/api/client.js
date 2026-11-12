@@ -4,6 +4,7 @@ const DEFAULT_API_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000/api/v1' : '
 const FALLBACK_GRACE_MS = 40_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 70_000;
 const ATTEMPT_TIMEOUT_MS = 9_000;
+export const AUTH_TOKEN_KEY = 'urbansaarthi_access_token';
 
 async function waitForFallbackGrace(startedAt, graceMs = FALLBACK_GRACE_MS) {
   const remaining = graceMs - (Date.now() - startedAt);
@@ -39,6 +40,9 @@ export async function request(path, options = {}) {
   const statusContext = createDataStatusContext(routePathAtRequestStart);
   const publishStatus = (detail) => publishDataStatus(detail, statusContext);
   const headers = new Headers(options.headers || {});
+  if (!headers.has('Authorization') && !/^\/auth\/login(?:\?|$)/i.test(path)) {
+    try { const token = globalThis.localStorage?.getItem(AUTH_TOKEN_KEY); if (token) headers.set('Authorization', `Bearer ${token}`); } catch { /* storage may be unavailable in hardened browsers */ }
+  }
   const method = String(options.method || 'GET').toUpperCase();
   const privatePath = /^\/(?:auth(?:\/|\?|$)|trips(?:\/|\?|$)|users(?:\/|\?|$)|profile(?:\/|\?|$)|analytics\/my-mobility(?:\/|\?|$)|agent(?:\/|\?|$)|routing\/(?:geocode|reverse-geocode)(?:\/|\?|$))/i.test(path);
   const cacheEligible = (method === 'GET' && !privatePath) || (options.cacheResponse === true && typeof options.body === 'string');

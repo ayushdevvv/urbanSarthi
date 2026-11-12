@@ -1,0 +1,4 @@
+# Install on a dedicated Linux edge host with access to the authorized RTSP network.
+opencv-python-headless>=4.10,<5
+ultralytics>=8.3,<9
+requests>=2.32,<3

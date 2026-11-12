@@ -1,20 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, ArrowRight, Bot, Check, CheckCircle2, Circle, Clock3, Cpu, Gauge, Leaf, LoaderCircle, RefreshCw, ShieldCheck, Sparkles, Timer, TrendingUp, Wind, XCircle } from 'lucide-react';
+import { Activity, ArrowRight, Bot, Camera, Check, CheckCircle2, Circle, Clock3, Cpu, Gauge, Leaf, LoaderCircle, RefreshCw, ShieldCheck, Sparkles, Timer, TrendingUp, Wind, XCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api } from '../../services/api/client.js';
 import { readLocalRecord, saveLocalRecord } from '../../services/apiSnapshot.js';
 import { useApp } from '../../context/AppContext.jsx';
 import './traffic-agent.css';
-
-const EXAMPLE_REPORT = {
-  mode: 'video', model: 'Illustrative traffic scenario', preview_only: true, source_filename: 'Example junction scenario',
-  video: { sampled_frames: 12, duration_seconds: 45, sampling_interval_seconds: 4 },
-  counts: { car: 26, bus: 3, motorbike: 18, bicycle: 2, truck: 4 },
-  total_vehicles: 53, peak_vehicles_in_frame: 53, mean_vehicles_per_sampled_frame: 4.4,
-  congestion_estimate: 'Moderate', congestion_score_heuristic: 58, tracking_ids_available: false,
-  confidence_threshold: 0.3, congestion_note: 'Illustrative values only. Upload a real traffic clip to create YOLO evidence.',
-  segment_distance_km: 0.5,
-};
 
 const TOOL_STEPS = [
   { key: 'inspect_video_evidence', title: 'Inspect video evidence', detail: 'Read vehicle classes, counts and scene density', icon: Gauge },
@@ -22,77 +12,6 @@ const TOOL_STEPS = [
   { key: 'draft_signal_timing', title: 'Draft adaptive signal phases', detail: 'Allocate green time while preserving clearance intervals', icon: Cpu },
   { key: 'run_60_minute_traffic_forecast', title: 'Run 60-minute forecast', detail: 'Evaluate the selected demand / signal scenario', icon: TrendingUp },
 ];
-
-function makeLocalPreview(report, scenario, cycleSeconds, segmentDistanceKm) {
-  const counts = report?.counts || {};
-  const distance = Math.max(0.001, Number(segmentDistanceKm) || 0.5);
-  const profiles = {
-    car: { co2: 149.263, nox: 0.06, pm: 0.005 },
-    motorbike: { co2: 57.409, nox: 0.06, pm: 0.0045 },
-    bus: { co2: 687.5, nox: 0.46, pm: 0.01 },
-    truck: { co2: 791.121, nox: 0.4, pm: 0.01 },
-    bicycle: { co2: 0, nox: 0, pm: 0 },
-  };
-  const totals = { co2_g: 0, nox_g: 0, pm_g: 0 };
-  Object.entries(profiles).forEach(([key, profile]) => {
-    const n = Math.max(0, Number(counts[key] || 0));
-    totals.co2_g += n * distance * profile.co2;
-    totals.nox_g += n * distance * profile.nox;
-    totals.pm_g += n * distance * profile.pm;
-  });
-  Object.keys(totals).forEach((key) => { totals[key] = Number(totals[key].toFixed(3)); });
-
-  const cycle = Math.max(60, Math.min(120, Number(cycleSeconds) || 90));
-  const greenTotal = cycle - 16;
-  const phaseNames = ['North / south through', 'East / west through', 'North / south turn', 'East / west turn'];
-  const weights = [0.32, 0.31, 0.19, 0.18];
-  const phases = phaseNames.map((name, index) => ({
-    movement: name.toLowerCase().replaceAll(' ', '_'), name,
-    green_seconds: Math.round(greenTotal * weights[index]), yellow_seconds: 3, all_red_seconds: 1,
-  }));
-  phases[0].green_seconds += greenTotal - phases.reduce((sum, item) => sum + item.green_seconds, 0);
-  const vehicles = Object.values(counts).reduce((sum, value) => sum + (Number(value) || 0), 0);
-  const baseQueue = Math.max(8, Math.round(vehicles * 0.72));
-  const scenarioFactor = scenario === 'demand_surge' ? 0.23 : scenario === 'signal_priority' ? -0.12 : 0.06;
-  const timeline = Array.from({ length: 13 }, (_, index) => {
-    const progress = index / 12;
-    return {
-      minute: index * 5,
-      queue_total: Math.max(2, Math.round(baseQueue * (1 + scenarioFactor * progress))),
-      vehicles: Math.max(1, Math.round(vehicles * (1 + (scenario === 'demand_surge' ? 0.16 : 0.02) * progress))),
-      heavy_roads: Math.max(0, Math.round(2 + (scenario === 'demand_surge' ? 2 : -0.3) * progress)),
-      moderate_roads: Math.max(1, Math.round(5 - progress)),
-      free_roads: Math.max(1, Math.round(7 + progress)),
-    };
-  });
-  const change = Number((((timeline.at(-1).queue_total - timeline[0].queue_total) / Math.max(1, timeline[0].queue_total)) * 100).toFixed(1));
-  const estimate = {
-    factor_version: 'india-bsvi-indicative-v1', segment_distance_km: distance, totals,
-    source_quality: 'illustrative_preview_from_saved_vehicle_counts',
-    assumptions: ['Client-side preview using indicative vehicle-class factors.', 'Not a live backend result, measured exhaust or validated SUMO intervention.'],
-  };
-  return {
-    success: true,
-    preview_only: true,
-    agent: {
-      agent_mode: 'local_illustrative_preview',
-      response: `Prepared an illustrative ${cycle}s four-phase signal draft from ${vehicles} vehicles in the selected evidence. The forecast is a local preview to keep the workspace usable while the service is unavailable. It is not a live run or a validated intervention.`,
-      llm_note: 'No verified workflow result was returned. This preview remains local and has not been saved to the authority system.',
-      human_review_required: true, physical_dispatch_enabled: false,
-    },
-    tools: ['inspect_video_evidence', 'calculate_video_emissions', 'draft_signal_timing', 'run_60_minute_traffic_forecast'],
-    emissions_estimate: estimate,
-    plan: {
-      id: null, status: 'preview', cycle_seconds: cycle, phases,
-      rationale: 'Illustrative phase allocation based on overall vehicle mix. Lane-specific calibration and pedestrian timing must be configured before operational use.',
-    },
-    simulation: {
-      name: `${scenario.replaceAll('_', ' ')} · local preview`, mode: 'client_side_preview', engine_label: 'Local illustrative estimate',
-      timeline, summary: { road_count: 14, heavy_roads_start: timeline[0].heavy_roads, heavy_roads_end: timeline.at(-1).heavy_roads, queue_change_percent: change },
-      caveats: ['Illustrative local calculation only. It does not use live city traffic or a running SUMO/TraCI simulation.'],
-    },
-  };
-}
 
 function MiniTimeline({ points = [] }) {
   const path = useMemo(() => {
@@ -130,10 +49,10 @@ export default function TrafficAgentPage() {
   const [dispatchPreview, setDispatchPreview] = useState(null);
   const [error, setError] = useState('');
   const [waitSeconds, setWaitSeconds] = useState(0);
+  const [cameraLoading, setCameraLoading] = useState(false);
   const [activeToolIndex, setActiveToolIndex] = useState(0);
   const [attemptStartedAt, setAttemptStartedAt] = useState(Date.now());
   const autoStarted = useRef(false);
-  const workflowRef = useRef(null);
 
   const hasEvidence = Boolean(report && !report.preview_only && !['Illustrative traffic scene', 'Illustrative traffic scenario'].includes(report.model));
   const preview = Boolean(workflow?.preview_only);
@@ -164,7 +83,6 @@ export default function TrafficAgentPage() {
     setError('');
     setDispatchPreview(null);
     setWorkflow(null);
-    workflowRef.current = null;
     setAttemptStartedAt(Date.now());
     setWaitSeconds(0);
     setActiveToolIndex(0);
@@ -177,13 +95,12 @@ export default function TrafficAgentPage() {
         cycle_seconds: Number(cycleSeconds),
         segment_distance_km: Number(distanceKm) || 0.5,
       }, { timeoutMs: 40000 });
-      workflowRef.current = result;
       setWorkflow(result);
       saveLocalRecord('traffic-agent-last-workflow', result);
       notify(result.agent?.agent_mode === 'langgraph_groq_tool_calling' ? 'TrafficSaarthi completed its LangGraph tool run.' : 'TrafficSaarthi completed its analysis workflow.');
     } catch (err) {
       setError(err?.message || 'The Traffic Agent could not complete the workflow.');
-      if (!automatic) notify('The service did not complete the live run. Showing a local preview where possible.');
+      if (!automatic) notify('The live agent workflow did not complete. No result was substituted.');
     } finally {
       setLoading(false);
     }
@@ -208,21 +125,52 @@ export default function TrafficAgentPage() {
     return () => globalThis.clearInterval(interval);
   }, [loading, attemptStartedAt]);
 
-  // Show an illustrative, local-only workspace after 40 seconds if there is no
-  // saved evidence or if the service has not produced a workflow result.
+  // Keep the elapsed indicator honest. If the service times out, the page shows
+  // an error rather than inventing a local agent run or a simulated city result.
   useEffect(() => {
+    if (!loading) return undefined;
     const started = attemptStartedAt;
     const interval = globalThis.setInterval(() => setWaitSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
-    const timeout = globalThis.setTimeout(() => {
-      if (!workflowRef.current) {
-        const source = report || EXAMPLE_REPORT;
-        const localPreview = makeLocalPreview(source, scenario, cycleSeconds, distanceKm);
-        workflowRef.current = localPreview;
-        setWorkflow(localPreview);
-      }
-    }, 40000);
-    return () => { globalThis.clearInterval(interval); globalThis.clearTimeout(timeout); };
-  }, [attemptStartedAt, report, scenario, cycleSeconds, distanceKm]);
+    return () => globalThis.clearInterval(interval);
+  }, [loading, attemptStartedAt]);
+
+  const loadLatestCameraEvidence = useCallback(async () => {
+    if (!junctionId) return;
+    setCameraLoading(true);
+    setError('');
+    try {
+      const rows = await api.get(`/traffic/junctions/${junctionId}/observations?limit=100&since_minutes=15`, { timeoutMs: 20000 });
+      const row = (Array.isArray(rows) ? rows : []).find((item) => {
+        const details = item.detection_summary || {};
+        return Boolean(details.camera_id || String(item.source || '').startsWith('camera:'));
+      });
+      if (!row) throw new Error('No camera detections have reached this junction in the last 15 minutes. Check the RTSP worker, source registration and ingestion key.');
+      const details = row.detection_summary || {};
+      const counts = details.counts && typeof details.counts === 'object' ? details.counts : {};
+      const measuredAt = row.observed_at;
+      const cameraId = details.camera_id || row.source || 'registered camera';
+      const cameraReport = {
+        mode: 'edge_camera', model: details.model || 'YOLO edge inference',
+        source_filename: `Live camera · ${cameraId}`,
+        video: { sampled_frames: 1, duration_seconds: 0, sampling_interval_seconds: 0 },
+        counts, total_vehicles: Number(row.vehicle_count || details.total_detections || 0),
+        peak_vehicles_in_frame: Number(row.vehicle_count || details.total_detections || 0),
+        mean_vehicles_per_sampled_frame: Number(row.vehicle_count || details.total_detections || 0),
+        congestion_estimate: row.congestion_score == null ? 'Not measured' : 'Backend observation',
+        congestion_score_heuristic: row.congestion_score ?? null,
+        tracking_ids_available: false, confidence_threshold: details.confidence_threshold ?? null,
+        congestion_note: 'Authenticated edge-camera sample. Queue length, speed and congestion are only shown when a calibrated source supplies those measurements.',
+        segment_distance_km: Number(distanceKm) || 0.5, source_observation_id: row.id,
+        source_observed_at: measuredAt, preview_only: false,
+      };
+      setReport(cameraReport);
+      notify(`Loaded live camera evidence from ${cameraId}.`);
+    } catch (err) {
+      setError(err?.message || 'Could not load recent camera evidence.');
+    } finally {
+      setCameraLoading(false);
+    }
+  }, [junctionId, distanceKm, notify]);
 
   async function reviewPlan(action) {
     if (!workflow?.plan?.id || preview) return;
@@ -280,17 +228,21 @@ export default function TrafficAgentPage() {
       <div className="ta-panel ta-source-panel">
         <div className="ta-panel-heading"><div><span>INPUT EVIDENCE</span><h2>What the agent is analysing</h2></div><span className="ta-soft-icon"><Activity size={18}/></span></div>
         {hasEvidence ? <>
-          <div className="ta-evidence-source"><div className="ta-file-icon"><Gauge size={20}/></div><div><b>{report.source_filename || 'Saved traffic evidence'}</b><small>{report.model || 'YOLO model'} · {report.video?.sampled_frames || 1} sampled frames{reportSavedAt ? ` · ${new Date(reportSavedAt).toLocaleString()}` : ''}</small></div><span>YOLO REPORT</span></div>
+          <div className="ta-evidence-source"><div className="ta-file-icon"><Gauge size={20}/></div><div><b>{report.source_filename || 'Saved traffic evidence'}</b><small>{report.model || 'YOLO model'} · {report.source_observed_at ? `Camera sample · ${new Date(report.source_observed_at).toLocaleString()}` : `${report.video?.sampled_frames || 1} sampled frames`}{reportSavedAt ? ` · ${new Date(reportSavedAt).toLocaleString()}` : ''}</small></div><span>YOLO REPORT</span></div>
           <div className="ta-source-metrics"><div><small>Vehicles</small><b>{Number(totalVehicles).toLocaleString()}</b></div><div><small>Scene density</small><b>{report.congestion_estimate || '—'}</b></div><div><small>Confidence</small><b>{Math.round(Number(report.confidence_threshold || 0.3) * 100)}%</b></div></div>
-        </> : <div className="ta-no-evidence"><div><Gauge size={22}/></div><b>No saved YOLO report yet</b><p>Run an image or video analysis in Traffic Lab. The agent will start automatically when that report is available.</p><Link to="/authority/traffic-lab" className="ta-inline-link">Create traffic evidence <ArrowRight size={14}/></Link></div>}
+        </> : <div className="ta-no-evidence"><div><Gauge size={22}/></div><b>No saved YOLO report yet</b><p>Run a real upload in Traffic Lab or load a recent edge-camera sample below. The agent will start when measured evidence is available.</p><Link to="/authority/traffic-lab" className="ta-inline-link">Create traffic evidence <ArrowRight size={14}/></Link></div>}
         <div className="ta-control-grid">
           <label><span>Junction</span><select value={junctionId} onChange={(event) => setJunctionId(event.target.value)}><option value="">Choose junction</option>{junctions.map((item) => <option key={item.id} value={item.id}>{item.name} · #{item.id}</option>)}</select></label>
           <label><span>Forecast scenario</span><select value={scenario} onChange={(event) => setScenario(event.target.value)}><option value="baseline">Baseline</option><option value="signal_priority">Signal priority sensitivity</option><option value="demand_surge">Demand surge sensitivity</option></select></label>
           <label><span>Signal cycle</span><select value={cycleSeconds} onChange={(event) => setCycleSeconds(event.target.value)}><option value="60">60 seconds</option><option value="75">75 seconds</option><option value="90">90 seconds</option><option value="105">105 seconds</option><option value="120">120 seconds</option></select></label>
           <label><span>Corridor distance (km)</span><input type="number" min="0.001" max="100" step="0.1" value={distanceKm} onChange={(event) => setDistanceKm(event.target.value)}/></label>
         </div>
+        <div className="ta-live-camera-action">
+          <div><b><Camera size={15}/> Latest edge-camera evidence</b><small>Pull the newest authenticated YOLO sample from this junction (last 15 minutes).</small></div>
+          <button type="button" className="ta-secondary-action" onClick={loadLatestCameraEvidence} disabled={!junctionId || cameraLoading || loading}>{cameraLoading ? <LoaderCircle className="ta-spin" size={15}/> : <RefreshCw size={15}/>} Load live sample</button>
+        </div>
         <label className="ta-prompt-field"><span>Operator instruction</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={700} rows={3}/></label>
-        {junctions.length === 0 && <div className="ta-inline-note"><Clock3 size={15}/> No junction list is available yet. The local preview can still be viewed; live workflow requires a registered junction.</div>}
+        {junctions.length === 0 && <div className="ta-inline-note"><Clock3 size={15}/> No junction list is available yet. Register a real junction and connect a camera edge worker to run a live workflow.</div>}
       </div>
 
       <div className="ta-panel ta-execution-panel">

@@ -19,6 +19,8 @@ VEHICLE_ALIASES = {
     "motorcycle": "motorbike",
     "bicycle": "bicycle",
     "bike": "motorbike",
+    "truck": "truck",
+    "truck": "truck",
 }
 
 
@@ -61,7 +63,7 @@ def status() -> dict[str, Any]:
         "ready": path.is_file() and installed,
         "model_file": path.name if path.is_file() else None,
         "input_modes": ["image upload", "browser camera snapshot"],
-        "classes_counted_as_vehicles": ["car", "bus", "motorbike", "bicycle"],
+        "classes_counted_as_vehicles": ["car", "bus", "motorbike", "bicycle", "truck"],
         "note": "Congestion level is a preliminary vehicle-count heuristic, not a validated measure of real-world traffic flow.",
     }
 
@@ -85,7 +87,7 @@ def analyze_image(raw: bytes, confidence: float = 0.25) -> dict[str, Any]:
     names = model.names
     if isinstance(names, list):
         names = {i: name for i, name in enumerate(names)}
-    counts = {"car": 0, "bus": 0, "motorbike": 0, "bicycle": 0}
+    counts = {"car": 0, "bus": 0, "motorbike": 0, "bicycle": 0, "truck": 0}
     detections = []
     boxes = getattr(result, "boxes", None)
     if boxes is not None:

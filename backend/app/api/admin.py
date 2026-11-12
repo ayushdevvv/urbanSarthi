@@ -24,9 +24,10 @@ def upsert_data_source(payload: DataSourceUpsertIn, request: Request, db: Sessio
     else:
         for key, value in payload.model_dump().items():
             setattr(row, key, value)
-    if payload.status == "online":
-        row.last_success_at = utc_now()
-        row.last_error = None
+    # The registry is configuration metadata. A source can become online only
+    # through a provider sync or authenticated device heartbeat, never by a form toggle.
+    if payload.status not in {"not_configured", "unknown"}:
+        raise HTTPException(status_code=422, detail="Source health is updated by a successful sync or authenticated heartbeat, not by manual registration.")
     audit(db, user.id, "data_source.upserted", "data_source", payload.external_id, {"status": payload.status, "source_type": payload.source_type}, request.client.host if request.client else None)
     db.commit()
     db.refresh(row)
@@ -38,13 +39,10 @@ def source_heartbeat(external_id: str, request: Request, status_value: str = "on
     row = db.scalar(select(DataSource).where(DataSource.external_id == external_id))
     if not row:
         raise HTTPException(status_code=404, detail="Data source not found")
-    if status_value not in {"online", "degraded", "offline", "not_configured", "unknown"}:
-        raise HTTPException(status_code=422, detail="Invalid data source status")
+    if status_value not in {"degraded", "offline", "not_configured", "unknown"}:
+        raise HTTPException(status_code=422, detail="A manual action cannot mark a source online. A successful provider sync or authenticated device heartbeat is required.")
     row.status = status_value
-    if status_value == "online":
-        row.last_success_at = utc_now()
-        row.last_error = None
-    elif error:
+    if status_value in {"degraded", "offline"} and error:
         row.last_error = error[:2000]
     audit(db, user.id, "data_source.heartbeat", "data_source", external_id, {"status": status_value}, request.client.host if request.client else None)
     db.commit()
@@ -57,8 +55,8 @@ def set_junction_status(junction_id: int, status_value: str, request: Request, d
     junction = db.get(Junction, junction_id)
     if not junction:
         raise HTTPException(status_code=404, detail="Junction not found")
-    if status_value not in {"online", "degraded", "offline", "unknown"}:
-        raise HTTPException(status_code=422, detail="Invalid junction status")
+    if status_value not in {"degraded", "offline", "unknown"}:
+        raise HTTPException(status_code=422, detail="A manual action cannot mark a junction online. A verified traffic observation is required.")
     junction.status = status_value
     audit(db, user.id, "junction.status_changed", "junction", str(junction.id), {"status": status_value}, request.client.host if request.client else None)
     db.commit()

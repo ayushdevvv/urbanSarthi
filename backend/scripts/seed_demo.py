@@ -1,7 +1,7 @@
-"""Seed master data with clearly synthetic demo junctions.
+"""Register source adapters and optionally seed explicitly synthetic demo infrastructure.
 
-Usage: python scripts/seed_demo.py [--demo-telemetry]
-Set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD to create an admin account.
+Usage: python scripts/seed_demo.py [--demo-network] [--demo-telemetry]
+Set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD to create the first admin.
 """
 import argparse
 import os
@@ -17,27 +17,30 @@ from app.services.common import utc_now
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--demo-telemetry", action="store_true", help="Add conspicuously synthetic traffic/AQI records for UI development")
+    parser.add_argument("--demo-network", action="store_true", help="Create 24 clearly synthetic clusters and 48 demo junctions")
+    parser.add_argument("--demo-telemetry", action="store_true", help="Add synthetic traffic/AQI records; also enables --demo-network")
     args = parser.parse_args()
+    demo_network = args.demo_network or args.demo_telemetry
     db = SessionLocal()
     try:
-        for i in range(1, 25):
-            external_id = f"DEMO-CLUSTER-{i:02d}"
-            cluster = db.scalar(select(CityCluster).where(CityCluster.external_id == external_id))
-            if not cluster:
-                cluster = CityCluster(external_id=external_id, name=f"Demo Mobility Cluster {i:02d}", city="Synthetic demo city", status="unknown", config={"is_synthetic": True})
-                db.add(cluster)
-                db.flush()
-            for j in range(1, 3):
-                junction_external = f"DEMO-JUNCTION-{i:02d}-{j:02d}"
-                junction = db.scalar(select(Junction).where(Junction.external_id == junction_external))
-                if not junction:
-                    # Coordinates are demo placeholders around Delhi and must be replaced with the pilot's surveyed coordinates.
-                    offset = (i * 2 + j) * 0.001
-                    junction = Junction(external_id=junction_external, name=f"Synthetic Junction {i:02d}-{j:02d}", cluster_id=cluster.id,
-                                        latitude=28.6139 + offset, longitude=77.2090 - offset, status="unknown", lane_count=4,
-                                        baseline_cycle_seconds=90, configuration={"is_synthetic": True, "coordinates_verified": False})
-                    db.add(junction)
+        if demo_network:
+            for i in range(1, 25):
+                external_id = f"DEMO-CLUSTER-{i:02d}"
+                cluster = db.scalar(select(CityCluster).where(CityCluster.external_id == external_id))
+                if not cluster:
+                    cluster = CityCluster(external_id=external_id, name=f"Demo Mobility Cluster {i:02d}", city="Synthetic demo city", status="unknown", config={"is_synthetic": True})
+                    db.add(cluster)
+                    db.flush()
+                for j in range(1, 3):
+                    junction_external = f"DEMO-JUNCTION-{i:02d}-{j:02d}"
+                    junction = db.scalar(select(Junction).where(Junction.external_id == junction_external))
+                    if not junction:
+                        # Coordinates are demo placeholders and must be replaced with the pilot's surveyed coordinates.
+                        offset = (i * 2 + j) * 0.001
+                        junction = Junction(external_id=junction_external, name=f"Synthetic Junction {i:02d}-{j:02d}", cluster_id=cluster.id,
+                                            latitude=28.6139 + offset, longitude=77.2090 - offset, status="unknown", lane_count=4,
+                                            baseline_cycle_seconds=90, configuration={"is_synthetic": True, "coordinates_verified": False})
+                        db.add(junction)
         default_sources = [
             ("camera-edge", "Camera vision edge feed", "camera", "edge-json-events"),
             ("cpcb-aqi", "CPCB ambient air quality feed", "cpcb", "authorized CPCB integration"),
@@ -81,7 +84,8 @@ def main():
             if not db.scalar(select(DataSource.id).where(DataSource.external_id == "synthetic-demo")):
                 db.add(DataSource(external_id="synthetic-demo", name="Synthetic demo observations", source_type="other", provider="seed_demo.py", status="online", last_success_at=now, safe_config={"is_synthetic": True}))
         db.commit()
-        print("Seed complete: 24 demo clusters, up to 48 synthetic junctions, connector registry created.")
+        print("Seed complete: connector registry created.")
+        print("Synthetic demo network created:", demo_network)
         print("Demo telemetry added:", args.demo_telemetry)
         print("Admin account created:", bool(admin_email and admin_password))
     except Exception:

@@ -16,13 +16,14 @@ router = APIRouter(prefix="/traffic", tags=["Traffic intelligence"])
 
 
 @router.get("/current")
-def current_traffic(latitude: float = Query(default=28.6139, ge=-90, le=90), longitude: float = Query(default=77.2090, ge=-180, le=180)):
+def current_traffic(latitude: float = Query(ge=-90, le=90), longitude: float = Query(ge=-180, le=180)):
     """Fetch a current road segment snapshot from TomTom when configured. The API key stays server side."""
     if not settings.tomtom_api_key:
         return {
-            "provider": "UrbanSaarthi SUMO traffic model", "configured": False, "mode": "sumo_model",
-            "message": "Showing a forecast from the supplied SUMO simulation model.",
-            "latitude": latitude, "longitude": longitude, "observed_at": utc_now().isoformat(), "flow": None,
+            "provider": None, "configured": False, "mode": "model_forecast", "data_mode": "model_forecast",
+            "live_data_available": False,
+            "message": "No live road-speed provider is configured for this coordinate. The separate network model forecast is not a live traffic observation.",
+            "latitude": latitude, "longitude": longitude, "observed_at": None, "flow": None,
             "simulation": get_simulation_snapshot(),
         }
     url = "https://api.tomtom.com/traffic/services/4/flowSegmentData/relative/10/json"
@@ -32,13 +33,15 @@ def current_traffic(latitude: float = Query(default=28.6139, ge=-90, le=90), lon
         payload = response.json().get("flowSegmentData") or {}
     except (httpx.HTTPError, ValueError):
         return {
-            "provider": "UrbanSaarthi SUMO traffic model", "configured": False, "mode": "sumo_model",
-            "message": "Showing a forecast from the supplied SUMO simulation model.",
-            "latitude": latitude, "longitude": longitude, "observed_at": utc_now().isoformat(), "flow": None,
+            "provider": None, "configured": True, "mode": "provider_unavailable", "data_mode": "unavailable",
+            "live_data_available": False,
+            "message": "The configured live traffic provider could not return this road segment. The network model forecast remains separate and is not substituted as a live reading.",
+            "latitude": latitude, "longitude": longitude, "observed_at": None, "flow": None,
             "simulation": get_simulation_snapshot(),
         }
     return {
-        "provider": "TomTom Traffic Flow", "configured": True, "mode": "provider",
+        "provider": "TomTom Traffic Flow", "configured": True, "mode": "provider", "data_mode": "live_provider",
+        "live_data_available": True,
         "latitude": latitude, "longitude": longitude, "observed_at": utc_now().isoformat(),
         "flow": {
             "current_speed_kmph": payload.get("currentSpeed"),
@@ -65,13 +68,16 @@ def traffic_simulation_scenario(minutes: int = Query(default=60, ge=15, le=60), 
 
 
 @router.get("/junctions", response_model=list[JunctionOut])
-def list_junctions(db: Session = Depends(get_db), cluster_id: int | None = None, status_filter: str | None = Query(default=None, alias="status"), limit: int = 100, offset: int = 0):
+def list_junctions(db: Session = Depends(get_db), cluster_id: int | None = None, status_filter: str | None = Query(default=None, alias="status"), include_synthetic: bool = False, limit: int = 100, offset: int = 0):
     query = select(Junction).order_by(Junction.name)
     if cluster_id is not None:
         query = query.where(Junction.cluster_id == cluster_id)
     if status_filter:
         query = query.where(Junction.status == status_filter)
-    return list(db.scalars(query.offset(max(0, offset)).limit(max(1, min(limit, 250)))))
+    rows = list(db.scalars(query))
+    if not include_synthetic:
+        rows = [row for row in rows if not (row.configuration or {}).get("is_synthetic")]
+    return rows[max(0, offset):max(0, offset) + max(1, min(limit, 250))]
 
 
 @router.get("/junctions/{junction_id}", response_model=JunctionOut)
@@ -83,22 +89,44 @@ def get_junction(junction_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/junctions/{junction_id}/observations", response_model=list[TrafficObservationOut])
-def junction_observations(junction_id: int, db: Session = Depends(get_db), limit: int = 50):
-    if not db.get(Junction, junction_id):
-        raise HTTPException(status_code=404, detail="Junction not found")
-    return list(db.scalars(select(TrafficObservation).where(TrafficObservation.junction_id == junction_id).order_by(TrafficObservation.observed_at.desc()).limit(max(1, min(limit, 500)))))
+def junction_observations(
+    junction_id: int,
+    db: Session = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=500),
+    since_minutes: int = Query(default=1440, ge=1, le=10080),
+    source: str | None = Query(default=None, max_length=80),
+    include_synthetic: bool = False,
+    user=Depends(require_roles("operator", "admin")),
+):
+    junction = db.get(Junction, junction_id)
+    if not junction or ((junction.configuration or {}).get("is_synthetic") and not include_synthetic):
+        raise HTTPException(status_code=404, detail="Registered live junction not found")
+    query = select(TrafficObservation).where(
+        TrafficObservation.junction_id == junction_id,
+        TrafficObservation.observed_at >= utc_now() - timedelta(minutes=since_minutes),
+    )
+    if source:
+        query = query.where(TrafficObservation.source == source)
+    else:
+        query = query.where(TrafficObservation.source != "synthetic-demo")
+    return list(db.scalars(query.order_by(TrafficObservation.observed_at.desc()).limit(limit)))
 
 
 @router.get("/overview")
 def traffic_overview(db: Session = Depends(get_db)):
     now = utc_now()
     cutoff = now - timedelta(minutes=30)
-    junction_count = db.scalar(select(func.count(Junction.id)) ) or 0
-    active_junction_count = db.scalar(select(func.count(Junction.id)).where(Junction.status == "online")) or 0
-    observations = list(db.scalars(select(TrafficObservation).where(TrafficObservation.observed_at >= cutoff).order_by(TrafficObservation.observed_at.desc()).limit(1000)))
+    all_junctions = list(db.scalars(select(Junction)))
+    real_junctions = [junction for junction in all_junctions if not (junction.configuration or {}).get("is_synthetic")]
+    real_junction_ids = {junction.id for junction in real_junctions}
+    junction_count = len(real_junctions)
+    live_cutoff = now - timedelta(minutes=5)
+    observations = list(db.scalars(select(TrafficObservation).where(TrafficObservation.observed_at >= cutoff, TrafficObservation.source != "synthetic-demo").order_by(TrafficObservation.observed_at.desc()).limit(1000)))
+    fresh_junction_ids = {o.junction_id for o in observations if o.junction_id in real_junction_ids and o.observed_at >= live_cutoff}
+    active_junction_count = len(fresh_junction_ids)
     latest_by_junction: dict[int, TrafficObservation] = {}
     for row in observations:
-        if row.junction_id is not None and row.junction_id not in latest_by_junction:
+        if row.junction_id in real_junction_ids and row.junction_id not in latest_by_junction:
             latest_by_junction[row.junction_id] = row
     congested = [o for o in latest_by_junction.values() if (o.congestion_score or 0) >= 70]
     scores = [o.congestion_score for o in latest_by_junction.values() if o.congestion_score is not None]

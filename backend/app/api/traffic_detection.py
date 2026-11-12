@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Upl
 import json
 from starlette.concurrency import run_in_threadpool
 from app.services.traffic_detection import analyze_image, status
+from app.dependencies import require_roles
 
 router = APIRouter(prefix="/traffic-detection", tags=["Traffic AI"])
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
@@ -17,6 +18,7 @@ def traffic_model_status():
 async def analyze_traffic_image(
     file: UploadFile = File(...),
     confidence: float = Query(default=0.25, ge=0.05, le=0.9),
+    user=Depends(require_roles("operator", "admin")),
 ):
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=415, detail="Upload a JPG, PNG, or WebP image.")
@@ -78,6 +80,7 @@ async def analyze_traffic_video(
     confidence: float = Query(default=0.25, ge=0.05, le=0.9),
     sample_every_seconds: int = Query(default=1, ge=1, le=5),
     approach_rois: str | None = Query(default=None, description="JSON array of normalized camera polygons keyed to canonical signal movements"),
+    user=Depends(require_roles("operator", "admin")),
 ):
     if file.content_type not in ALLOWED_VIDEO_TYPES and not (file.filename or "").lower().endswith((".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v")):
         raise HTTPException(status_code=415, detail="Upload an MP4, MOV, AVI, MKV, WebM or M4V traffic video.")

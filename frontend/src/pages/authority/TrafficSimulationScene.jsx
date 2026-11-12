@@ -66,13 +66,13 @@ export default function TrafficSimulationScene({ roads = [], frame, scenario = '
   for (let i = 0; i < s; i++) cars.push(<Car key={`s-${i}`} x={526 - (i % 2) * 24} y={474 - i * 22} direction="N" index={i + 1} moving={playing && active === 'NS'}/>);
   for (let i = 0; i < w; i++) cars.push(<Car key={`w-${i}`} x={28 + i * 27} y={229 + (i % 2) * 30} direction="E" index={i + 2} moving={playing && active === 'EW'}/>);
   for (let i = 0; i < e; i++) cars.push(<Car key={`e-${i}`} x={952 - i * 27} y={269 - (i % 2) * 30} direction="W" index={i + 3} moving={playing && active === 'EW'}/>);
-  return <section className={`panel traffic-sim-scene ${playing ? 'is-playing' : ''}`} aria-label="Animated traffic intersection">
+  return <section className={`panel traffic-sim-scene ${playing ? 'is-playing' : ''}`} aria-label="Illustrative traffic model playback; not a live camera feed or traffic-controller state">
     <div className="traffic-sim-scene-head">
-      <div><span className="eyebrow">TRAFFIC NETWORK PLAYBACK</span><h3>{areaName} · Intersection activity</h3><p>Vehicle movement, queues and signal phases update during playback.</p></div>
-      <div className="traffic-sim-live"><i/>{playing ? 'PLAYING' : 'PAUSED'} <b>MIN {frame?.minute ?? 0}</b></div>
+      <div><span className="eyebrow">REFERENCE MODEL PLAYBACK · NOT LIVE CCTV</span><h3>{areaName} · Modelled intersection</h3><p>Vehicle positions and signal phases are illustrative animations driven by the selected forecast, not live camera telemetry or controller state.</p></div>
+      <div className="traffic-sim-live"><i/>{playing ? 'MODEL PLAYING' : 'MODEL PAUSED'} <b>MIN {frame?.minute ?? 0}</b></div>
     </div>
     <div className="traffic-sim-scene-canvas">
-      <svg viewBox="0 0 980 520" role="img" aria-label={`Road network at simulation minute ${frame?.minute ?? 0}; north-south ${active === 'NS' ? 'green' : 'red'}, east-west ${active === 'EW' ? 'green' : 'red'}`}>
+      <svg viewBox="0 0 980 520" role="img" aria-label={`Illustrative model road network at minute ${frame?.minute ?? 0}; north-south ${active === 'NS' ? 'green' : 'red'}, east-west ${active === 'EW' ? 'green' : 'red'}. These are not live signal states.`}>
         <defs>
           <pattern id="urban-grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M 28 0 L 0 0 0 28" fill="none" stroke="#a5b6a4" strokeWidth=".6" opacity=".36"/></pattern>
           <pattern id="road-grain" width="46" height="46" patternUnits="userSpaceOnUse"><circle cx="7" cy="8" r=".8" fill="#ffffff" opacity=".1"/><circle cx="31" cy="25" r=".8" fill="#000000" opacity=".08"/></pattern>
@@ -119,7 +119,7 @@ export default function TrafficSimulationScene({ roads = [], frame, scenario = '
       </svg>
     </div>
     <div className="traffic-sim-scene-footer">
-      <div className="traffic-sim-signal-summary"><span className={active === 'NS' ? 'go' : 'stop'}><i/>{active === 'NS' ? 'N/S GREEN' : 'N/S RED'}</span><span className={active === 'EW' ? 'go' : 'stop'}><i/>{active === 'EW' ? 'E/W GREEN' : 'E/W RED'}</span><small>Illustrative signal phase</small></div>
+      <div className="traffic-sim-signal-summary"><span className={active === 'NS' ? 'go' : 'stop'}><i/>{active === 'NS' ? 'N/S GREEN' : 'N/S RED'}</span><span className={active === 'EW' ? 'go' : 'stop'}><i/>{active === 'EW' ? 'E/W GREEN' : 'E/W RED'}</span><small>Illustrative phase only · no controller connection</small></div>
       <div className="traffic-sim-road-key"><span><i className="light-road"/> Road network</span><span><i className="light-car"/> Vehicles</span><span><i className="light-person"/> Pedestrian zones</span></div>
     </div>
   </section>;

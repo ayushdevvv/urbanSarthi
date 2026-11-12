@@ -151,5 +151,8 @@ def test_production_configuration_fails_closed():
         app_env="production",
         database_url="postgresql+psycopg://user:pass@localhost:5432/urbansaarthi",
         cors_origins="https://frontend.example.org",
+        auth_enabled=True,
+        jwt_secret="test-jwt-secret-that-is-at-least-32-characters-long",
+        ingestion_api_key="test-ingestion-key-that-is-at-least-32-chars",
     )
     assert settings.app_env == "production"

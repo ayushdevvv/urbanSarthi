@@ -164,3 +164,13 @@ def test_route_sorting_does_not_treat_missing_pollution_as_zero():
     ]
     cleanest = routing_service._sort_route_options(routes, "cleanest")
     assert cleanest[0]["pollution_score"] == 55
+
+
+def test_managed_postgres_urls_normalize_to_installed_psycopg_driver():
+    from app.core.config import Settings
+
+    render_url = "postgresql://user:secret@db.example.org:5432/urban"
+    settings = Settings(database_url=render_url)
+    assert settings.database_url == "postgresql+psycopg://user:secret@db.example.org:5432/urban"
+    legacy_url = Settings(database_url="postgres://user:secret@db.example.org:5432/urban")
+    assert legacy_url.database_url == "postgresql+psycopg://user:secret@db.example.org:5432/urban"

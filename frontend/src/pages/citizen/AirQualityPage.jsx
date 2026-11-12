@@ -52,13 +52,12 @@ function AirQualityTrend({ rows }) {
 }
 
 export default function AirQualityPage({ authorityMode = false, forecastFocus = false } = {}) {
-  const [query, setQuery] = useState('Lucknow, Uttar Pradesh');
+  const [query, setQuery] = useState('');
   const [location, setLocation] = useState(null);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState('');
-  const autoLoadStarted = useRef(false);
   const requestSequence = useRef(0);
 
   const load = useCallback(async (latitude, longitude, label) => {
@@ -112,14 +111,6 @@ export default function AirQualityPage({ authorityMode = false, forecastFocus = 
       setQuery(label); setLocating(false); load(coords.latitude, coords.longitude, label);
     }, (geoError) => { if (requestId === requestSequence.current) { setLocating(false); setError(geoError.code === 1 ? 'Location permission was denied. You can search for a city instead.' : 'Could not retrieve your location. Check device location services and retry.'); } }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
   };
-
-  useEffect(() => {
-    if (autoLoadStarted.current) return;
-    autoLoadStarted.current = true;
-    // Load the default city on entry so citizens see an outlook immediately.
-    // They can replace it with any city or their device location at any time.
-    void search();
-  }, []);
 
   const current = report?.current || {};
   const index = currentIndex(current);

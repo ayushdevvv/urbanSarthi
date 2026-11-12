@@ -17,8 +17,10 @@ import TrafficAgentPage from './pages/authority/TrafficAgentPage.jsx';
 import CitizenHomePage from './pages/citizen/CitizenHomePage.jsx';
 import RoutePlannerPage from './pages/citizen/RoutePlannerPage.jsx';
 import AirQualityPage from './pages/citizen/AirQualityPage.jsx';
+import AqiVisionPage from './pages/citizen/AqiVisionPage.jsx';
 import TransitPage from './pages/citizen/TransitPage.jsx';
 import TripsPage from './pages/citizen/TripsPage.jsx';
+import AccountPage from './pages/citizen/AccountPage.jsx';
 import TrafficInfoPage from './pages/citizen/TrafficInfoPage.jsx';
 import Toast from './components/shared/Toast.jsx';
 
@@ -67,11 +69,12 @@ export default function App() {
         <Route path="agent" element={<Navigate to="/citizen" replace />} />
         <Route path="air-quality" element={<AirQualityPage />} />
         <Route path="aqi-forecast" element={<AirQualityPage forecastFocus />} />
-        <Route path="aqi-vision" element={<Navigate to="/citizen/air-quality" replace />} />
+        <Route path="aqi-vision" element={<AqiVisionPage />} />
         <Route path="transit" element={<TransitPage />} />
         <Route path="traffic" element={<TrafficInfoPage />} />
-        <Route path="traffic-vision" element={<Navigate to="/authority/traffic-lab" replace />} />
+        <Route path="traffic-vision" element={<Navigate to="/citizen/traffic" replace />} />
         <Route path="trips" element={<TripsPage />} />
+        <Route path="account" element={<AccountPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

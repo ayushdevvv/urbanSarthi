@@ -14,25 +14,6 @@ const ACCEPTED_VIDEO = '.mp4,.mov,.avi,.mkv,.webm,.m4v';
 const ACCEPTED_IMAGE = 'image/jpeg,image/png,image/webp';
 const CLASS_LABELS = { car: 'Cars', bus: 'Buses', motorbike: 'Motorcycles', bicycle: 'Bicycles', truck: 'Trucks' };
 
-function makeIllustrativeTrafficReport(mode = 'video', confidence = 0.3) {
-  return {
-    mode,
-    model: 'Illustrative traffic scenario',
-    preview_only: true,
-    source_filename: 'Example junction scenario',
-    video: { sampled_frames: 12, duration_seconds: 45, sampling_interval_seconds: 4 },
-    counts: { car: 26, bus: 3, motorbike: 18, bicycle: 2, truck: 4 },
-    total_vehicles: 53,
-    peak_vehicles_in_frame: 53,
-    mean_vehicles_per_sampled_frame: 4.4,
-    congestion_estimate: 'Moderate',
-    congestion_score_heuristic: 58,
-    tracking_ids_available: false,
-    confidence_threshold: confidence,
-    congestion_note: 'Illustrative scenario only. These values are not YOLO detections and are not sent to the Traffic Agent.',
-  };
-}
-
 function compactReport(report) {
   return {
     mode: report.mode,
@@ -68,12 +49,10 @@ export default function TrafficVisionPage() {
   const [mode, setMode] = useState(() => initialReportSnapshot?.value?.mode || 'video');
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
-  const [report, setReport] = useState(() => initialReportSnapshot?.value || null);
-  const [reportRestored, setReportRestored] = useState(Boolean(initialReportSnapshot?.value));
-  const [reportSavedAt, setReportSavedAt] = useState(initialReportSnapshot?.savedAt || null);
+  const [report, setReport] = useState(() => initialReportSnapshot?.value?.preview_only ? null : initialReportSnapshot?.value || null);
+  const [reportRestored, setReportRestored] = useState(Boolean(initialReportSnapshot?.value && !initialReportSnapshot.value.preview_only));
+  const [reportSavedAt, setReportSavedAt] = useState(initialReportSnapshot?.value?.preview_only ? null : initialReportSnapshot?.savedAt || null);
   const [systemStatus, setSystemStatus] = useState(null);
-  const [previewReport, setPreviewReport] = useState(null);
-  const [previewFallbackStartedAt, setPreviewFallbackStartedAt] = useState(Date.now());
   const [confidence, setConfidence] = useState(0.3);
   const [sampleEvery, setSampleEvery] = useState('1');
   const [segmentDistanceKm, setSegmentDistanceKm] = useState('0.5');
@@ -94,17 +73,8 @@ export default function TrafficVisionPage() {
 
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
-  // Keep the scene report area populated after the 40-second service grace period.
-  // This local example is never persisted or handed to the Traffic Agent.
-  useEffect(() => {
-    if (report || previewReport) return undefined;
-    const timeout = globalThis.setTimeout(() => {
-      setPreviewReport((current) => current || makeIllustrativeTrafficReport(mode, confidence));
-    }, 40000);
-    return () => globalThis.clearTimeout(timeout);
-  }, [report, previewReport, mode, confidence, previewFallbackStartedAt]);
-
-  const visibleReport = report || previewReport;
+  // Only genuine inference results or clearly labelled historical results appear here.
+  const visibleReport = report;
   const vehicleTotal = visibleReport?.tracking_ids_available ? (visibleReport?.total_vehicles ?? 0) : (visibleReport?.peak_vehicles_in_frame ?? visibleReport?.total_vehicles ?? 0);
   const countEntries = Object.entries(CLASS_LABELS).filter(([key]) => visibleReport?.counts && key in visibleReport.counts);
   const modelReadiness = Boolean(systemStatus?.ready);
@@ -119,8 +89,6 @@ export default function TrafficVisionPage() {
     if (nextFile.size > maxSize) { setError(`This file exceeds the ${mode === 'video' ? '150 MB' : '8 MB'} upload limit.`); return; }
     setFile(nextFile);
     setPreviewUrl(URL.createObjectURL(nextFile));
-    setPreviewReport(null);
-    setPreviewFallbackStartedAt(Date.now());
     if (report) setReportRestored(true);
     setError('');
   }
@@ -128,8 +96,6 @@ export default function TrafficVisionPage() {
   function switchMode(nextMode) {
     setMode(nextMode);
     setFile(null);
-    setPreviewReport(null);
-    setPreviewFallbackStartedAt(Date.now());
     if (report) setReportRestored(true);
     setError('');
     setPreviewUrl((old) => { if (old) URL.revokeObjectURL(old); return ''; });
@@ -137,7 +103,7 @@ export default function TrafficVisionPage() {
 
   async function analyzeScene() {
     if (!file) { setError(`Upload a ${mode === 'video' ? 'traffic video' : 'road image'} first.`); return; }
-    setBusy(true); setError(''); setPreviewReport(null); setPreviewFallbackStartedAt(Date.now());
+    setBusy(true); setError('');
     try {
       const body = new FormData();
       body.append('file', file);
@@ -173,9 +139,7 @@ export default function TrafficVisionPage() {
     } catch (e) {
       if (report) setReportRestored(true);
       const availabilityFailure = e?.status === 0 || e?.status >= 500 || /timed out|could not be reached|refresh/i.test(e?.message || '');
-      // The 40-second page-level grace period will reveal a local illustrative
-      // scenario when no prior YOLO report exists. Never present it as a detection.
-      setError(e.message || (availabilityFailure ? 'The vision service is taking longer than expected.' : 'The vision pipeline failed. Check the API and model status.'));
+      setError(e.message || (availabilityFailure ? 'The vision service is temporarily unavailable. No result was generated.' : 'The vision pipeline failed. Check the API and model status.'));
     } finally { setBusy(false); }
   }
 
@@ -237,8 +201,8 @@ export default function TrafficVisionPage() {
       <section className="ul-panel ul-evidence-panel">
         <div className="ul-panel-head"><div><span className="ul-panel-kicker">SCENE OUTPUT</span><h3>Scene report</h3></div>{report && <button className="ul-text-button" onClick={downloadReport}><ArrowDownToLine size={14}/> Export JSON</button>}</div>
         {!visibleReport ? <div className="ul-empty-evidence"><div className="ul-scan-illustration"><span/><span/><span/><i/></div><b>Waiting for source evidence</b><p>Run the detector to populate class counts, track metrics and a report tied to your uploaded footage.</p><div className="ul-empty-track"><span>01 Capture</span><i/><span>02 Detect</span><i/><span>03 Verify</span></div></div> : <>
-          <div className="ul-report-status"><span><CheckCircle2 size={16}/></span><div><b>{previewReport ? 'Illustrative traffic scenario' : reportRestored ? 'Last successful analysis' : 'Inference completed'}</b><small>{visibleReport.model || 'YOLO detector'} · {visibleReport.source_filename || file?.name}</small></div><em>{previewReport ? 'ILLUSTRATIVE PREVIEW' : reportRestored ? 'SAVED RESULT' : 'MODEL OUTPUT'}</em></div>
-          {previewReport ? <div className="ul-saved-report-note ul-preview-report-note">Illustrative preview · these values are not YOLO detections and are not sent to the Traffic Agent. Upload footage to generate an evidence report.</div> : reportRestored && <div className="ul-saved-report-note">Restored from this browser · {reportSavedAt ? new Date(reportSavedAt).toLocaleString() : 'Saved earlier'}. This is a previous analysis, not a new inference.</div>}
+          <div className="ul-report-status"><span><CheckCircle2 size={16}/></span><div><b>{reportRestored ? 'Last successful analysis' : 'Inference completed'}</b><small>{visibleReport.model || 'YOLO detector'} · {visibleReport.source_filename || file?.name}</small></div><em>{reportRestored ? 'SAVED RESULT' : 'MODEL OUTPUT'}</em></div>
+          {reportRestored && <div className="ul-saved-report-note">Restored from this browser · {reportSavedAt ? new Date(reportSavedAt).toLocaleString() : 'Saved earlier'}. This is a previous analysis, not a new inference.</div>}
           <div className="ul-metric-grid">
             <div className="ul-metric-card"><span>{visibleReport.tracking_ids_available ? 'Tracked vehicles' : visibleReport.mode === 'video' ? 'Peak vehicles' : 'Vehicles detected'}</span><strong>{vehicleTotal}</strong><small>{visibleReport.tracking_ids_available ? 'Unique IDs across sampled frames' : visibleReport.mode === 'video' ? 'IDs not returned by tracker' : 'From this frame only'}</small></div>
             <div className="ul-metric-card"><span>Peak in frame</span><strong>{visibleReport.peak_vehicles_in_frame ?? visibleReport.total_vehicles ?? 0}</strong><small>Highest concurrent count</small></div>

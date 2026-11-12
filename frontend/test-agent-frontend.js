@@ -22,12 +22,14 @@ assert(app.includes('Navigate to="control"'), 'Authority workspace must open on 
 console.log('✓ Air-first route structure verified');
 
 const layout = read('src/components/layout/AuthorityLayout.jsx');
-for (const target of ['/authority/control', '/authority/air-intelligence', '/authority/iot', '/authority/traffic-lab', '/authority/traffic-agent', '/authority/traffic-simulation']) {
+assert(layout.includes("['operator', 'admin'].includes(user?.role)") && layout.includes('This account does not have authority access'), 'Authority UI must reject valid citizen tokens rather than entering an operator workspace');
+for (const target of ['/authority/control', '/authority/air-intelligence', '/authority/carbon', '/authority/iot', '/authority/sources', '/authority/traffic-lab', '/authority/traffic-agent', '/authority/traffic-simulation', '/authority/analytics', '/authority/settings']) {
   assert(layout.includes(target), `Navigation must include ${target}`);
 }
-assert(layout.includes('OVERVIEW') && layout.includes('AIR QUALITY') && layout.includes('FIELD NETWORK') && layout.includes('TRAFFIC'), 'Navigation must group overview, AQI, IoT and traffic');
+assert(layout.includes('OVERVIEW') && layout.includes('AIR QUALITY') && layout.includes('FIELD NETWORK') && layout.includes('TRAFFIC') && layout.includes('INSIGHTS & SYSTEM'), 'Navigation must group operational, air, field, traffic and insights sections');
 assert(layout.indexOf("to: '/authority/control'") < layout.indexOf("to: '/authority/air-intelligence'") && layout.indexOf("to: '/authority/air-intelligence'") < layout.indexOf("to: '/authority/iot'") && layout.indexOf("to: '/authority/iot'") < layout.indexOf("to: '/authority/traffic-lab'") && layout.indexOf("to: '/authority/traffic-lab'") < layout.indexOf("to: '/authority/traffic-agent'") && layout.indexOf("to: '/authority/traffic-agent'") < layout.indexOf("to: '/authority/traffic-simulation'"), 'Admin navigation order must be Overview → AQI → IoT → Traffic');
-assert(!layout.includes("to: '/authority/signals'") && !layout.includes("to: '/authority/analytics'") && !layout.includes("to: '/authority/traffic-analysis'"), 'Removed standalone Signal Plans and Traffic Analysis must not appear in navigation');
+assert(layout.includes("to: '/authority/analytics'") && layout.includes("to: '/authority/sources'") && layout.includes("to: '/authority/settings'"), 'Implemented insights, source registry and preferences pages must be reachable from navigation');
+assert(!layout.includes("to: '/authority/signals'") && !layout.includes("to: '/authority/traffic-analysis'"), 'Legacy standalone Signal Plans and Traffic Analysis must remain consolidated into the Traffic Agent and Camera System');
 assert(!layout.includes('API configuration'), 'Technical API configuration label must not be shown in the main navigation');
 console.log('✓ Section navigation and user-facing labels verified');
 const shellCss = read('src/styles/app-shell-refinement.css');
@@ -63,6 +65,8 @@ assert(iot.includes('HTTP ingestion available') && iot.includes('does not curren
 console.log('✓ IoT observation ingestion and device registry verified');
 
 
+const trafficScene = read('src/pages/authority/TrafficSimulationScene.jsx');
+assert(trafficScene.includes('REFERENCE MODEL PLAYBACK · NOT LIVE CCTV') && trafficScene.includes('not live signal states') && trafficScene.includes('no controller connection'), 'Animated model playback must not be presented as live camera evidence or physical signal state');
 const trafficInfo = read('src/pages/citizen/TrafficInfoPage.jsx');
 assert(trafficInfo.includes('setScenarioData(null); setProvider(null); setLastUpdated(null);') && trafficInfo.includes('const isServiceFailure = !err?.status || err.status >= 500'), 'Old traffic scenario data is hidden during live refresh and local recovery is reserved for service failures');
 const carbonPage = read('src/pages/authority/CarbonImpactPage.jsx');
@@ -114,12 +118,13 @@ const trafficAgent = read('src/pages/authority/TrafficAgentPage.jsx');
 assert(app.includes('path="traffic-agent"') && app.includes('<TrafficAgentPage'), 'Traffic Agent must be a separate authority route');
 assert(trafficAgent.includes('/traffic-detection/ops-workflow') && trafficAgent.includes('runWorkflow'), 'Separate Traffic Agent page must execute the real operations workflow endpoint');
 assert(trafficAgent.includes('autoStarted.current') && trafficAgent.includes('api.post') && trafficAgent.includes('!report.preview_only'), 'Traffic Agent must auto-start only from genuine saved YOLO evidence and never submit local preview values');
-assert(trafficAgent.includes('40000') && trafficAgent.includes('makeLocalPreview') && trafficAgent.includes('preview_only: true') && trafficAgent.includes('if (!workflowRef.current)'), 'Traffic Agent must reveal a local illustrative preview after the 40-second wait even while a slow request remains pending');
+assert(trafficAgent.includes('loadLatestCameraEvidence') && trafficAgent.includes('since_minutes=15') && !trafficAgent.includes('makeLocalPreview') && !trafficAgent.includes('EXAMPLE_REPORT'), 'Traffic Agent must consume fresh authenticated edge-camera evidence and never substitute a local fake result');
 assert(trafficAgent.includes('activeToolIndex') && trafficAgent.includes('tools list') && trafficAgent.includes('IN PROGRESS'), 'Traffic Agent must show an active workflow progress indicator without claiming individual tools completed before response');
-assert(trafficAgent.includes('Approve draft') && trafficAgent.includes('physical_dispatch_enabled'), 'Agent must retain operator approval and no physical dispatch safeguards');
+assert(trafficAgent.includes('Approve draft') && trafficAgent.includes('It does not operate physical lights.'), 'Agent must retain operator approval and no physical dispatch safeguards');
 assert(trafficAgent.includes('not inferred from this progress animation'), 'Agent must distinguish real tool results from the visual progress indicator');
-assert(traffic.includes('setTimeout') && traffic.includes('40000') && traffic.includes('makeIllustrativeTrafficReport') && traffic.includes('preview_only: true') && traffic.includes('not sent to the Traffic Agent'), 'Traffic Lab must reveal a 40-second illustrative scene without treating it as YOLO evidence');
-assert(traffic.includes("previewReport ? 'Illustrative traffic scenario'"), 'Traffic Lab must identify the local example as an illustrative scenario, not a completed YOLO inference');
+assert(!traffic.includes('makeIllustrativeTrafficReport') && !traffic.includes('previewFallbackStartedAt') && !traffic.includes('previewReport'), 'Traffic Lab must never create a local example report when no live inference exists');
+assert(traffic.includes('No result was generated') && traffic.includes('Waiting for source evidence'), 'Traffic Lab must show an empty/error state until real inference evidence exists');
+assert(app.includes('path="traffic-vision" element={<Navigate to="/citizen/traffic" replace />}'), 'Legacy citizen traffic-vision link must stay inside the citizen portal');
 const trafficAgentCss = read('src/pages/authority/traffic-agent.css');
 assert(trafficAgentCss.includes('.ta-hero') && trafficAgentCss.includes('#2f6a49') && trafficAgentCss.includes('@media(max-width:560px)') && trafficAgentCss.includes('.ta-workstream-note'), 'Traffic Agent must have a responsive premium green theme and readable execution note');
 console.log('✓ PNG favicon, multi-route map, Google Maps, carbon cards and outage recovery verified');
@@ -135,7 +140,7 @@ const airQualityPage = read('src/pages/citizen/AirQualityPage.jsx');
 assert(airQualityPage.includes('air-aqi-outlook') && airQualityPage.includes('AirQualityTrend'), 'Citizen AQI page must combine current readings and the 24-hour outlook');
 assert(citizenLayout.includes("to: '/citizen/aqi-forecast'") && citizenLayout.includes("label: 'AQI forecast'"), 'Citizen navigation must expose a dedicated AQI forecast destination');
 assert(app.includes('path="aqi-forecast" element={<AirQualityPage forecastFocus />}'), 'Citizen AQI forecast URL must open its focused forecast workspace');
-assert(airQualityPage.includes('autoLoadStarted') && airQualityPage.includes('void search()') && airQualityPage.includes('forecast-first'), 'Citizen forecast must load its default location on entry and prioritize the outlook on the forecast route');
+assert(!airQualityPage.includes('autoLoadStarted') && !airQualityPage.includes('void search()') && airQualityPage.includes('forecast-first'), 'Citizen AQI must require a selected city or explicit browser location rather than silently loading a guessed location');
 assert(airQualityPage.includes('forecastAverage') && airQualityPage.includes('forecastIntervalLabel') && airQualityPage.includes('forecastCategory(row)'), 'Citizen forecast must show correctly scaled summary metrics and provider-aware time intervals');
 const signalUi = read('src/pages/authority/SignalPlansPage.jsx');
 const signalApi = fs.readFileSync(path.join(root, '../backend/app/api/signals.py'), 'utf8');

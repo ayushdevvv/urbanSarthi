@@ -14,11 +14,14 @@ router = APIRouter(prefix="/aqi", tags=["Air quality"])
 
 
 @router.get("/observations", response_model=list[AqiObservationOut])
-def list_aqi(db: Session = Depends(get_db), latitude: float | None = Query(default=None, ge=-90, le=90), longitude: float | None = Query(default=None, ge=-180, le=180), radius_km: float = Query(default=20, ge=0.1, le=500), max_age_hours: float = Query(default=24, ge=0.1, le=720), limit: int = 100):
+def list_aqi(db: Session = Depends(get_db), latitude: float | None = Query(default=None, ge=-90, le=90), longitude: float | None = Query(default=None, ge=-180, le=180), radius_km: float = Query(default=20, ge=0.1, le=500), max_age_hours: float = Query(default=24, ge=0.1, le=720), limit: int = 100, include_synthetic: bool = False):
     if (latitude is None) != (longitude is None):
         raise HTTPException(status_code=422, detail="latitude and longitude must be supplied together")
     cutoff = utc_now() - timedelta(hours=max_age_hours)
-    rows = list(db.scalars(select(AqiObservation).where(AqiObservation.observed_at >= cutoff).order_by(AqiObservation.observed_at.desc()).limit(2000)))
+    query = select(AqiObservation).where(AqiObservation.observed_at >= cutoff)
+    if not include_synthetic:
+        query = query.where(AqiObservation.source != "synthetic-demo")
+    rows = list(db.scalars(query.order_by(AqiObservation.observed_at.desc()).limit(2000)))
     if latitude is not None and longitude is not None:
         max_m = radius_km * 1000
         rows = [r for r in rows if haversine_m(latitude, longitude, r.latitude, r.longitude) <= max_m]
@@ -30,7 +33,7 @@ def list_aqi(db: Session = Depends(get_db), latitude: float | None = Query(defau
 def nearby_aqi(latitude: float = Query(ge=-90, le=90), longitude: float = Query(ge=-180, le=180), radius_km: float = Query(default=20, ge=0.1, le=500), db: Session = Depends(get_db)):
     now = utc_now()
     cutoff = now - timedelta(hours=24)
-    rows = list(db.scalars(select(AqiObservation).where(AqiObservation.observed_at >= cutoff).order_by(AqiObservation.observed_at.desc()).limit(1000)))
+    rows = list(db.scalars(select(AqiObservation).where(AqiObservation.observed_at >= cutoff, AqiObservation.source != "synthetic-demo").order_by(AqiObservation.observed_at.desc()).limit(1000)))
     nearby = []
     for row in rows:
         distance = haversine_m(latitude, longitude, row.latitude, row.longitude)
