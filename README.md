@@ -1,38 +1,48 @@
-# UrbanSaarthi — full-stack repository
+# UrbanSaarthi
 
-A React/Vite frontend paired with a FastAPI backend, simplified for a no-login UrbanSaarthi demo. The frontend is organized by shared components, layouts, citizen pages, authority pages and one API client.
+**City mobility and environmental intelligence for citizens and operations teams.**
 
+UrbanSaarthi combines citizen mobility services with an authority operations workspace: route planning, traffic and camera intelligence, AQI monitoring/forecasting, a Traffic Agent, signal-plan review, scenario simulation, public transit, source health and city analytics.
 
-> **Prototype/demo mode:** This archive has login and role checks disabled so the Citizen and Authority portals open directly. The backend creates/uses a shared demo admin identity, and authority write endpoints are unauthenticated. Use only with synthetic demo data; do not deploy this version for real users or connect it to operational systems. Re-enable authentication before production.
+This repository is built to distinguish real observations from forecasts, model scenarios and unavailable integrations. Empty live dashboards are intentional until real providers/devices are connected; demo data is never silently substituted for missing live data.
 
-## Repository structure
+## Product areas
 
-```text
-UrbanSaarthi/
-├── frontend/
-│   ├── src/
-│   │   ├── components/       # layouts, reusable UI and Leaflet map
-│   │   ├── context/           # theme, language and toast
-│   │   ├── hooks/             # API resource lifecycle
-│   │   ├── pages/
-│   │   │   ├── landing/       # main portal selector
-│   │   │   ├── citizen/       # home, planner, AQI station + AQI Vision, transit, trips
-│   │   │   └── authority/     # command centre, signals, analytics, sources, settings
-│   │   ├── services/api/      # shared API client/endpoints
-│   │   └── styles/            # authority and citizen UI styles
-│   ├── .env.example
-│   ├── vercel.json
-│   └── vite.config.js
-├── backend/                   # existing FastAPI + SQLAlchemy + Alembic app
-├── .gitignore
-└── README.md
-```
+### Citizen workspace
+The citizen navigation intentionally contains five destinations:
 
-## Run locally
+- **Home:** route planning begins only after the user submits origin and destination; location is requested only after an explicit action.
+- **AQI Forecast:** search any city, neighbourhood or address for current air-quality conditions, pollutant cards and a 24-hour forecast.
+- **Traffic Conditions:** explicitly use device location or search an area to map nearby roads, show provider-backed speed/incidents where available, and read nearby traffic news.
+- **Bus & Train:** discover mapped stops/routes, search recent service updates and show timetable/realtime arrivals only when agency data is connected.
+- **My Trips:** save journeys and review personal trip history.
 
-### 1. Backend
+### Authority workspace
 
-Read `backend/README.md` first. In brief, use Python 3.11+, create a virtual environment, install `backend/requirements.txt`, copy `backend/.env.example` to `backend/.env`, configure the database and CORS, run migrations, then seed the database and start Uvicorn:
+- **City Overview:** mapped registered junctions, AQI stations, source freshness, alerts and city reports.
+- **Traffic Lab:** OpenCV/YOLO image and video analysis, annotated evidence, vehicle-class reports and authorized RTSP edge-camera ingestion.
+- **Traffic Simulation:** native SUMO baseline vs. signal intervention, using actual SUMO FCD vehicle coordinates/headings for playback and edge interval metrics for road reports.
+- **Traffic Agent:** evidence review, forecasting, emissions estimates and signal-plan recommendations with operator approval.
+- **AQI:** air-quality observations, forecasts and hotspots.
+- **Carbon Emissions:** vehicle-class and distance-based pollutant estimates.
+- **IoT Sensors:** authenticated device observations and ESP32/PMS5003 integration starter.
+
+The platform separates observations, forecasts, news, model scenarios and unavailable integrations. Missing live data is shown as unavailable rather than replaced with invented metrics. Physical traffic-signal writes are intentionally disabled.
+
+## Architecture
+
+- `frontend/`: React + Vite SPA, citizen and authority surfaces, responsive shared design system.
+- `backend/`: FastAPI, SQLAlchemy, Alembic, forecasting, YOLO and integration adapters.
+- `backend/scripts/edge_camera_worker.py`: separate RTSP/YOLO edge worker for authorized cameras.
+- `hardware/`: ESP32 + PMS5003 HTTP telemetry starter.
+- `docs/FEATURE_READINESS.md`: capability-by-capability implementation and live-data truth table.
+- `docs/LIVE_SYSTEM_SETUP.md`: production, provider, camera, SUMO, transit and IoT setup instructions.
+
+## Local development
+
+### Backend
+
+Python 3.11+ recommended.
 
 ```bash
 cd backend
@@ -41,66 +51,63 @@ python -m venv .venv
 # macOS/Linux: source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-# Copy .env.example to .env and set the database/CORS values.
-alembic upgrade head
+cp .env.example .env   # on Windows, copy .env.example .env
+alembic upgrade heads
 python scripts/seed_demo.py
 uvicorn app.main:app --reload
 ```
 
-API docs: `http://127.0.0.1:8000/docs`. Health checks: `/healthz` and `/readyz`.
+Local development uses SQLite and may use the local demo identity (`APP_ENV=development`, `AUTH_ENABLED=false`). The default seed registers provider sources only. To explicitly generate a synthetic lab network or synthetic telemetry, use `--demo-network` or `--demo-telemetry`; never enable those in production.
 
-### 2. Frontend
+API docs: `http://127.0.0.1:8000/docs`  
+Health: `http://127.0.0.1:8000/healthz` and `/readyz`.
 
-In a second terminal:
+### Frontend
+
+In another terminal:
 
 ```bash
 cd frontend
-# Copy .env.example to .env and set VITE_API_URL if needed.
-npm install
+cp .env.example .env
+npm ci
 npm run dev
 ```
 
-Open the Vite URL shown in the terminal. `VITE_API_URL` must include `/api/v1`. No API secrets belong in frontend environment variables.
+`VITE_API_URL` must include `/api/v1`. Provider credentials, database passwords, JWT secrets and device-ingestion keys must never be placed in frontend variables.
 
-## Deploy frontend to Vercel
+## Live deployment
 
-Set the Vercel project Root Directory to `frontend`. Set `VITE_API_URL` in Vercel Environment Variables to the production backend URL including `/api/v1`. The existing `frontend/vercel.json` routes client-side paths to the Vite SPA entry point. Ensure the backend CORS configuration allows the deployed frontend origin.
+For production the backend deliberately refuses to start unless all of these are configured: PostgreSQL, explicit non-wildcard `CORS_ORIGINS`, `AUTH_ENABLED=true`, a 32+ character `JWT_SECRET`, and a separate 32+ character `INGESTION_API_KEY`. Set `VITE_REQUIRE_AUTH=true` and the production API URL in the frontend build.
 
-## Referenced views covered
+See **[Live-system setup](./docs/LIVE_SYSTEM_SETUP.md)** for exact provider setup and acceptance checks. See **[Feature readiness](./docs/FEATURE_READINESS.md)** for what runs now versus what requires external access, feeds, devices or calibration. For the latest latency fixes, production API URL and native SUMO deployment option, see **[Traffic, AQI and simulation fixes](./docs/TRAFFIC_AQI_SIMULATION_FIX.md)**. The optional `render-sumo.yaml` Blueprint deploys an API worker with SUMO installed.
 
-- Main portal selection
-- Citizen home and map
-- Route planning with fastest / balanced / cleanest preferences
-- Air-quality stations and observations
-- Location-based AQI outlook: current coordinates, Open-Meteo/CAMS AQI and pollutant forecasts, and map marker
-- Traffic Vision: camera snapshots or upload, YOLO11 vehicle counts, annotated image, and labelled fallback
-- Public transport routes, stops and service alerts
-- Saved trips, details, lifecycle actions and CSV export
-- Authority command centre, traffic map and alert panels
-- Signal plan list, create, simulate and phase preview
-- Data-source health, source registration and refresh
-- Authority demo settings and preferences
+## Data-source truth and limitations
 
-## API integration and data integrity
+- Open-Meteo/CAMS are atmospheric model forecasts, not official CPCB station measurements.
+- OpenAQ supplies pollutant concentration observations; the connector does not invent an official CPCB AQI value.
+- OpenWeather AQI is a distinct 1–5 scale and is shown separately from US AQI/CPCB AQI.
+- TomTom integration returns a current road-flow snapshot for a queried coordinate; it is not a complete live traffic-aware routing engine.
+- YOLO camera worker events are sampled-frame vehicle counts. Queue, speed and wait metrics remain unknown unless calibrated measurement logic supplies them.
+- Transit schedules require an operator-imported GTFS feed; live arrivals require a separate provider/GTFS-RT adapter.
+- The bundled SUMO network is synthetic. Real-city simulation requires network conversion, junction/edge mapping, demand calibration and validation against observations.
+- Signal dispatch is a preview only. No command is sent to physical controllers.
+- Carbon values are estimates based on vehicle counts and assumptions, not direct exhaust measurements.
+- Citizen sign-up does not yet include email verification, password reset delivery or rate limiting; do not open it publicly until an identity/verification layer and abuse controls are added.
 
-The frontend calls documented API routes from `backend/openapi.json`. For example, command overview uses `/command-center/overview`, city analytics uses `/analytics/city-summary`, signal plans use `/signals/plans`, air quality uses `/aqi/observations`, routing uses `/routing/plan`, and trip history uses `/trips`.
+## Quality checks
 
-Location-based AQI uses Open-Meteo/CAMS without a paid key. Routing and mapped transit discovery use public OpenStreetMap-derived services. Timetable availability is not inferred from stop locations; schedules require an operator GTFS/live feed. If road geometry is unavailable, route estimates do not draw straight-line paths. Reference fallback scenarios are explicitly distinguished from provider observations. The existing backend explicitly does not issue physical traffic signal writes or valid paid travel tickets.
+```bash
+cd backend
+python -m pytest -q
+python -m compileall -q app scripts
+```
 
-## Screenshots and design target
+Frontend smoke tests:
 
-The interface uses the uploaded UrbanSaarthi references as the visual target: light green-tinted work surfaces, dark green navigation, lime selection accents, compact cards and Leaflet/OpenStreetMap views. The authority layouts follow the supplied dashboard structure; citizen-facing pages mirror the supplied portal, route-planning, AQI, public-transit and trips layouts. Exact rendered pixel equality must still be checked in a browser at the reference viewport sizes and with the same API data density.
+```bash
+cd frontend
+node test-agent-frontend.js
+node test-public-routing.js
+```
 
-## AQI Vision (multimodal model)
-
-The `/citizen/aqi-vision` page now asks for the visitor's location and retrieves a current + 24-hour AQI outlook from Open-Meteo/CAMS without a key. It shows US AQI, pollutant concentrations and hourly forecasts, and explicitly notes that these are atmospheric model forecasts rather than official ground-station readings. The legacy image-based AQI endpoint is retained for compatibility, but it is no longer the primary location-AQI workflow.
-
-## Final quality check
-
-See [`FINAL_QA.md`](./FINAL_QA.md) for the AQI page render fix, model inference smoke test, responsive refinements, known verification limits, and deployment checklist.
-
-## Traffic simulation forecast
-
-The included SUMO-generated dataset contains 518,400 records from 36 runs across 80 road edges. The XGBoost model and separate 60-minute horizon model are available through `GET /api/v1/traffic/simulation` and `GET /api/v1/traffic/simulation/scenario`. The client can play the 60-minute model timeline at five-minute forecast steps. The 60-minute held-out evaluation is shown separately (61.5% congestion-level accuracy, MAE 3.93 vehicles, R² 0.384); this is a stored-data model scenario, not a live SUMO/TraCI process or current road sensor feed.
-
-For production, set `VITE_API_URL=https://urbansarthi.onrender.com/api/v1` in Vercel and configure provider credentials only in the backend environment. The frontend has a production API fallback, but an explicit Vercel value is recommended.
+Run `npm ci && npm run build` in a network-enabled CI/deployment environment before release. This project workspace previously could not complete npm installation because DNS resolution for the npm registry failed, so a production Vite build was not verified in that environment.

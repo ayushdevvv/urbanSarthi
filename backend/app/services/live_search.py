@@ -6,11 +6,17 @@ recently indexed reporting; its results are news articles, not traffic telemetry
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from copy import deepcopy
+import threading
+import time
 from email.utils import parsedate_to_datetime
-from urllib.parse import quote_plus
 import xml.etree.ElementTree as ET
 
 import httpx
+
+_NEWS_CACHE: dict[tuple[str, int, str], tuple[float, dict]] = {}
+_NEWS_CACHE_LOCK = threading.Lock()
+_NEWS_CACHE_TTL_SECONDS = 300
 
 from app.core.config import settings
 
@@ -36,6 +42,24 @@ def search_live_news(query: str, *, limit: int = 8, topic: str = "news") -> dict
         return {"status": "unavailable", "provider": None, "items": [], "query": clean,
                 "updated_at": datetime.now(timezone.utc).isoformat(), "note": "A search query is required."}
 
+    cache_key = (clean.casefold(), max(1, min(limit, 12)), topic)
+    now = time.monotonic()
+    with _NEWS_CACHE_LOCK:
+        cached = _NEWS_CACHE.get(cache_key)
+        if cached and cached[0] > now:
+            result = deepcopy(cached[1])
+            result["served_from_cache"] = True
+            return result
+        if cached:
+            _NEWS_CACHE.pop(cache_key, None)
+
+    def remember(result: dict) -> dict:
+        if result.get("status") in {"available", "no_results"}:
+            with _NEWS_CACHE_LOCK:
+                _NEWS_CACHE[cache_key] = (time.monotonic() + _NEWS_CACHE_TTL_SECONDS, deepcopy(result))
+        result["served_from_cache"] = False
+        return result
+
     if settings.tavily_api_key.strip():
         try:
             response = httpx.post(
@@ -44,13 +68,13 @@ def search_live_news(query: str, *, limit: int = 8, topic: str = "news") -> dict
                     "api_key": settings.tavily_api_key.strip(),
                     "query": clean,
                     "topic": topic,
-                    "search_depth": "advanced",
+                    "search_depth": "basic",
                     "max_results": max(1, min(limit, 12)),
                     "include_answer": False,
                     "include_raw_content": False,
                 },
                 headers={"Accept": "application/json", "User-Agent": "UrbanSaarthi/1.0"},
-                timeout=14.0,
+                timeout=3.5,
             )
             response.raise_for_status()
             payload = response.json()
@@ -65,9 +89,9 @@ def search_live_news(query: str, *, limit: int = 8, topic: str = "news") -> dict
                     "source": str(row.get("source") or "")[:160],
                     "published_at": _iso(row.get("published_date")),
                 })
-            return {"status": "available" if items else "no_results", "provider": "Tavily Search",
+            return remember({"status": "available" if items else "no_results", "provider": "Tavily Search",
                     "items": items[:limit], "query": clean, "updated_at": datetime.now(timezone.utc).isoformat(),
-                    "note": "Search results are source-linked reporting. Check publisher timestamps; they are not live vehicle or service telemetry."}
+                    "note": "Search results are source-linked reporting. Check publisher timestamps; they are not live vehicle or service telemetry."})
         except (httpx.HTTPError, ValueError, TypeError, KeyError):
             # Preserve a working keyless news path; never surface the provider's raw error.
             pass
@@ -77,7 +101,7 @@ def search_live_news(query: str, *, limit: int = 8, topic: str = "news") -> dict
             "https://news.google.com/rss/search",
             params={"q": clean, "hl": "en-IN", "gl": "IN", "ceid": "IN:en"},
             headers={"User-Agent": "UrbanSaarthi/1.0 (citizen mobility news)"},
-            timeout=12.0,
+            timeout=2.5,
         )
         response.raise_for_status()
         root = ET.fromstring(response.content)
@@ -91,9 +115,9 @@ def search_live_news(query: str, *, limit: int = 8, topic: str = "news") -> dict
             if title and url.startswith(("https://", "http://")):
                 items.append({"title": title[:300], "url": url, "snippet": "",
                               "source": source[:160], "published_at": _iso(pub)})
-        return {"status": "available" if items else "no_results", "provider": "Google News RSS",
+        return remember({"status": "available" if items else "no_results", "provider": "Google News RSS",
                 "items": items, "query": clean, "updated_at": datetime.now(timezone.utc).isoformat(),
-                "note": "Recent news index. Article publication time is shown when supplied by the publisher; this is not live transit telemetry."}
+                "note": "Recent news index. Article publication time is shown when supplied by the publisher; this is not live transit telemetry."})
     except (httpx.HTTPError, ET.ParseError, ValueError, TypeError):
         return {"status": "unavailable", "provider": None, "items": [], "query": clean,
                 "updated_at": datetime.now(timezone.utc).isoformat(),

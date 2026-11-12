@@ -1,0 +1,31 @@
+# UrbanSaarthi hackathon deployment: existing API service, now Docker-based
+# so SUMO is installed inside the Render container.
+services:
+  - type: web
+    name: urbansaarthi-api
+    runtime: docker
+    plan: 1c-2g
+    dockerfilePath: ./backend/Dockerfile.sumo
+    dockerContext: ./backend
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: AUTH_ENABLED
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: INGESTION_API_KEY
+        generateValue: true
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
+      - key: SUMO_BINARY
+        value: /usr/bin/sumo
+      - key: SUMO_HOME
+        value: /usr/share/sumo

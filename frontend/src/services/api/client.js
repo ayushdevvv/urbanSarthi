@@ -1,15 +1,10 @@
 import { readApiSnapshot, storeApiSnapshot, publishDataStatus, createDataStatusContext } from '../apiSnapshot.js';
 
-const DEFAULT_API_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000/api/v1' : 'https://urbansarthi.onrender.com/api/v1';
-const FALLBACK_GRACE_MS = 40_000;
+const DEFAULT_API_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000/api/v1' : 'https://urbansaarthi-api.onrender.com/api/v1';
+const FALLBACK_GRACE_MS = 5_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 70_000;
-const ATTEMPT_TIMEOUT_MS = 9_000;
+const ATTEMPT_TIMEOUT_MS = 18_000;
 export const AUTH_TOKEN_KEY = 'urbansaarthi_access_token';
-
-async function waitForFallbackGrace(startedAt, graceMs = FALLBACK_GRACE_MS) {
-  const remaining = graceMs - (Date.now() - startedAt);
-  if (remaining > 0) await new Promise((resolve) => globalThis.setTimeout(resolve, remaining));
-}
 
 export const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || DEFAULT_API_URL).replace(/\/$/, '');
 
@@ -61,9 +56,8 @@ export async function request(path, options = {}) {
     return saved.payload;
   };
 
-  // Always give the live API first opportunity to respond. After 40 seconds,
-  // availability failures may restore a last-successful snapshot. External
-  // cancellation is preserved for uploads/navigation.
+  // Give the live API a short retry window, then use a saved read snapshot when available.
+  // Non-read operations honour their caller-supplied timeout (important for video and SUMO jobs).
   const controller = new AbortController();
   const onExternalAbort = () => controller.abort(externalSignal?.reason);
   if (externalSignal) {
@@ -94,8 +88,10 @@ export async function request(path, options = {}) {
       const attemptController = new AbortController();
       const relayAbort = () => attemptController.abort(controller.signal.reason);
       controller.signal.addEventListener('abort', relayAbort, { once: true });
-      const remainingLiveWindow = retryable ? Math.max(250, fallbackDeadline - Date.now()) : ATTEMPT_TIMEOUT_MS;
-      const attemptTimeout = Math.max(250, Math.min(ATTEMPT_TIMEOUT_MS, remainingLiveWindow));
+      const remainingLiveWindow = retryable ? Math.max(250, fallbackDeadline - Date.now()) : timeoutMs;
+      const attemptTimeout = retryable
+        ? Math.max(250, Math.min(ATTEMPT_TIMEOUT_MS, Math.max(250, remainingLiveWindow)))
+        : Math.max(250, timeoutMs);
       const attemptTimeoutId = globalThis.setTimeout(
         () => attemptController.abort(new DOMException('Connection attempt timed out', 'TimeoutError')),
         attemptTimeout,
@@ -116,7 +112,7 @@ export async function request(path, options = {}) {
 
       const remaining = fallbackDeadline - Date.now();
       if (remaining <= 0) break;
-      const delay = Math.min(1_500 * Math.min(2 ** attempt, 4), remaining);
+      const delay = Math.min(300 * Math.min(2 ** attempt, 4), remaining);
       attempt += 1;
       await retryDelay(delay);
       response = undefined;
@@ -126,7 +122,6 @@ export async function request(path, options = {}) {
     const reason = controller.signal.aborted && !isExternalAbort
       ? `The service did not respond within ${Math.round(Math.max(1000, timeoutMs) / 1000)} seconds.`
       : 'The service could not be reached.';
-    if (!isExternalAbort && cacheEligible) await waitForFallbackGrace(requestStartedAt, fallbackGraceMs);
     const saved = isExternalAbort ? null : returnSaved(reason);
     if (saved !== null) return saved;
     if (!isExternalAbort) publishStatus({ type: 'offline', path: cacheKey, reason });
@@ -136,11 +131,10 @@ export async function request(path, options = {}) {
     externalSignal?.removeEventListener?.('abort', onExternalAbort);
   }
 
-  // A failed read is allowed to use the saved response only after the complete
-  // retry window has expired. Non-read requests are never replayed automatically.
+  // A failed read may use its saved response after the short retry window.
+  // Non-read requests are never replayed automatically.
   if (!response || availabilityStatus(response.status)) {
     const reason = response ? `The service returned ${response.status}.` : 'The service could not be reached.';
-    if (cacheEligible) await waitForFallbackGrace(requestStartedAt, fallbackGraceMs);
     const saved = returnSaved(reason);
     if (saved !== null) return saved;
     publishStatus({ type: 'offline', path: cacheKey, reason });
@@ -155,8 +149,7 @@ export async function request(path, options = {}) {
     // 404/422 is a real request or permission error, not an outage to mask.
     const outageStatus = response.status >= 500 || response.status === 408 || response.status === 429;
     if (outageStatus) {
-      if (cacheEligible) await waitForFallbackGrace(requestStartedAt, fallbackGraceMs);
-      const saved = returnSaved(`The service returned ${response.status}.`);
+        const saved = returnSaved(`The service returned ${response.status}.`);
       if (saved !== null) return saved;
       publishStatus({ type: 'offline', path: cacheKey, reason: `The service returned ${response.status}.` });
     } else {

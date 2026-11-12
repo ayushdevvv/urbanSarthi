@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle, ArrowDownToLine, ArrowUpRight, CheckCircle2, ChevronDown,
+  Activity, AlertTriangle, ArrowDownToLine, ArrowUpRight, Bot, CheckCircle2, ChevronDown,
   CircleHelp, Clock3, Cpu, FileVideo, Gauge, LoaderCircle, ScanLine, ShieldCheck, SlidersHorizontal, Video, XCircle,
 } from 'lucide-react';
 import { api } from '../../services/api/client.js';
@@ -67,7 +67,7 @@ export default function TrafficVisionPage() {
 
   useEffect(() => {
     let alive = true;
-    api.get('/traffic-detection/video-status', { timeoutMs: 40000 }).then((result) => {
+    api.get('/traffic-detection/video-status', { timeoutMs: 9000, fallbackGraceMs: 6500 }).then((result) => {
       if (alive) setSystemStatus(result);
     }).catch((reason) => {
       if (alive) setSystemStatus({ ready: false, opencv_available: false, video_analysis_ready: false, note: 'Live video-analysis capability is temporarily unavailable. Try again after the service reconnects.' });
@@ -122,7 +122,7 @@ export default function TrafficVisionPage() {
       const endpoint = mode === 'video'
         ? `/traffic-detection/analyze-video?confidence=${confidence}&sample_every_seconds=${sampleEvery}${roiQuery}`
         : `/traffic-detection/analyze?confidence=${confidence}`;
-      const data = await api.postForm(endpoint, body, { timeoutMs: 40000 });
+      const data = await api.postForm(endpoint, body, { timeoutMs: mode === 'video' ? 180000 : 60000, fallbackGraceMs: 0 });
       const analyzedReport = { ...data, mode, source_filename: file.name, segment_distance_km: Number(segmentDistanceKm) || 0.5, saved_at: new Date().toISOString() };
       setReport(analyzedReport);
       setReportRestored(false);

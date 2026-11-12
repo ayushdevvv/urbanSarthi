@@ -129,7 +129,47 @@ function NativeSumoScene({ roads = [], frame, playing = false, areaName, signalT
   </section>;
 }
 
+
+function ModelForecastScene({ frame, areaName = 'Bundled reference network', networkGeometry, signalTimings }) {
+  const mapRoads = networkGeometry?.roads || [];
+  const junctions = networkGeometry?.junctions || [];
+  const roadData = new Map((frame?.roads || []).map((road) => [String(road.road), road]));
+  const colorFor = (level) => level === 'Heavy' ? '#c95c52' : level === 'Moderate' ? '#d4a044' : '#438d66';
+  const active = signalPhase(Number(frame?.minute || 0), 'baseline', signalTimings);
+  return <section className="panel traffic-sim-scene native-sumo-scene model-forecast-scene" aria-label="XGBoost network queue forecast on the bundled reference road network; no individual vehicle trajectories">
+    <div className="traffic-sim-scene-head">
+      <div><span className="eyebrow">XGBOOST · 30 / 60-MINUTE QUEUE FORECAST</span><h3>{areaName} · Network forecast</h3><p>Road colours show per-edge modelled queue levels. These are forecast estimates, not live camera data or individual moving vehicles. Install SUMO for microscopic vehicle trajectories.</p></div>
+      <div className="traffic-sim-live"><i/>{`FORECAST · MIN ${Number(frame?.minute ?? 0)}`}</div>
+    </div>
+    <div className="traffic-sim-scene-canvas native-sumo-canvas model-forecast-canvas">
+      <svg viewBox="0 0 1000 1000" role="img" aria-label={`XGBoost forecast road network at minute ${frame?.minute ?? 0}`}>
+        <defs><pattern id="model-ground-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#d5e0d2" strokeWidth="1"/></pattern></defs>
+        <rect width="1000" height="1000" fill="#e7eee3"/><rect width="1000" height="1000" fill="url(#model-ground-grid)"/>
+        {Array.from({ length: 16 }, (_, i) => <rect key={`model-block-${i}`} x={72 + (i % 4) * 225} y={72 + Math.floor(i / 4) * 225} width="150" height="150" rx="15" fill={i % 3 === 0 ? '#dce7d5' : '#e1e9dc'} stroke="#d0dccb" strokeWidth="2"/>)}
+        {mapRoads.map((road) => {
+          const points = (road.points || []).map((point) => `${point.x},${point.y}`).join(' ');
+          if (!points) return null;
+          const data = roadData.get(String(road.id));
+          const color = colorFor(data?.level);
+          return <g key={road.id}><title>{`${road.id} · ${data?.level || 'No forecast'} · Queue ${data?.queue ?? '—'}`}</title>
+            <polyline points={points} fill="none" stroke="#f4f6ef" strokeWidth="34" strokeLinecap="round" strokeLinejoin="round"/>
+            <polyline points={points} fill="none" stroke={color} strokeWidth="24" strokeLinecap="round" strokeLinejoin="round" opacity={data ? .94 : .32}/>
+            <polyline points={points} fill="none" stroke="#fff" strokeWidth="1.5" strokeDasharray="8 12" opacity=".8"/>
+          </g>;
+        })}
+        {junctions.map((junction) => <g key={junction.id} transform={`translate(${junction.x} ${junction.y})`}><circle r="12" fill="#f6faf3" stroke="#607769" strokeWidth="2"/><circle r="4" fill={active === 'ALL_RED' ? '#d75a52' : active.includes('YELLOW') ? '#dfa83e' : '#48a275'}/><title>{junction.id} · proposed cycle illustration</title></g>)}
+        {!mapRoads.length && <text x="500" y="500" textAnchor="middle" fill="#65776b" fontSize="25">Reference road geometry unavailable</text>}
+      </svg>
+    </div>
+    <div className="traffic-sim-scene-footer native-sumo-footer">
+      <div className="traffic-sim-signal-summary"><span className={active === 'NS' ? 'go' : 'stop'}><i/>N/S {active === 'NS' ? 'GREEN' : active === 'NS_YELLOW' ? 'AMBER' : 'RED'}</span><span className={active === 'EW' ? 'go' : 'stop'}><i/>E/W {active === 'EW' ? 'GREEN' : active === 'EW_YELLOW' ? 'AMBER' : 'RED'}</span><small>Illustrative proposed phase · no field-controller link</small></div>
+      <div className="traffic-sim-road-key"><span><i className="light-road"/> {mapRoads.length} reference edges</span><span><i style={{background:'#438d66'}}/> Free</span><span><i style={{background:'#d4a044'}}/> Moderate</span><span><i style={{background:'#c95c52'}}/> Heavy</span></div>
+    </div>
+  </section>;
+}
+
 export default function TrafficSimulationScene(props) {
+  if (props.modelForecast) return <ModelForecastScene {...props}/>;
   if (props.nativeSumo) return <NativeSumoScene {...props}/>;
   const { roads = [], frame, scenario = 'baseline', playing = false, areaName = 'Selected area', signalTimings } = props;
   const active = signalPhase(Number(frame?.minute || 0), scenario, signalTimings);

@@ -19,9 +19,16 @@
 - Added Render production defaults and an idempotent startup sequence for Alembic migrations, provider-source registration and optional first-admin bootstrap.
 - Added feature readiness and live-system setup documents.
 
+- Shortened cached-read retry and page fallback waits from the previous long grace period to a bounded five-second window; preserved explicit long job timeouts for video analysis and SUMO.
+- Corrected the frontend production API fallback to match the Render service slug declared in `render.yaml`, while preserving `VITE_API_URL` as the authoritative deployment override.
+- Reduced OSM/Overpass, TomTom, Tavily and Google News request timeouts; cached successful traffic-news results and short-lived road-lookup failures to reduce repeated slow provider calls.
+- Added a Traffic Lab route error boundary with a retry and return-to-overview recovery path.
+- Added an optional `render-sumo.yaml` Docker Blueprint that installs the SUMO CLI on the API worker; the standard Python deployment keeps the XGBoost fallback.
+- Added a full traffic/AQI/SUMO setup guide with Windows, WSL and Render instructions.
+
 ## Verification
 
-- Backend: `python -m pytest -q` — **53 passed**.
+- Backend: `python -m pytest -q` — **58 passed**.
 - Backend syntax: `python -m compileall -q app scripts` — passed.
 - SUMO FCD regression: verifies missing FCD output fails explicitly rather than returning an empty vehicle-playback timeline.
 - Frontend source smoke test: `node test-agent-frontend.js` — passed.
@@ -43,4 +50,4 @@ A production Vite bundle is **not verified**: npm dependencies could not be rest
 8. Provision and calibrate field sensors. The current device path is authenticated HTTP, not MQTT.
 9. Keep physical ATCS writes disabled until vendor integration, safety certification and field acceptance are complete.
 
-See [Live-system setup](./LIVE_SYSTEM_SETUP.md) and [Feature readiness](./FEATURE_READINESS.md) for the complete requirements and per-feature limits.
+See [Live-system setup](./LIVE_SYSTEM_SETUP.md), [Feature readiness](./FEATURE_READINESS.md), and [Traffic, AQI and simulation fixes](./TRAFFIC_AQI_SIMULATION_FIX.md) for the complete requirements and per-feature limits.

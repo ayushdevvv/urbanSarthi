@@ -50,7 +50,7 @@ for (const endpoint of ['/aqi/nearby', '/air-intelligence/hotspots']) assert(aqi
 for (const feature of ['AqiDial', 'AqiForecastTrend', '24-hour AQI forecast', 'Expected peak', '24h average', 'Nearby sensor network', 'Priority locations']) assert(aqi.includes(feature), `AQI overview must include ${feature}`);
 assert(app.includes('path="aqi-forecast" element={<AirQualityOverviewPage forecastFocus />}'), 'Authority must provide a dedicated AQI forecast view without adding another sidebar item');
 const airService = read('src/services/airQuality.js');
-assert(airService.includes('hasUsAqiForecast') && airService.includes('forecast_provider') && airService.includes('fetchOpenMeteoAirQuality') && airService.includes("forecast_hours: '24'"), 'AQI service must supplement a non-US-AQI forecast with a comparable 24-hour US AQI timeline when available');
+assert(airService.includes('hasAnyForecast') && airService.includes('fetchOpenMeteoAirQuality') && airService.includes("forecast_hours: '24'") && airService.includes('Do not block a usable OpenWeather'), 'AQI service must render a usable primary forecast without waiting on a second provider');
 assert(aqi.includes('US AQI · 0–500') && aqi.includes('OpenWeather AQI · 1–5') && aqi.includes('matchingCurrentValue'), 'AQI forecast must keep provider index scales separate');
 console.log('✓ AQI-centred overview and visualisations verified');
 
@@ -69,9 +69,10 @@ console.log('✓ IoT observation ingestion and device registry verified');
 
 
 const trafficScene = read('src/pages/authority/TrafficSimulationScene.jsx');
-assert(trafficScene.includes('NATIVE SUMO · FLOATING CAR DATA') && trafficScene.includes('vehicle_positions') && trafficScene.includes('networkGeometry') && trafficScene.includes('signalTimings') && trafficScene.includes('NativeVehicle'), 'Simulation scene must plot native SUMO vehicle coordinates/headings on SUMO road geometry and reflect the candidate signal phase');
+assert(trafficScene.includes('NATIVE SUMO · FLOATING CAR DATA') && trafficScene.includes('XGBOOST · 30 / 60-MINUTE QUEUE FORECAST') && trafficScene.includes('vehicle_positions') && trafficScene.includes('networkGeometry') && trafficScene.includes('signalTimings') && trafficScene.includes('NativeVehicle'), 'Simulation scene must support native SUMO trajectories and a truthful XGBoost network forecast view');
 const citizenTraffic = read('src/pages/citizen/TrafficConditionsPage.jsx');
 assert(citizenTraffic.includes('getCurrentPosition') && citizenTraffic.includes('Use my location') && citizenTraffic.includes('/traffic/nearby') && citizenTraffic.includes('/traffic/news'), 'Citizen traffic must require explicit location and load nearby roads plus traffic news');
+assert(citizenTraffic.includes('fallbackGraceMs: 6500') && airService.includes('fallbackGraceMs: 7000'), 'Citizen traffic and AQI browser deadlines must allow their bounded backend provider lookups to complete');
 const carbonPage = read('src/pages/authority/CarbonImpactPage.jsx');
 assert(!carbonPage.includes('readLocalRecord(\'carbon-last-estimate\')') && carbonPage.includes('setResult(null);'), 'Old carbon results must not appear as initial fallback before the current estimate request');
 const traffic = read('src/pages/citizen/TrafficVisionPage.jsx');
@@ -82,8 +83,12 @@ assert(traffic.includes('saveLatestVisionEvidence'), 'Traffic Lab must hand vehi
 const evidenceStore = read('src/services/visionEvidence.js');
 assert(evidenceStore.includes('airtraffic.latestVisionEvidence') && evidenceStore.includes('LEGACY_STORAGE_KEY'), 'Video evidence storage must use the neutral key and preserve existing saved evidence');
 const sumoPage = read('src/pages/authority/TrafficSimulationPage.jsx');
-assert(sumoPage.includes("api.post('/traffic/sumo/run'") && sumoPage.includes('north_south_green_seconds') && sumoPage.includes('east_west_green_seconds') && sumoPage.includes('SUMO did not return edge interval'), 'Native SUMO workbench must submit signal timings and render edge-level output without synthetic fallback');
-assert(sumoPage.includes('30s / 5m') && sumoPage.includes('SUMO FCD every 30s; road-edge metrics: every 5 min'), 'SUMO page must disclose actual vehicle-position and road-metric sampling intervals');
+assert(sumoPage.includes("api.post('/traffic/sumo/run'") && sumoPage.includes("api.post('/traffic/simulation/model-scenario'") && sumoPage.includes('north_south_green_seconds') && sumoPage.includes('east_west_green_seconds') && sumoPage.includes('XGBOOST FORECAST'), 'Simulation workbench must prefer native SUMO and fall back to the trained XGBoost forecast without fake vehicle trajectories');
+assert(sumoPage.includes('30s / 5m') && sumoPage.includes('SUMO FCD every 30s; edge metrics every 5 min'), 'SUMO page must disclose actual vehicle-position and road-metric sampling intervals');
+assert(app.includes('RouteErrorBoundary') && app.includes('traffic-lab" element={<RouteErrorBoundary'), 'Traffic Lab route must show a recoverable error state instead of going blank on a render exception');
+const routeBoundary = read('src/components/shared/RouteErrorBoundary.jsx');
+assert(routeBoundary.includes('Traffic Lab could not load') && routeBoundary.includes('Try again') && routeBoundary.includes('/authority/control'), 'Traffic Lab render fallback must give the operator a recovery path');
+assert(read('src/services/api/client.js').includes('https://urbansaarthi-api.onrender.com/api/v1'), 'Production API fallback must match the declared Render service name');
 console.log('✓ Citizen traffic, camera evidence and native SUMO workflows verified');
 const html = read('index.html');
 const brand = read('src/components/shared/BrandMark.jsx');
@@ -111,7 +116,7 @@ const cityMap = read('src/components/maps/CityMap.jsx');
 assert(cityMap.includes('routeOptions') && cityMap.includes('Polyline'), 'Map must render road-network route geometries');
 const apiClient = read('src/services/api/client.js');
 assert(apiClient.includes('cacheResponse') && apiClient.includes('readApiSnapshot'), 'API client must restore saved read responses during backend outages');
-assert(apiClient.includes('DEFAULT_REQUEST_TIMEOUT_MS = 70_000') && apiClient.includes('FALLBACK_GRACE_MS = 40_000') && apiClient.includes('ATTEMPT_TIMEOUT_MS = 9_000') && apiClient.includes('fallbackDeadline') && apiClient.includes('waitForFallbackGrace(requestStartedAt, fallbackGraceMs)') && apiClient.includes("type: 'pending'"), 'Live backend is retried throughout the 40-second window before any saved snapshot is restored');
+assert(apiClient.includes('FALLBACK_GRACE_MS = 5_000') && apiClient.includes('ATTEMPT_TIMEOUT_MS = 18_000') && apiClient.includes('fallbackDeadline') && !apiClient.includes('waitForFallbackGrace') && apiClient.includes("type: 'pending'"), 'Live API calls use a short retry window, respect caller timeouts and do not force a 40-second wait before cached fallback');
 const dataBanner = read('src/components/shared/DataStatusBanner.jsx');
 assert(dataBanner.includes('Showing the latest saved information'), 'Cached response state must be visible and timestamped');
 assert(dataBanner.includes('Live data is temporarily delayed') && dataBanner.includes("location.pathname === '/authority/aqi-forecast'"), 'Connection copy must be neutral and the AQI workspace must use its own source status');
@@ -189,13 +194,11 @@ try {
   const wakeResult = await runtimeClient.request('/healthz/wake-check', { fallbackGraceMs: 2000 });
   assert(wakeResult.source === 'backend-woke-up' && wakeAttempts === 2 && snapshotReads === 0, 'A backend that recovers during the live-first window must be retried and beat the saved snapshot');
 
-  let graceElapsed = false;
   globalThis.fetch = async () => new Response(JSON.stringify({ detail: 'warming up' }), { status: 503, headers: { 'content-type': 'application/json' } });
-  const graceStart = Date.now();
-  const graceResult = await runtimeClient.request('/routing/grace-check', { method: 'POST', body: '{}', cacheResponse: true, fallbackGraceMs: 20 });
-  graceElapsed = Date.now() - graceStart >= 20;
-  assert(graceResult.source === 'saved-snapshot' && graceElapsed, 'A quick 5xx must wait through the live-first grace window before using a snapshot');
-  assert(snapshotReads === 1, 'The grace-window fallback must read one snapshot only after the delay');
+  const actionFallbackStart = Date.now();
+  const actionFallback = await runtimeClient.request('/routing/grace-check', { method: 'POST', body: '{}', cacheResponse: true, fallbackGraceMs: 20 });
+  assert(actionFallback.source === 'saved-snapshot' && Date.now() - actionFallbackStart < 100, 'A failed one-shot POST may restore its saved read snapshot without waiting through a GET retry window');
+  assert(snapshotReads === 1, 'The saved fallback must read one snapshot only');
 
   const nonCacheStart = Date.now();
   globalThis.fetch = async () => { throw new Error('offline'); };

@@ -24,6 +24,7 @@ import TripsPage from './pages/citizen/TripsPage.jsx';
 import AccountPage from './pages/citizen/AccountPage.jsx';
 import TrafficConditionsPage from './pages/citizen/TrafficConditionsPage.jsx';
 import Toast from './components/shared/Toast.jsx';
+import RouteErrorBoundary from './components/shared/RouteErrorBoundary.jsx';
 
 function RouteScrollReset() {
   const location = useLocation();
@@ -56,7 +57,7 @@ export default function App() {
         <Route path="signal-plans" element={<Navigate to="/authority/traffic-agent" replace />} />
         <Route path="aqi-prediction" element={<Navigate to="/authority/air-intelligence" replace />} />
         <Route path="signals" element={<Navigate to="/authority/traffic-agent" replace />} />
-        <Route path="traffic-lab" element={<TrafficVisionPage authorityLab />} />
+        <Route path="traffic-lab" element={<RouteErrorBoundary resetKey="traffic-lab"><TrafficVisionPage authorityLab /></RouteErrorBoundary>} />
         <Route path="traffic-agent" element={<TrafficAgentPage />} />
         <Route path="iot" element={<IotNetworkPage />} />
         <Route path="aqi" element={<Navigate to="/authority/air-intelligence" replace />} />

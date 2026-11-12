@@ -84,7 +84,7 @@ export default function AirQualityPage({ authorityMode = false, forecastFocus = 
     try {
       let places = [];
       try {
-        const response = await api.get(`/routing/geocode?q=${encodeURIComponent(text)}&limit=5`, { timeoutMs: 9000 });
+        const response = await api.get(`/routing/geocode?q=${encodeURIComponent(text)}&limit=5`, { timeoutMs: 7000, fallbackGraceMs: 2500 });
         places = response?.results || [];
       } catch { /* direct public geocoder below */ }
       if (!places.length) {
@@ -103,13 +103,18 @@ export default function AirQualityPage({ authorityMode = false, forecastFocus = 
     setLoading(false);
     if (!navigator.geolocation) { setError('Location access is not available in this browser.'); return; }
     setLocating(true); setError('');
-    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
+    navigator.geolocation.getCurrentPosition(({ coords }) => {
       if (requestId !== requestSequence.current) return;
-      let label = 'Your current location';
-      try { const place = await api.get(`/routing/reverse-geocode?latitude=${coords.latitude}&longitude=${coords.longitude}`); label = place.label || label; } catch { /* coordinates remain usable */ }
-      if (requestId !== requestSequence.current) return;
-      setQuery(label); setLocating(false); load(coords.latitude, coords.longitude, label);
-    }, (geoError) => { if (requestId === requestSequence.current) { setLocating(false); setError(geoError.code === 1 ? 'Location permission was denied. You can search for a city instead.' : 'Could not retrieve your location. Check device location services and retry.'); } }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+      const pointLabel = 'Your current location';
+      setLocating(false);
+      setQuery(pointLabel);
+      // Start the forecast using coordinates immediately; reverse geocoding only
+      // improves the label and never blocks the AQI request.
+      void load(coords.latitude, coords.longitude, pointLabel);
+      api.get(`/routing/reverse-geocode?latitude=${coords.latitude}&longitude=${coords.longitude}`, { timeoutMs: 3500, fallbackGraceMs: 1500 })
+        .then((place) => { if (requestId + 1 === requestSequence.current && place?.label) setQuery(place.label); })
+        .catch(() => {});
+    }, (geoError) => { if (requestId === requestSequence.current) { setLocating(false); setError(geoError.code === 1 ? 'Location permission was denied. You can search for a city instead.' : 'Could not retrieve your location. Check device location services and retry.'); } }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 120000 });
   };
 
   const current = report?.current || {};

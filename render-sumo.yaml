@@ -1,0 +1,32 @@
+# Optional deployment variant for operators who want native SUMO execution.
+# Create a separate Render Blueprint using this file, then copy the same
+# DATABASE_URL, CORS_ORIGINS, JWT_SECRET and INGESTION_API_KEY from the
+# current API service before switching the frontend VITE_API_URL.
+services:
+  - type: web
+    name: urbansaarthi-api-sumo
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile.sumo
+    dockerContext: ./backend
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: AUTH_ENABLED
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: INGESTION_API_KEY
+        sync: false
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
+      - key: SUMO_BINARY
+        value: /usr/bin/sumo
+      - key: SUMO_HOME
+        value: /usr/share/sumo

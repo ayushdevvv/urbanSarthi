@@ -228,3 +228,116 @@ def test_native_sumo_endpoint_returns_native_run_and_submitted_signal_timings(cl
     assert captured["phases"][0]["green_seconds"] == 55
     assert captured["phases"][1]["green_seconds"] == 35
     assert captured["report"]["mean_vehicles_per_sampled_frame"] == 6.5
+
+
+def test_xgboost_model_scenario_endpoint_accepts_signal_settings(client, monkeypatch):
+    from app.api import traffic as traffic_api
+    captured = {}
+
+    def fake_scenario(**kwargs):
+        captured.update(kwargs)
+        return {
+            "mode": "xgboost_model_scenario", "engine": "XGBoost test forecast",
+            "timeline": [{"minute": 0, "queue_total": 10, "roads": []}],
+            "baseline_timeline": [{"minute": 0, "queue_total": 9, "roads": []}],
+        }
+
+    monkeypatch.setattr(traffic_api, "get_xgboost_signal_scenario", fake_scenario)
+    response = client.post("/api/v1/traffic/simulation/model-scenario", json={
+        "name": "Fallback test", "north_south_green_seconds": 58,
+        "east_west_green_seconds": 34, "yellow_seconds": 4,
+        "all_red_seconds": 2, "demand_multiplier": 1.3,
+    })
+    assert response.status_code == 200, response.text
+    assert response.json()["mode"] == "xgboost_model_scenario"
+    assert captured["north_south_green_seconds"] == 58
+    assert captured["east_west_green_seconds"] == 34
+    assert captured["demand_multiplier"] == 1.3
+
+
+def test_nearby_traffic_returns_cached_osm_roads_without_fake_flow(client, monkeypatch):
+    from app.api import traffic as traffic_api
+
+    traffic_api._NEARBY_ROAD_CACHE.clear()
+    monkeypatch.setattr(traffic_api.settings, "tomtom_api_key", "")
+    calls = []
+
+    class RoadResponse:
+        def raise_for_status(self):
+            return None
+        def json(self):
+            return {"elements": [{
+                "type": "way", "id": 101, "center": {"lat": 26.8468, "lon": 80.9463},
+                "geometry": [{"lat": 26.8467, "lon": 80.9462}, {"lat": 26.8470, "lon": 80.9470}],
+                "tags": {"highway": "primary", "name": "Test Ring Road"},
+            }]}
+
+    def fake_post(url, **kwargs):
+        calls.append(url)
+        return RoadResponse()
+
+    monkeypatch.setattr(traffic_api.httpx, "post", fake_post)
+    first = client.get("/api/v1/traffic/nearby?latitude=26.8467&longitude=80.9462&radius_m=3500")
+    assert first.status_code == 200, first.text
+    payload = first.json()
+    assert payload["roads"][0]["name"] == "Test Ring Road"
+    assert len(payload["roads"][0]["geometry"]) == 2
+    assert payload["roads"][0]["traffic"] is None
+    assert payload["traffic_status"] == "not_configured"
+
+    second = client.get("/api/v1/traffic/nearby?latitude=26.8467&longitude=80.9462&radius_m=3500")
+    assert second.status_code == 200
+    assert len(calls) == 1
+    assert second.json()["roads"][0]["name"] == "Test Ring Road"
+
+
+def test_traffic_news_uses_short_timeout_and_five_minute_cache(client, monkeypatch):
+    from app.services import live_search
+
+    live_search._NEWS_CACHE.clear()
+    calls = []
+
+    class NewsResponse:
+        content = b'''<?xml version="1.0"?><rss><channel><item><title>Road closure near test area</title><link>https://example.com/road-closure</link><pubDate>Thu, 12 Nov 2026 10:00:00 GMT</pubDate><source>Example News</source></item></channel></rss>'''
+        def raise_for_status(self):
+            return None
+
+    def fake_get(url, **kwargs):
+        calls.append((url, kwargs.get("timeout")))
+        return NewsResponse()
+
+    monkeypatch.setattr(live_search.settings, "tavily_api_key", "")
+    monkeypatch.setattr(live_search.httpx, "get", fake_get)
+    first = client.get("/api/v1/traffic/news?latitude=26.8467&longitude=80.9462&area=Hazratganj")
+    second = client.get("/api/v1/traffic/news?latitude=26.8467&longitude=80.9462&area=Hazratganj")
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert first.json()["items"][0]["title"] == "Road closure near test area"
+    assert first.json()["served_from_cache"] is False
+    assert second.json()["served_from_cache"] is True
+    assert calls == [("https://news.google.com/rss/search", 2.5)]
+
+
+def test_sumo_unavailable_route_can_run_real_xgboost_fallback(client, monkeypatch):
+    from app.api import traffic as traffic_api
+
+    monkeypatch.setattr(traffic_api, "sumo_binary", lambda: None)
+    payload = {
+        "name": "XGBoost fallback integration",
+        "north_south_green_seconds": 58,
+        "east_west_green_seconds": 34,
+        "yellow_seconds": 4,
+        "all_red_seconds": 2,
+        "demand_multiplier": 1.1,
+    }
+    native = client.post("/api/v1/traffic/sumo/run", json=payload)
+    assert native.status_code == 424, native.text
+
+    fallback = client.post("/api/v1/traffic/simulation/model-scenario", json=payload)
+    assert fallback.status_code == 200, fallback.text
+    body = fallback.json()
+    assert body["mode"] == "xgboost_model_scenario"
+    assert len(body["timeline"]) == 13
+    assert len(body["timeline"][0]["roads"]) == 80
+    assert "sensitivity" in body["engine"].lower()
