@@ -6,45 +6,43 @@ Last reviewed: 12 November 2026. This document distinguishes code shipped in thi
 
 | Surface | Current implementation | What is genuinely live | Remaining requirement |
 |---|---|---|---|
-| Citizen home and route planner | Location-aware pages, route alternatives, route quality labels | Geocoding/routing only when the configured public or custom provider responds | Configure a maintained `OSRM_BASE_URL` for dependable routing. Live congestion-aware rerouting needs a traffic-aware routing provider; a TomTom flow snapshot alone is not a full routing engine. |
-| Citizen AQI and AQI Vision | Location consent/search, current + hourly forecast, pollutant detail and clear source labels | Open-Meteo/CAMS model forecasts; OpenWeather current air pollution if configured | Official CPCB readings need an authorized CPCB/CAAQMS source adapter and station mapping. Browser location permission is required for GPS mode. |
-| Citizen Traffic and Traffic Vision | Location-scoped traffic, camera/video analysis and source labels | TomTom current flow at queried coordinates if key and coverage exist; uploaded clip analysis on a configured YOLO runtime | Continuous city CCTV requires the edge worker, network access and registered cameras/junctions. |
-| Citizen transit | GTFS routes/stops/timetables, direct/one-transfer planning, arrival endpoint | Imported feed timetable; pushed real-time arrivals only when a transit provider sends them | Agency GTFS Static ZIP and a GTFS-Realtime/partner adapter. No live vehicle positions are fabricated. |
-| Citizen trips/account | Citizen-only public registration, login, private trip lifecycle | Database-backed after PostgreSQL and auth are configured | Email verification, abuse controls and password reset delivery are not implemented. Add a mail/SMS identity provider before unrestricted public sign-up. |
-| Authority command centre | Network KPIs, junction freshness, incident/alert surfaces | Only records arriving from real registered providers/devices | Register real junctions and data sources; synthetic seed network/telemetry is opt-in only. |
-| Traffic Agent | Tool-calling operations workflow, forecasts, emissions estimate, draft signal plan and approval | Deterministic operations workflow; Groq/LangGraph reasoning when credentials/dependencies are available | Configure Groq for LLM reasoning. Physical controller write is intentionally disabled. |
-| Traffic simulation | Forecast timeline and scenario comparison; native SUMO baseline/intervention runner | XGBoost model forecast now; native SUMO when installed | Bundled SUMO network is a synthetic reference grid. Replace it and map camera/detector observations to real edges before claiming city-specific simulation. |
-| Traffic camera intelligence | YOLO image/video analysis, RTSP edge worker, authenticated observation ingestion and camera heartbeat | Edge detections when worker is running and posting successfully | Authorized RTSP endpoint, camera-network host, model weights/dependencies, source/junction registration and calibration. A detection sample is not calibrated speed/queue measurement. |
-| AQI sensors / IoT | Authenticated HTTP ingestion, data-source health and ESP32/PMS5003 starter example | Sensor readings after a configured device posts observations | Hardware, Wi-Fi, API key, station metadata and calibration/QA. MQTT broker integration is not included; current device path is HTTP. |
-| Carbon intelligence | Pollutant estimation from detected vehicle classes and corridor assumptions | Calculated estimate from measured counts and configured assumptions | Vehicle class mix, local fleet emission factors, segment distance and calibration. Do not describe estimates as direct emissions measurements. |
-| Signal plans | Demand-based draft, simulation, operator approval/rejection, dispatch preview and audit trail | Workflow and auditable approval state | Vendor-specific ATCS integration and safety certification are absent. Dispatch preview never changes physical lights. |
-| Analytics and data sources | Source registry, freshness, city and personal analytics | Database-backed observations and trips | Real feeds and history accumulation. Empty states are expected until data is ingested. |
+| Citizen Home | Manual origin/destination entry, route alternatives and optional current-location action | Geocoding/routing when the configured OSM/custom router responds; planning starts only after submit | Configure a maintained `OSRM_BASE_URL` for dependable routing. Congestion-aware rerouting needs a traffic-aware routing provider. |
+| Citizen AQI Forecast | Any-place search, current conditions, pollutant cards and 24-hour forecast | Open-Meteo/CAMS forecast; provider-specific observations when configured and available | Official CPCB station values require an authorized CPCB/CAAQMS adapter and station mapping. |
+| Citizen Traffic Conditions | Explicit “Use my location” or manual area search, nearby OSM road map, road list, incident and traffic-news panels | TomTom live flow/incidents only for covered roads and configured key; nearby road geometry from OSM; Tavily news when configured or RSS search fallback | GPS permission is needed only for the location button. No TomTom key means roads remain neutral rather than receiving guessed traffic colours. |
+| Citizen Bus & Train | City/mode search, current service-news panel, GTFS routes/stops/timetables and stop map | Dated news reports from Tavily or RSS; operator schedule data after GTFS import; live arrivals only from a connected realtime provider | Agency GTFS Static ZIP and GTFS-Realtime/partner adapter. News is not labelled as live vehicle arrival telemetry. |
+| Citizen My Trips | Private saved journey lifecycle and personal history | Database-backed when PostgreSQL and authentication are configured | Email verification and password-reset delivery need an identity/mail integration. |
+| Authority City Overview | Registered junction map, AQI stations, alerts, source freshness and aggregate reports | Only records ingested from real registered providers/devices; stale sources age out | Register real junctions, locations and data sources. Empty states are expected before ingestion. |
+| Traffic Lab | OpenCV/YOLO image/video analysis, class counts and annotated output; RTSP edge worker and authenticated observations | Camera samples only while an authorized edge worker is connected and reporting; uploads only when vision dependencies/model are present | Authorized RTSP URL, camera-network host, YOLO model/dependencies, source registration and local calibration. Unknown speed/queue values remain unavailable. |
+| Traffic Simulation | Native SUMO baseline/intervention runner; FCD vehicle positions/headings every 30 simulated seconds; edge metrics every 5 minutes; signal timings alter the candidate network | Actual vehicle trajectories and road intervals after a native SUMO run completes | SUMO binary is not installed in this validation environment. Bundled network is an 80-edge synthetic reference grid, not a calibrated city. Replace it with a mapped/correctly calibrated `.net.xml` and real turning counts before city claims. |
+| Traffic Agent | Evidence-backed operations workflow, forecast/emissions tools and signal-plan review | Deterministic tools run from available records; Groq/LangGraph reasoning when credentials and optional dependencies are configured | Groq key/dependencies for LLM reasoning. It drafts/recommends; physical controller writes remain disabled. |
+| Authority AQI | Station observations, forecast and hotspots | Data only from configured/ingesting sources | Authorized CPCB/CAAQMS adapter for official city-station claims; OpenAQ/CAMS are distinct sources. |
+| Carbon intelligence | Vehicle-class and distance-based pollutant estimates | Calculated from measured counts/trip records and explicit factors | Local fleet mix, route distance and locally validated emission factors. It is an estimate, not a direct tailpipe measurement. |
+| IoT sensors | Authenticated HTTP observation ingestion and ESP32/PMS5003 starter sketch | Real device readings after authorized devices post observations | Actual hardware, Wi-Fi, device identity, ingestion key, calibration and QA. MQTT is not included. Use TLS outside a trusted LAN. |
+| Signal plans | Demand-based draft, SUMO what-if simulation, operator approval/rejection and dispatch preview | Workflow state and simulated impact | ATCS vendor integration, certified safety controls and field acceptance are not implemented. No physical signal writes occur. |
 
 ## Page and route inventory
 
+The citizen navigation contains exactly five destinations. Legacy URLs are redirects and are not additional navigation items.
+
 | Experience | Route | Primary capability |
 |---|---|---|
-| Portal selector | `/` | Enter citizen or authority workspace |
-| Citizen home | `/citizen` | Nearby mobility and air-quality overview |
-| Citizen air quality | `/citizen/air-quality` | Current AQI/station readings with provenance |
-| Citizen AQI forecast | `/citizen/aqi-forecast` | Location-based hourly AQI outlook |
-| Citizen AQI Vision | `/citizen/aqi-vision` | Air-quality forecast and pollutant intelligence |
-| Citizen traffic | `/citizen/traffic` | Explicit-location traffic conditions and provider snapshots |
-| Citizen transit | `/citizen/transit` | GTFS-backed routes, stop and arrival information |
-| Citizen trips | `/citizen/trips` | Saved journey lifecycle and personal history |
-| Citizen account | `/citizen/account` | Citizen registration/login when enabled |
-| Authority command centre | `/authority/control` | Junction, source health and operational overview |
-| Authority AQI | `/authority/air-intelligence` | Station observations, forecast and hotspots |
-| Authority carbon | `/authority/carbon` | Vehicle/emissions estimates and comparisons |
-| Authority IoT network | `/authority/iot` | Sensor registry and measurement ingestion status |
-| Authority camera system | `/authority/traffic-lab` | YOLO image/video inference and agent handoff |
-| Authority Traffic Agent | `/authority/traffic-agent` | Recent edge evidence, operations workflow and signal review |
-| Authority simulation | `/authority/traffic-simulation` | Traffic horizon/scenario exploration |
-| Authority analytics | `/authority/analytics` | City and source-derived analytics |
-| Authority data sources | `/authority/sources` | Provider registry, freshness and OpenAQ sync |
-| Authority settings | `/authority/settings` | Runtime integration status and preferences |
-
-The legacy `/citizen/traffic-vision` URL now redirects within the citizen workspace to `/citizen/traffic`; it no longer sends a citizen to the authority camera lab.
+| Portal selector | `/` | Enter the citizen or authority workspace |
+| Citizen Home | `/citizen` | Submit a route search; no automatic route or location request |
+| Citizen AQI Forecast | `/citizen/aqi-forecast` | Search any place and inspect current AQI, pollutants and 24-hour forecast |
+| Citizen Traffic Conditions | `/citizen/traffic` | Explicit GPS or manual area search, nearby road map, traffic flow/incidents and nearby traffic news |
+| Citizen Bus & Train | `/citizen/transit` | Latest service news, GTFS routes/stops/schedules and realtime arrival slots when a feed is connected |
+| Citizen My Trips | `/citizen/trips` | Saved journeys and personal trip history |
+| Citizen account | `/citizen/account` | Citizen registration/login; accessed from the account icon, not a sixth main nav item |
+| Authority City Overview | `/authority/control` | City reports, registered junctions, map, AQI stations, alerts and source health |
+| Authority Traffic Lab | `/authority/traffic-lab` | OpenCV/YOLO upload analysis and RTSP camera observations |
+| Authority Traffic Simulation | `/authority/traffic-simulation` | Native SUMO baseline vs signal intervention, vehicle playback and road metrics |
+| Authority Traffic Agent | `/authority/traffic-agent` | Evidence-backed traffic operations and signal-plan review |
+| Authority AQI | `/authority/air-intelligence` | AQI stations, observations, forecast and hotspots |
+| Authority Carbon | `/authority/carbon` | Vehicle emissions estimates and comparisons |
+| Authority IoT Sensors | `/authority/iot` | Sensor registry, actual reading ingestion and device setup |
+| Authority Data Sources | `/authority/sources` | Provider registry, freshness and source ingestion |
+| Authority Analytics | `/authority/analytics` | City/source-derived analytics |
+| Authority Settings | `/authority/settings` | Runtime integration status and settings |
 
 ## Data integrity rules in this build
 
@@ -65,4 +63,4 @@ The legacy `/citizen/traffic-vision` URL now redirects within the citizen worksp
 
 ## Verification status
 
-Latest local verification on 12 November 2026: backend test suite **48 passed**; Python compilation passed; frontend source smoke tests passed (`node test-agent-frontend.js` and `node test-public-routing.js`); clean PostgreSQL-compatible migration flow and Alembic schema check passed on an isolated SQLite validation database. A production Vite build could not be verified in the current environment because npm registry DNS resolution failed (`EAI_AGAIN`) during dependency installation and the Vite executable was unavailable; no claim of a successful production build should be made until `npm ci` and `npm run build` complete in a network-enabled environment. The animated intersection is explicitly a reference-model visualization; its vehicle motion and phase lights are not live CCTV or physical controller state.
+Latest local verification on 12 November 2026: backend test suite **53 passed**; Python compilation passed; frontend source smoke tests passed (`node test-agent-frontend.js` and `node test-public-routing.js`); frontend JS/JSX source syntax parsed with the installed TypeScript parser; clean migrations and Alembic schema check passed on an isolated SQLite validation database. A production Vite build could not be verified in the current environment because npm registry DNS resolution failed (`EAI_AGAIN`) and the offline npm cache lacked a locked dependency. Run `npm ci && npm run build` in a network-enabled CI environment. Native SUMO FCD parsing and network-geometry tests pass, but the SUMO CLI is not installed here, so a native simulation could not be executed in this environment. The included network is a synthetic reference grid, not a live city map.

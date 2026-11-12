@@ -16,8 +16,10 @@ console.log('--- RUNNING URBANSARTHI WORKSPACE SMOKE TESTS ---');
 const app = read('src/App.jsx');
 for (const [route, component] of [
   ['air-intelligence', 'AirQualityOverviewPage'], ['carbon', 'CarbonImpactPage'],
-  ['iot', 'IotNetworkPage'], ['traffic', 'TrafficInfoPage'],
+  ['iot', 'IotNetworkPage'], ['traffic-lab', 'TrafficVisionPage'],
 ]) assert(app.includes(`path="${route}"`) && app.includes(`<${component}`), `${route} page must be registered`);
+assert(app.includes('<Route path="traffic-simulation" element={<TrafficSimulationPage />} />'), 'Authority simulation must use the native SUMO workbench');
+assert(app.includes('<Route path="traffic" element={<TrafficConditionsPage />} />'), 'Citizen traffic conditions must use its own nearby-traffic page');
 assert(app.includes('Navigate to="control"'), 'Authority workspace must open on City overview');
 console.log('✓ Air-first route structure verified');
 
@@ -36,6 +38,7 @@ const shellCss = read('src/styles/app-shell-refinement.css');
 assert(shellCss.includes('.authority-app .sidebar') && shellCss.includes('.citizen-app .citizen-header') && shellCss.includes('.citizen-app .citizen-nav-item.active'), 'Shared authority sidebar and citizen navigation must receive the app-wide responsive theme');
 assert(layout.includes('aria-expanded={mobileOpen}') && layout.includes('aria-controls=\"authority-sidebar\"') && layout.includes('useEffect(() => { setMobileOpen(false); }, [location.pathname])'), 'Authority mobile navigation must be accessible and close after route navigation');
 const citizenLayout = read('src/components/layout/CitizenLayout.jsx');
+assert((citizenLayout.match(/to: '\/citizen(?:\/[^']*)?'/g) || []).length === 5, 'Citizen sidebar must contain exactly Home, AQI forecast, Traffic conditions, Bus & train and My trips');
 assert(citizenLayout.includes('aria-label=\"Citizen navigation\"') && citizenLayout.includes('aria-label={dark ?'), 'Citizen navigation and utility controls must be accessible');
 const appContext = read('src/context/AppContext.jsx');
 assert(appContext.includes('useState(false)') && !appContext.includes("getItem('us_theme')"), 'The green light theme must be the default after refresh, not an old persisted dark preference');
@@ -60,15 +63,15 @@ console.log('✓ Carbon and pollutant estimator verified');
 const iot = read('src/pages/authority/IotNetworkPage.jsx');
 assert(iot.includes("api.get('/aqi/observations?max_age_hours=720&limit=200')"), 'IoT page must retrieve stored observations');
 assert(iot.includes("api.post('/aqi/observations', payload)"), 'IoT page must submit sensor observations to backend');
-assert(iot.includes("aqi: ''") && iot.includes("form.aqi !== ''"), 'IoT sensor must not invent AQI when only particulate readings are supplied');
-assert(iot.includes('HTTP ingestion available') && iot.includes('does not currently run an MQTT broker'), 'IoT transport and limits must be explicit');
+assert(iot.includes("aqi: ''") && iot.includes("filter((key) => form[key] !== '')") && iot.includes('Empty fields are not converted to zero'), 'IoT sensor must omit blank measurements and never invent AQI or zero readings');
+assert(iot.includes('HTTP ingestion available') && iot.includes('device-level key provisioning and MQTT are not included') && iot.includes('plain HTTP for a trusted private LAN only') && iot.includes('HTTPS/TLS'), 'IoT transport, public-network TLS requirement and limits must be explicit');
 console.log('✓ IoT observation ingestion and device registry verified');
 
 
 const trafficScene = read('src/pages/authority/TrafficSimulationScene.jsx');
-assert(trafficScene.includes('REFERENCE MODEL PLAYBACK · NOT LIVE CCTV') && trafficScene.includes('not live signal states') && trafficScene.includes('no controller connection'), 'Animated model playback must not be presented as live camera evidence or physical signal state');
-const trafficInfo = read('src/pages/citizen/TrafficInfoPage.jsx');
-assert(trafficInfo.includes('setScenarioData(null); setProvider(null); setLastUpdated(null);') && trafficInfo.includes('const isServiceFailure = !err?.status || err.status >= 500'), 'Old traffic scenario data is hidden during live refresh and local recovery is reserved for service failures');
+assert(trafficScene.includes('NATIVE SUMO · FLOATING CAR DATA') && trafficScene.includes('vehicle_positions') && trafficScene.includes('networkGeometry') && trafficScene.includes('signalTimings') && trafficScene.includes('NativeVehicle'), 'Simulation scene must plot native SUMO vehicle coordinates/headings on SUMO road geometry and reflect the candidate signal phase');
+const citizenTraffic = read('src/pages/citizen/TrafficConditionsPage.jsx');
+assert(citizenTraffic.includes('getCurrentPosition') && citizenTraffic.includes('Use my location') && citizenTraffic.includes('/traffic/nearby') && citizenTraffic.includes('/traffic/news'), 'Citizen traffic must require explicit location and load nearby roads plus traffic news');
 const carbonPage = read('src/pages/authority/CarbonImpactPage.jsx');
 assert(!carbonPage.includes('readLocalRecord(\'carbon-last-estimate\')') && carbonPage.includes('setResult(null);'), 'Old carbon results must not appear as initial fallback before the current estimate request');
 const traffic = read('src/pages/citizen/TrafficVisionPage.jsx');
@@ -78,7 +81,10 @@ assert(traffic.includes('approach_rois'), 'Traffic Lab must support camera ROI c
 assert(traffic.includes('saveLatestVisionEvidence'), 'Traffic Lab must hand vehicle counts to the emissions estimator');
 const evidenceStore = read('src/services/visionEvidence.js');
 assert(evidenceStore.includes('airtraffic.latestVisionEvidence') && evidenceStore.includes('LEGACY_STORAGE_KEY'), 'Video evidence storage must use the neutral key and preserve existing saved evidence');
-console.log('✓ Existing traffic video and operations workflow preserved');
+const sumoPage = read('src/pages/authority/TrafficSimulationPage.jsx');
+assert(sumoPage.includes("api.post('/traffic/sumo/run'") && sumoPage.includes('north_south_green_seconds') && sumoPage.includes('east_west_green_seconds') && sumoPage.includes('SUMO did not return edge interval'), 'Native SUMO workbench must submit signal timings and render edge-level output without synthetic fallback');
+assert(sumoPage.includes('30s / 5m') && sumoPage.includes('SUMO FCD every 30s; road-edge metrics: every 5 min'), 'SUMO page must disclose actual vehicle-position and road-metric sampling intervals');
+console.log('✓ Citizen traffic, camera evidence and native SUMO workflows verified');
 const html = read('index.html');
 const brand = read('src/components/shared/BrandMark.jsx');
 assert(html.includes('href="/favicon.png"') && !html.includes('href="/favicon.svg"'), 'PNG favicon must be linked in the browser shell');
@@ -90,7 +96,8 @@ assert(routePlanner.includes('slice(0, 3)') && routePlanner.includes('3 road rou
 assert(routePlanner.includes('String.fromCharCode(65 + index)') || routePlanner.includes('Route A'), 'Route planner should label distinct road alternatives');
 assert(routePlanner.includes('route-carbon-grid') && routePlanner.includes('route-emission-card'), 'Each route alternative must have a dedicated premium carbon card');
 assert(routePlanner.includes('sortRouteOptions') && routePlanner.includes('const displayRoutes'), 'Route cards and map must use one preference-sorted route order');
-assert(routePlanner.includes("lastAutoKey.current = '';") && routePlanner.includes('planRunRef.current += 1;') && !routePlanner.includes('destination.resolved, mode, preference]'), 'Editing or swapping locations must cancel stale route requests; sorting preferences must not refetch the route network.');
+assert(routePlanner.includes('planRunRef.current += 1;') && routePlanner.includes('const swap = () =>') && !routePlanner.includes('destination.resolved, mode, preference]'), 'Editing or swapping locations must cancel stale route requests; sorting preferences must not refetch the route network.');
+assert(!routePlanner.includes('useEffect(() => plan(') && !routePlanner.includes('void plan(') && routePlanner.includes('onSubmit={plan}'), 'Home must start route planning only after the journey form is submitted.');
 assert(routePlanner.includes('setResult(null); setSelectedRouteId(null);') && routePlanner.includes('Checking live road-routing providers'), 'Old route data must be hidden while fresh route providers are queried');
 assert(routePlanner.includes('Promise.all([') && routePlanner.includes('resolveMappedPlace(originQuery)') && routePlanner.includes('resolveMappedPlace(destinationQuery)'), 'Route submit must resolve both typed endpoints together instead of stopping after the first unresolved place');
 assert(routePlanner.includes('estimateRouteOnly(') && routePlanner.includes('No road path is available for this estimate'), 'If road routing is unavailable, return an honest estimate without drawing a fake path');

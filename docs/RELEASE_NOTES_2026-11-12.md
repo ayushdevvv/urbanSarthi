@@ -12,20 +12,21 @@
 - Kept provider traffic flow, atmospheric forecasts, station pollutant measurements, trained model forecasts and SUMO scenarios visibly distinct.
 - Corrected the City Command Centre grouped-query bug and added a regression test.
 - Fixed authority navigation so Carbon, Data Sources, Analytics and Settings are reachable; alert navigation now opens the operational overview.
-- Fixed the legacy citizen traffic-vision deep link and added a citizen AQI Vision route.
+- Reduced the citizen workspace navigation to exactly Home, AQI Forecast, Traffic Conditions, Bus & Train and My Trips. Legacy AQI Vision and traffic-vision URLs redirect into the relevant citizen page.
 - Refined the shared responsive forest-green design system, page spacing, cards, forms, navigation, focus states and mobile layouts.
-- Added an explicit warning inside animated traffic playback that the vehicle and signal animations are model visualizations, not live CCTV or controller state.
+- Made the SUMO page render actual sampled vehicle coordinates/headings from Floating Car Data (FCD), on the bundled SUMO road geometry. Vehicle snapshots are 30 simulated seconds apart; road-edge performance intervals remain 5 minutes. Rendered vehicles are capped per frame while the reported total remains unfiltered.
 - Normalized common managed-Postgres URL schemes for the installed psycopg v3 driver.
 - Added Render production defaults and an idempotent startup sequence for Alembic migrations, provider-source registration and optional first-admin bootstrap.
 - Added feature readiness and live-system setup documents.
 
 ## Verification
 
-- Backend: `python -m pytest -q` — **48 passed**.
+- Backend: `python -m pytest -q` — **53 passed**.
 - Backend syntax: `python -m compileall -q app scripts` — passed.
+- SUMO FCD regression: verifies missing FCD output fails explicitly rather than returning an empty vehicle-playback timeline.
 - Frontend source smoke test: `node test-agent-frontend.js` — passed.
 - Frontend public routing smoke test: `node test-public-routing.js` — passed.
-- Frontend syntax parse: 41 JavaScript/JSX source files parsed with the installed TypeScript parser — zero syntax errors.
+- Frontend syntax parse: JavaScript/JSX source files parsed with the installed TypeScript parser — zero syntax errors.
 - Database deployment check: clean migrations applied and Alembic reported no pending schema changes. Default seed created seven provider-source registrations, zero junctions, zero traffic observations, zero AQI observations, and one bootstrap admin when credentials were supplied.
 
 A production Vite bundle is **not verified**: npm dependencies could not be restored because the npm registry DNS lookup failed (`EAI_AGAIN`), and the local offline npm cache did not contain every locked package. Run `npm ci && npm run build` in a network-enabled CI runner before deploying the frontend.

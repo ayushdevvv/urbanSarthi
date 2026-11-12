@@ -1,5 +1,8 @@
 from datetime import timedelta
+from math import asin, cos, radians, sin, sqrt
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 import httpx
@@ -11,8 +14,26 @@ from app.schemas import JunctionCreateIn, JunctionOut, TrafficObservationIn, Tra
 from app.services.common import audit, utc_now
 from app.services.predictions import maybe_refresh_forecasts
 from app.services.traffic_simulation import get_simulation_snapshot, get_simulation_scenario
+from app.services.live_search import search_live_news
+from app.services.sumo_runner import run_native_sumo_simulation, sumo_binary
 
 router = APIRouter(prefix="/traffic", tags=["Traffic intelligence"])
+
+
+class NativeSumoRunIn(BaseModel):
+    name: str = Field(default="Traffic signal timing experiment", min_length=3, max_length=160)
+    north_south_green_seconds: int = Field(default=42, ge=8, le=100)
+    east_west_green_seconds: int = Field(default=42, ge=8, le=100)
+    yellow_seconds: int = Field(default=3, ge=3, le=8)
+    all_red_seconds: int = Field(default=1, ge=1, le=5)
+    demand_multiplier: float = Field(default=1.0, ge=0.5, le=2.0)
+
+    @model_validator(mode="after")
+    def valid_cycle(self):
+        cycle = self.north_south_green_seconds + self.east_west_green_seconds + 2 * (self.yellow_seconds + self.all_red_seconds)
+        if cycle < 40 or cycle > 240:
+            raise ValueError("The complete signal cycle must be between 40 and 240 seconds.")
+        return self
 
 
 @router.get("/current")
@@ -53,6 +74,196 @@ def current_traffic(latitude: float = Query(ge=-90, le=90), longitude: float = Q
         },
         "note": "Road segment flow snapshot from the configured provider. Coverage depends on provider availability at the selected coordinates.",
     }
+
+
+ROAD_HIGHWAYS = "motorway|trunk|primary|secondary|tertiary|unclassified|residential|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link"
+
+
+def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    dlat, dlon = radians(lat2 - lat1), radians(lon2 - lon1)
+    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+    return 6371000 * 2 * asin(sqrt(min(1, a)))
+
+
+def _road_flow(latitude: float, longitude: float) -> dict | None:
+    if not settings.tomtom_api_key:
+        return None
+    try:
+        response = httpx.get(
+            "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json",
+            params={"point": f"{latitude},{longitude}", "key": settings.tomtom_api_key},
+            headers={"User-Agent": "UrbanSaarthi/1.0"}, timeout=8.0,
+        )
+        response.raise_for_status()
+        payload = response.json().get("flowSegmentData") or {}
+        current, free = payload.get("currentSpeed"), payload.get("freeFlowSpeed")
+        if current is None or free is None:
+            return None
+        current, free = float(current), max(1.0, float(free))
+        ratio = current / free
+        level = "heavy" if ratio < 0.40 or payload.get("roadClosure") else "slow" if ratio < 0.72 else "moving"
+        return {"current_speed_kmph": current, "free_flow_speed_kmph": free,
+                "travel_time_seconds": payload.get("currentTravelTime"),
+                "free_flow_travel_time_seconds": payload.get("freeFlowTravelTime"),
+                "confidence": payload.get("confidence"), "road_closed": bool(payload.get("roadClosure")),
+                "congestion_ratio": round(ratio, 3), "status": "closed" if payload.get("roadClosure") else level,
+                "provider": "TomTom Traffic Flow"}
+    except (httpx.HTTPError, ValueError, TypeError, KeyError):
+        return None
+
+
+@router.get("/nearby")
+def nearby_road_traffic(
+    latitude: float = Query(ge=-90, le=90),
+    longitude: float = Query(ge=-180, le=180),
+    radius_m: int = Query(default=3500, ge=500, le=8000),
+):
+    """Return mapped nearby roads and attach live TomTom flow only when available."""
+    query = (f'[out:json][timeout:18];way(around:{radius_m},{latitude},{longitude})'
+             f'["highway"~"^({ROAD_HIGHWAYS})$"];out center geom tags 100;')
+    elements = []
+    provider_note = None
+    for endpoint in ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"):
+        try:
+            response = httpx.post(endpoint, data={"data": query},
+                                  headers={"User-Agent": "UrbanSaarthi/1.0 (nearby road discovery)"}, timeout=20.0)
+            response.raise_for_status()
+            elements = response.json().get("elements", [])
+            break
+        except (httpx.HTTPError, ValueError, TypeError):
+            provider_note = "OpenStreetMap road discovery could not be reached."
+
+    roads = []
+    for element in elements:
+        tags = element.get("tags") or {}
+        centre = element.get("center") or {}
+        road_lat = element.get("lat", centre.get("lat"))
+        road_lon = element.get("lon", centre.get("lon"))
+        if road_lat is None or road_lon is None:
+            geometry = element.get("geometry") or []
+            if geometry:
+                road_lat = sum(float(p["lat"]) for p in geometry) / len(geometry)
+                road_lon = sum(float(p["lon"]) for p in geometry) / len(geometry)
+        if road_lat is None or road_lon is None:
+            continue
+        distance = _haversine_m(latitude, longitude, float(road_lat), float(road_lon))
+        geometry = [{"lat": float(p["lat"]), "lng": float(p["lon"])} for p in (element.get("geometry") or [])
+                    if p.get("lat") is not None and p.get("lon") is not None]
+        roads.append({
+            "id": f"osm-road-{element.get('id')}",
+            "name": tags.get("name") or tags.get("ref") or tags.get("highway", "Mapped road").replace("_", " ").title(),
+            "road_type": tags.get("highway"), "distance_meters": round(distance),
+            "latitude": float(road_lat), "longitude": float(road_lon), "geometry": geometry[:250],
+            "traffic": None, "source": "OpenStreetMap road geometry",
+        })
+    roads.sort(key=lambda row: row["distance_meters"])
+    roads = roads[:24]
+
+    flow_candidates = [row for row in roads if settings.tomtom_api_key][:10]
+    if flow_candidates:
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            flow_results = list(pool.map(lambda row: _road_flow(row["latitude"], row["longitude"]), flow_candidates))
+        for row, flow in zip(flow_candidates, flow_results):
+            row["traffic"] = flow
+    flows = [row["traffic"] for row in roads if row.get("traffic")]
+    traffic_summary = {
+        "measured_roads": len(flows),
+        "heavy_roads": sum(1 for flow in flows if flow["status"] in {"heavy", "closed"}),
+        "slow_roads": sum(1 for flow in flows if flow["status"] == "slow"),
+        "moving_roads": sum(1 for flow in flows if flow["status"] == "moving"),
+    }
+
+    incidents = []
+    incident_status = "not_configured" if not settings.tomtom_api_key else "unavailable"
+    incident_note = "Configure TOMTOM_API_KEY for live incident and road-closure data."
+    if settings.tomtom_api_key:
+        lat_delta = radius_m / 111000
+        lon_delta = radius_m / max(1, 111000 * cos(radians(latitude)))
+        bbox = f"{longitude-lon_delta},{latitude-lat_delta},{longitude+lon_delta},{latitude+lat_delta}"
+        fields = "{incidents{type,geometry{type,coordinates},properties{id,iconCategory,magnitudeOfDelay,events{description,code,iconCategory},startTime,endTime,from,to,length,delay,roadNumbers,timeValidity,lastReportTime}}}"
+        try:
+            response = httpx.get(
+                "https://api.tomtom.com/traffic/services/5/incidentDetails",
+                params={"key": settings.tomtom_api_key, "bbox": bbox, "fields": fields,
+                        "language": "en-GB", "timeValidityFilter": "present"},
+                headers={"User-Agent": "UrbanSaarthi/1.0"}, timeout=10.0,
+            )
+            response.raise_for_status()
+            for item in (response.json().get("incidents") or [])[:80]:
+                props = item.get("properties") or {}
+                events = props.get("events") or []
+                coords = (item.get("geometry") or {}).get("coordinates") or []
+                # TomTom incident coordinates are GeoJSON [longitude, latitude].
+                point = coords[0] if coords and isinstance(coords[0], list) and len(coords[0]) == 2 and isinstance(coords[0][0], (int, float)) else coords
+                incidents.append({
+                    "id": props.get("id"), "type": (events[0].get("description") if events else None) or {1: "Accident", 6: "Traffic jam", 7: "Lane closure", 8: "Road closure", 9: "Road works", 11: "Flooding"}.get(props.get("iconCategory"), "Traffic incident"),
+                    "category": props.get("iconCategory"), "magnitude": props.get("magnitudeOfDelay"),
+                    "from": props.get("from"), "to": props.get("to"), "delay_seconds": props.get("delay"),
+                    "length_meters": props.get("length"), "road_numbers": props.get("roadNumbers") or [],
+                    "observed_at": props.get("lastReportTime") or props.get("startTime"),
+                    "latitude": point[1] if isinstance(point, list) and len(point) >= 2 else None,
+                    "longitude": point[0] if isinstance(point, list) and len(point) >= 2 else None,
+                    "source": "TomTom Traffic Incidents",
+                })
+            incident_status = "available"
+            incident_note = "Current incident details from TomTom. Coverage varies by road and provider region."
+        except (httpx.HTTPError, ValueError, TypeError, KeyError):
+            incident_note = "TomTom incident lookup did not return data for this area."
+
+    status = "available" if roads else "provider_unavailable"
+    return {
+        "status": status, "latitude": latitude, "longitude": longitude, "radius_m": radius_m,
+        "roads": roads, "road_count": len(roads), "traffic_summary": traffic_summary,
+        "traffic_provider": "TomTom Traffic Flow" if flows else None,
+        "traffic_status": "available" if flows else "not_configured" if not settings.tomtom_api_key else "unavailable",
+        "traffic_note": "Flow readings are live provider observations." if flows else "Live speed requires TOMTOM_API_KEY; mapped roads are shown without invented traffic colours.",
+        "incidents": incidents, "incident_status": incident_status, "incident_note": incident_note,
+        "provider": "OpenStreetMap" if roads else None, "note": provider_note or "Road geometry is mapped from OpenStreetMap. Speed and incident status are sourced separately and remain unavailable until the traffic provider returns readings.",
+        "updated_at": utc_now().isoformat(),
+    }
+
+
+@router.get("/news")
+def traffic_news(latitude: float = Query(ge=-90, le=90), longitude: float = Query(ge=-180, le=180), area: str = Query(default="", max_length=160), limit: int = Query(default=8, ge=1, le=12)):
+    place = " ".join(str(area or "nearby area").split())[:160]
+    query = f"traffic accident road closure congestion roadworks near {place} India" if place else f"traffic accident road closure congestion near {latitude:.4f},{longitude:.4f} India"
+    result = search_live_news(query, limit=limit, topic="news")
+    result["area"] = place
+    return result
+
+
+@router.post("/sumo/run")
+def run_sumo_signal_experiment(payload: NativeSumoRunIn, _user=Depends(require_roles("operator", "admin"))):
+    """Run a reproducible native SUMO baseline vs. signal-timing intervention.
+
+    This runs the bundled reference grid network. It is genuine SUMO execution,
+    but the bundled grid is not a mapped or calibrated city network.
+    """
+    if not sumo_binary():
+        raise HTTPException(status_code=424, detail="SUMO CLI is not installed or SUMO_BINARY is not configured. Install SUMO on the API worker to run this experiment; the XGBoost forecast is not substituted.")
+    phases = [
+        {"green_seconds": payload.north_south_green_seconds, "yellow_seconds": payload.yellow_seconds, "all_red_seconds": payload.all_red_seconds},
+        {"green_seconds": payload.east_west_green_seconds, "yellow_seconds": payload.yellow_seconds, "all_red_seconds": payload.all_red_seconds},
+    ]
+    report = {"mean_vehicles_per_sampled_frame": 5 * payload.demand_multiplier, "counts": {"car": 70, "motorbike": 20, "bus": 5, "truck": 5}}
+    try:
+        result = run_native_sumo_simulation("baseline", report=report, proposed_phases=phases)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"SUMO execution failed ({type(exc).__name__}). Check SUMO installation and the bundled network files.") from exc
+    if result is None:
+        raise HTTPException(status_code=424, detail="Native SUMO could not be started. Check SUMO_BINARY and the bundled grid network.")
+    result["experiment"] = {
+        "name": payload.name,
+        "signal_timings": {
+            "north_south_green_seconds": payload.north_south_green_seconds,
+            "east_west_green_seconds": payload.east_west_green_seconds,
+            "yellow_seconds": payload.yellow_seconds,
+            "all_red_seconds": payload.all_red_seconds,
+            "cycle_seconds": payload.north_south_green_seconds + payload.east_west_green_seconds + 2 * (payload.yellow_seconds + payload.all_red_seconds),
+        },
+        "demand_multiplier": payload.demand_multiplier,
+    }
+    return result
 
 
 @router.get("/simulation")

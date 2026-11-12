@@ -60,6 +60,10 @@ export default function TrafficVisionPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const fileInput = useRef(null);
+  const [cameraForm, setCameraForm] = useState({ name: '', externalId: '', latitude: '', longitude: '', rtspUrl: '', apiUrl: '' });
+  const [cameraBusy, setCameraBusy] = useState(false);
+  const [cameraCommand, setCameraCommand] = useState('');
+  const [cameraError, setCameraError] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -150,6 +154,38 @@ export default function TrafficVisionPage() {
     const link = document.createElement('a'); link.href = href; link.download = `urbansarthi-traffic-report-${Date.now()}.json`; link.click(); URL.revokeObjectURL(href);
   }
 
+  async function registerCamera(event) {
+    event.preventDefault(); setCameraBusy(true); setCameraError(''); setCameraCommand('');
+    const cleanId = cameraForm.externalId.trim();
+    const sourceId = `${cleanId.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-camera`.slice(0, 96);
+    const rtspUrl = cameraForm.rtspUrl.trim();
+    if (!/^rtsps?:\/\//i.test(rtspUrl)) { setCameraError('Use an authorized rtsp:// or rtsps:// camera stream URL.'); setCameraBusy(false); return; }
+    if (!cameraForm.name.trim() || cleanId.length < 2 || !cameraForm.latitude || !cameraForm.longitude || !cameraForm.apiUrl.trim()) {
+      setCameraError('Complete camera name, junction ID, coordinates and public API URL.'); setCameraBusy(false); return;
+    }
+    try {
+      await api.post('/traffic/junctions', {
+        external_id: cleanId, name: cameraForm.name.trim(), latitude: Number(cameraForm.latitude), longitude: Number(cameraForm.longitude),
+        lane_count: 4, baseline_cycle_seconds: 90, status: 'unknown', configuration: { registered_from: 'traffic_lab_camera_setup' },
+      });
+    } catch (err) {
+      if (err?.status !== 409) { setCameraError(err.message || 'Could not register the junction.'); setCameraBusy(false); return; }
+    }
+    try {
+      await api.post('/admin/data-sources', {
+        external_id: sourceId, name: `${cameraForm.name.trim()} camera`, source_type: 'camera',
+        provider: 'OpenCV + YOLO edge worker', status: 'not_configured', freshness_seconds: 120,
+        safe_config: { junction_external_id: cleanId, ingestion: 'edge_worker' },
+      });
+      const q = (value) => `'${String(value).replaceAll("'", "'\''")}'`;
+      const apiUrl = cameraForm.apiUrl.trim().replace(/\/$/, '');
+      const command = `export CAMERA_RTSP_URL=${q(rtspUrl)}\nexport INGESTION_API_KEY='REPLACE_WITH_BACKEND_INGESTION_API_KEY'\npython scripts/edge_camera_worker.py --junction-id ${q(cleanId)} --source-id ${q(sourceId)} --camera-id ${q(cameraForm.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'))} --api-url ${q(apiUrl)}`;
+      setCameraCommand(command);
+      notify('Junction and camera source registered. Start the edge worker on the authorized camera network to receive live samples.');
+    } catch (err) { setCameraError(`Junction registered, but camera source setup failed: ${err.message || 'Unknown error'}`); }
+    finally { setCameraBusy(false); }
+  }
+
   return <main className="ul-lab">
     <header className="ul-page-head">
       <div>
@@ -166,6 +202,22 @@ export default function TrafficVisionPage() {
       <div className="ul-status-item"><span className={systemStatus?.forecast_ready ? 'ready' : ''}><Activity size={15}/></span><div><b>60 min scenario</b><small>{systemStatus?.native_sumo_available ? 'Native SUMO detected' : systemStatus?.forecast_ready ? 'XGBoost fallback ready' : 'Install forecast requirements'}</small></div></div>
       <div className="ul-status-item"><span className={systemStatus?.agent_tools_ready ? 'ready' : ''}><Bot size={15}/></span><div><b>Operations agent</b><small>{systemStatus?.llm_tool_calling_ready ? 'Groq LLM + tools ready' : 'Local tools ready · Groq optional'}</small></div></div>
     </div>
+
+    <section className="ul-camera-connect-panel">
+      <div className="ul-camera-connect-heading"><div><span className="ul-panel-kicker">CONTINUOUS SOURCE</span><h2>Connect a live CCTV stream</h2><p>Register a junction and its camera source, then run the OpenCV + YOLO edge worker on a machine that can reach the authorized RTSP stream.</p></div><span className="ul-camera-connect-badge"><Video size={15}/> RTSP EDGE WORKER</span></div>
+      <form className="ul-camera-connect-form" onSubmit={registerCamera}>
+        <label>Camera / junction name<input value={cameraForm.name} onChange={(e) => setCameraForm((v) => ({ ...v, name: e.target.value }))} placeholder="Hazratganj junction camera" required/></label>
+        <label>Junction external ID<input value={cameraForm.externalId} onChange={(e) => setCameraForm((v) => ({ ...v, externalId: e.target.value }))} placeholder="JUNC-LKO-001" required/></label>
+        <label>Latitude<input type="number" min="-90" max="90" step="any" value={cameraForm.latitude} onChange={(e) => setCameraForm((v) => ({ ...v, latitude: e.target.value }))} placeholder="26.8467" required/></label>
+        <label>Longitude<input type="number" min="-180" max="180" step="any" value={cameraForm.longitude} onChange={(e) => setCameraForm((v) => ({ ...v, longitude: e.target.value }))} placeholder="80.9462" required/></label>
+        <label className="wide">Authorized RTSP stream URL<input type="password" autoComplete="off" value={cameraForm.rtspUrl} onChange={(e) => setCameraForm((v) => ({ ...v, rtspUrl: e.target.value }))} placeholder="rtsp://camera-host:554/stream" required/><small>Used only to generate the local worker command. Never sent to or stored by the UrbanSaarthi API.</small></label>
+        <label className="wide">UrbanSaarthi API base URL<input value={cameraForm.apiUrl} onChange={(e) => setCameraForm((v) => ({ ...v, apiUrl: e.target.value }))} placeholder="https://your-api.example.com/api/v1" required/></label>
+        <button className="ul-primary-button" type="submit" disabled={cameraBusy}>{cameraBusy ? <><LoaderCircle size={15} className="ul-spin"/> Registering…</> : <><Video size={15}/> Register camera source</>}</button>
+      </form>
+      {cameraError && <div className="ul-inline-error"><AlertTriangle size={14}/>{cameraError}</div>}
+      {cameraCommand && <div className="ul-camera-command"><div><b>Run on the camera-network machine</b><small>Install the edge worker requirements and set the same INGESTION_API_KEY configured on the backend.</small></div><pre>{cameraCommand}</pre><button className="ul-secondary-button" type="button" onClick={() => navigator.clipboard?.writeText(cameraCommand).then(() => notify('Worker command copied.')).catch(() => notify('Clipboard access is unavailable.'))}>Copy worker command</button></div>}
+      <div className="ul-camera-connect-foot"><ShieldCheck size={14}/> Only connect cameras you are authorized to access. Registration does not start the stream; live status begins after the edge worker sends its first authenticated heartbeat.</div>
+    </section>
 
     <div className="ul-section-heading"><div><span>01 / OBSERVATION</span><h2>Capture the road.</h2></div><p>Upload footage from a junction. The video is processed by your backend and is not saved as a media asset.</p></div>
     <div className="ul-observation-grid">

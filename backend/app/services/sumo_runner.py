@@ -190,7 +190,105 @@ def _write_edge_data(additional_path: Path, data_path: Path) -> None:
     ET.ElementTree(root).write(additional_path, encoding="utf-8", xml_declaration=True)
 
 
-def _run_one(binary: str, network_source: Path, route_path: Path, work_dir: Path, tag: str) -> dict[str, Any]:
+def _network_geometry(network_source: Path) -> dict[str, Any]:
+    """Return normalized road centre-lines and traffic-light junction positions."""
+    root = ET.parse(network_source).getroot()
+    location = root.find("location")
+    boundary = (location.get("convBoundary", "0,0,1000,1000") if location is not None else "0,0,1000,1000")
+    try:
+        x_min, y_min, x_max, y_max = [float(value) for value in boundary.split(",")]
+    except (TypeError, ValueError):
+        x_min, y_min, x_max, y_max = 0.0, 0.0, 1000.0, 1000.0
+    width, height = max(1.0, x_max - x_min), max(1.0, y_max - y_min)
+
+    def point(raw: str) -> dict[str, float] | None:
+        try:
+            x_raw, y_raw = raw.split(",", 1)
+            x, y = float(x_raw), float(y_raw)
+            return {"x": round((x - x_min) / width * 1000, 2),
+                    "y": round((y_max - y) / height * 1000, 2)}
+        except (TypeError, ValueError):
+            return None
+
+    roads = []
+    for edge in root.findall("edge"):
+        if edge.get("function") == "internal":
+            continue
+        lanes = edge.findall("lane")
+        if not lanes:
+            continue
+        lane_shape = lanes[0].get("shape", "").split()
+        points = [mapped for raw in lane_shape if (mapped := point(raw)) is not None]
+        if len(points) >= 2:
+            roads.append({"id": edge.get("id", "road"), "points": points})
+
+    junctions = []
+    for junction in root.findall("junction"):
+        if junction.get("type") != "traffic_light":
+            continue
+        try:
+            mapped = point(f"{junction.get('x')},{junction.get('y')}")
+        except (TypeError, ValueError):
+            mapped = None
+        if mapped:
+            junctions.append({"id": junction.get("id", "signal"), **mapped})
+    return {"width": 1000, "height": 1000, "roads": roads, "junctions": junctions,
+            "bounds": {"x_min": x_min, "y_min": y_min, "x_max": x_max, "y_max": y_max},
+            "source_network": network_source.name, "coordinate_system": "normalized SUMO network coordinates"}
+
+
+def _read_fcd_frames(fcd_path: Path, network_geometry: dict[str, Any] | None = None, *, max_vehicles_per_frame: int = 240) -> dict[int, dict[str, Any]]:
+    """Stream SUMO FCD XML and retain 30-second vehicle position snapshots only."""
+    frames: dict[int, dict[str, Any]] = {}
+    if not fcd_path.exists():
+        return frames
+    bounds = (network_geometry or {}).get("bounds") or {"x_min": 0.0, "y_min": 0.0, "x_max": 1000.0, "y_max": 1000.0}
+    x_min, y_min = float(bounds.get("x_min", 0)), float(bounds.get("y_min", 0))
+    width = max(1.0, float(bounds.get("x_max", 1000)) - x_min)
+    height = max(1.0, float(bounds.get("y_max", 1000)) - y_min)
+    for _, element in ET.iterparse(fcd_path, events=("end",)):
+        if element.tag != "timestep":
+            continue
+        try:
+            second = int(round(float(element.get("time", "0"))))
+        except (TypeError, ValueError):
+            element.clear()
+            continue
+        # SUMO writes one frame every 30 seconds; ignore any non-aligned ticks.
+        if second % 30 == 0:
+            vehicles = []
+            for vehicle in element.findall("vehicle"):
+                try:
+                    x, y = float(vehicle.get("x", "nan")), float(vehicle.get("y", "nan"))
+                    angle = float(vehicle.get("angle", "0"))
+                    speed = max(0.0, float(vehicle.get("speed", "0"))) * 3.6
+                    if not (x == x and y == y):
+                        continue
+                    vehicles.append({
+                        "id": vehicle.get("id", "vehicle"),
+                        "type": vehicle.get("type", "car"),
+                        "x": round(x, 2), "y": round(y, 2),
+                        "map_x": round((x - x_min) / width * 1000, 2),
+                        "map_y": round((float(bounds.get("y_max", 1000)) - y) / height * 1000, 2),
+                        "angle": round(angle, 1), "speed_kmph": round(speed, 2),
+                        "lane": vehicle.get("lane"),
+                    })
+                except (TypeError, ValueError):
+                    continue
+            total = len(vehicles)
+            if total > max_vehicles_per_frame:
+                if max_vehicles_per_frame <= 1:
+                    vehicles = vehicles[:1]
+                else:
+                    stride = (total - 1) / (max_vehicles_per_frame - 1)
+                    vehicles = [vehicles[round(index * stride)] for index in range(max_vehicles_per_frame)]
+            frames[second] = {"second": second, "vehicles": vehicles,
+                              "vehicle_count_actual": total, "vehicle_count_rendered": len(vehicles)}
+        element.clear()
+    return frames
+
+
+def _run_one(binary: str, network_source: Path, route_path: Path, work_dir: Path, tag: str, *, capture_fcd: bool = False) -> dict[str, Any]:
     network_path = work_dir / f"{tag}.net.xml"
     if network_source != network_path:
         shutil.copy2(network_source, network_path)
@@ -198,6 +296,7 @@ def _run_one(binary: str, network_source: Path, route_path: Path, work_dir: Path
     edge_data_path = work_dir / f"{tag}.edge-data.xml"
     summary_path = work_dir / f"{tag}.summary.xml"
     tripinfo_path = work_dir / f"{tag}.tripinfo.xml"
+    fcd_path = work_dir / f"{tag}.fcd.xml"
     _write_edge_data(additional_path, edge_data_path)
     command = [
         binary, "-n", str(network_path), "-r", str(route_path), "-a", str(additional_path),
@@ -207,6 +306,8 @@ def _run_one(binary: str, network_source: Path, route_path: Path, work_dir: Path
         "--seed", "42", "--time-to-teleport", "-1",
         "--no-step-log", "true", "--duration-log.disable", "true", "--ignore-route-errors", "false",
     ]
+    if capture_fcd:
+        command.extend(["--fcd-output", str(fcd_path), "--device.fcd.period", "30"])
     started = time.monotonic()
     completed = subprocess.run(command, capture_output=True, text=True, timeout=240, check=False)
     if completed.returncode != 0 or not summary_path.exists():
@@ -242,26 +343,50 @@ def _run_one(binary: str, network_source: Path, route_path: Path, work_dir: Path
                     density = float(edge.get("density", "0"))
                     occupancy = float(edge.get("occupancy", "0"))
                     speed = float(edge.get("speed", "0"))
-                    values.append({"density": density, "occupancy": occupancy, "speed": speed})
-                except ValueError: pass
+                    entered = float(edge.get("entered", "0"))
+                    left = float(edge.get("left", "0"))
+                    vehicle_sum = float(edge.get("vehicleSum", "0"))
+                    waiting = float(edge.get("waitingTime", "0"))
+                    level = "heavy" if density >= 20 or occupancy >= 35 else "slow" if density >= 7 or occupancy >= 15 else "moving"
+                    values.append({
+                        "road": str(edge.get("id") or "SUMO edge"),
+                        "density": density,
+                        "occupancy": occupancy,
+                        "speed_kmph": round(speed * 3.6, 2),
+                        "entered_vehicles": round(entered, 2),
+                        "left_vehicles": round(left, 2),
+                        "vehicle_sum": round(vehicle_sum, 2),
+                        "waiting_vehicle_seconds": round(waiting, 2),
+                        "level": level,
+                    })
+                except (ValueError, TypeError):
+                    continue
             edge_by_second[second] = values
 
+    fcd_frames = _read_fcd_frames(fcd_path, _network_geometry(network_source)) if capture_fcd else {}
+    if capture_fcd and not fcd_frames:
+        raise RuntimeError("SUMO completed but did not produce Floating Car Data snapshots. Check that the installed SUMO supports --fcd-output and --device.fcd.period.")
     timeline = []
-    for target_second in range(0, DURATION_SECONDS + 1, STEP_SECONDS):
+    sample_seconds = sorted(fcd_frames) if fcd_frames else list(range(0, DURATION_SECONDS + 1, STEP_SECONDS))
+    for target_second in sample_seconds:
         snap = min(steps, key=lambda item: abs(item["second"] - target_second))
-        edge_values = edge_by_second.get(target_second, [])
-        if not edge_values and edge_by_second:
-            nearest = min(edge_by_second, key=lambda second: abs(second - target_second))
-            edge_values = edge_by_second[nearest]
+        edge_second = min(edge_by_second, key=lambda second: abs(second - target_second)) if edge_by_second else None
+        edge_values = edge_by_second.get(edge_second, []) if edge_second is not None else []
         heavy = sum(1 for item in edge_values if item["density"] >= 20 or item["occupancy"] >= 35)
         moderate = sum(1 for item in edge_values if 7 <= item["density"] < 20 or 15 <= item["occupancy"] < 35)
+        fcd = fcd_frames.get(target_second, {})
         timeline.append({
-            "minute": round(target_second / 60), "queue_total": snap["halting"],
+            "second": target_second, "minute": round(target_second / 60, 2), "queue_total": snap["halting"],
             "vehicles": snap["running"], "heavy_roads": heavy,
             "moderate_roads": moderate, "free_roads": max(0, len(edge_values) - heavy - moderate),
             "mean_speed_kmph": round(snap["mean_speed_mps"] * 3.6, 2),
             "waiting_vehicle_seconds": round(snap["waiting"], 2),
             "vehicles_inserted": snap["inserted"], "vehicles_completed": snap["ended"],
+            "roads": sorted(edge_values, key=lambda item: (item["density"], item["occupancy"]), reverse=True)[:24],
+            "road_telemetry_count": len(edge_values),
+            "vehicle_positions": fcd.get("vehicles", []),
+            "vehicle_count_actual": fcd.get("vehicle_count_actual", snap["running"]),
+            "vehicle_count_rendered": fcd.get("vehicle_count_rendered", 0),
         })
 
     trips = []
@@ -291,7 +416,7 @@ def _run_one(binary: str, network_source: Path, route_path: Path, work_dir: Path
         "summary": {
             "queue_start": timeline[0]["queue_total"], "queue_end": timeline[-1]["queue_total"],
             "queue_change_percent": round((timeline[-1]["queue_total"] - timeline[0]["queue_total"]) / max(timeline[0]["queue_total"], 1) * 100, 1),
-            "road_count": len(edge_by_second.get(DURATION_SECONDS, [])) or 80,
+            "road_count": len(edge_by_second.get(DURATION_SECONDS, [])),
             "heavy_roads_start": timeline[0]["heavy_roads"], "heavy_roads_end": timeline[-1]["heavy_roads"],
             "vehicles_inserted": timeline[-1]["vehicles_inserted"], "vehicles_completed": timeline[-1]["vehicles_completed"],
             "mean_speed_kmph_final": timeline[-1]["mean_speed_kmph"],
@@ -303,6 +428,8 @@ def _run_one(binary: str, network_source: Path, route_path: Path, work_dir: Path
             "trip_emissions": trip_emissions,
             "trip_records_including_unfinished": len(trips),
             "runtime_seconds": round(time.monotonic() - started, 2),
+            "fcd_vehicle_frames": len(fcd_frames),
+            "vehicle_positions_per_frame_cap": 240 if fcd_frames else 0,
         },
     }
 
@@ -333,7 +460,7 @@ def run_native_sumo_simulation(scenario: str, report: dict[str, Any] | None = No
         baseline = _run_one(binary, NETWORK, route_path, root, "baseline")
         intervention_net = root / "intervention.net.xml"
         _patch_signal_cycles(NETWORK, intervention_net, proposed_phases)
-        intervention = _run_one(binary, intervention_net, route_path, root, "intervention")
+        intervention = _run_one(binary, intervention_net, route_path, root, "intervention", capture_fcd=True)
         base_summary = baseline["summary"]
         proposed_summary = intervention["summary"]
         base_queue = base_summary["queue_end"]
@@ -370,14 +497,18 @@ def run_native_sumo_simulation(scenario: str, report: dict[str, Any] | None = No
         }
         return {
             "mode": "native_sumo_simulation", "engine": "SUMO CLI / 3,600-second baseline + intervention",
-            "scenario": scenario, "duration_minutes": 60, "step_minutes": 5,
+            "scenario": scenario, "duration_minutes": 60, "step_minutes": 0.5,
+            "road_metrics_step_minutes": STEP_SECONDS / 60, "vehicle_position_sample_seconds": 30,
             "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
             "summary": summary, "timeline": intervention["timeline"], "baseline_timeline": baseline["timeline"],
+            "network_geometry": _network_geometry(NETWORK),
             "traffic_comparison": traffic_comparison, "emissions_comparison": emissions_comparison,
             "training_data": {"road_edges": 80, "network_file": "grid.net.xml", "demand_source": "same deterministic multi-class synthetic flows for both runs; proportions derived from YOLO class counts", "routes": len(routes), "vehicle_mix": vehicle_mix},
-            "models": {"engine": "native SUMO execution", "simulated_seconds": DURATION_SECONDS, "seed": 42},
+            "models": {"engine": "native SUMO execution", "simulated_seconds": DURATION_SECONDS, "seed": 42,
+                       "vehicle_position_source": "SUMO Floating Car Data", "vehicle_position_sample_seconds": 30},
             "notes": [
                 "This is a real 3,600-second SUMO execution on the bundled synthetic grid network with generated vehicle routes.",
+                "Vehicle positions are sampled from SUMO Floating Car Data at 30-second intervals; at most 240 are rendered per frame, while aggregate counts include all vehicles.",
                 "Baseline and candidate runs use identical generated demand and a fixed seed. The bundled network is synthetic and is not a mapped Kanpur junction.",
                 "Video detections inform vehicle-class proportions and demand scaling; footage is not geospatially map-matched to the network.",
                 "Emissions use trip routeLength and indicative vehicle-class factors. SUMO does not model speed/load-specific engine emissions in this prototype; fuel-use assumptions are not local fleet measurements.",

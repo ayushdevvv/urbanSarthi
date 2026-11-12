@@ -116,6 +116,9 @@ def test_command_center_overview_groups_data_source_statuses(client):
     body = response.json()
     assert body["data_sources"]["status_counts"] == {"online": 1, "stale": 1, "offline": 2}
     assert body["data_sources"]["configured_sources"] == 4
+    assert "stations" in body["air_quality"] and isinstance(body["air_quality"]["stations"], list)
+    assert all("latitude" in station and "longitude" in station for station in body["air_quality"]["stations"])
+    assert all("latitude" in alert and "longitude" in alert for alert in body["alerts"]["items"])
     freshness = client.get("/api/v1/command-center/health/data-sources").json()["sources"]
     assert next(row for row in freshness if row["external_id"] == "camera-02")["status"] == "stale"
     provider_status = client.get("/api/v1/integrations/status")
@@ -175,3 +178,53 @@ def test_production_auth_login_and_edge_ingestion_key(client, monkeypatch):
     assert live_rows.status_code == 200 and len(live_rows.json()) == 1
     heartbeat = client.post("/api/v1/ingestion/source-heartbeat", json={"external_id": "camera-test-source", "device": "test-camera"}, headers={"X-Ingestion-Key": "test-ingestion-key-that-is-at-least-32-chars"})
     assert heartbeat.status_code == 200 and heartbeat.json()["status"] == "online"
+
+
+def test_native_sumo_endpoint_returns_clear_setup_error_when_engine_missing(client, monkeypatch):
+    from app.api import traffic as traffic_api
+    monkeypatch.setattr(traffic_api, "sumo_binary", lambda: None)
+    response = client.post("/api/v1/traffic/sumo/run", json={
+        "name": "Missing engine test",
+        "north_south_green_seconds": 40,
+        "east_west_green_seconds": 50,
+        "yellow_seconds": 3,
+        "all_red_seconds": 1,
+        "demand_multiplier": 1.2,
+    })
+    assert response.status_code == 424
+    assert "SUMO CLI is not installed" in response.json()["detail"]
+
+
+def test_native_sumo_endpoint_returns_native_run_and_submitted_signal_timings(client, monkeypatch):
+    from app.api import traffic as traffic_api
+    monkeypatch.setattr(traffic_api, "sumo_binary", lambda: "sumo")
+    captured = {}
+
+    def fake_run(scenario, report=None, proposed_phases=None):
+        captured["scenario"] = scenario
+        captured["report"] = report
+        captured["phases"] = proposed_phases
+        return {
+            "mode": "native_sumo_simulation", "engine": "SUMO test runner",
+            "summary": {"queue_end": 12}, "timeline": [{"minute": 0, "roads": []}],
+            "baseline_timeline": [{"minute": 0, "queue_total": 16}], "notes": [],
+        }
+
+    monkeypatch.setattr(traffic_api, "run_native_sumo_simulation", fake_run)
+    response = client.post("/api/v1/traffic/sumo/run", json={
+        "name": "North south priority",
+        "north_south_green_seconds": 55,
+        "east_west_green_seconds": 35,
+        "yellow_seconds": 4,
+        "all_red_seconds": 2,
+        "demand_multiplier": 1.3,
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["mode"] == "native_sumo_simulation"
+    assert body["experiment"]["signal_timings"]["north_south_green_seconds"] == 55
+    assert body["experiment"]["signal_timings"]["east_west_green_seconds"] == 35
+    assert captured["scenario"] == "baseline"
+    assert captured["phases"][0]["green_seconds"] == 55
+    assert captured["phases"][1]["green_seconds"] == 35
+    assert captured["report"]["mean_vehicles_per_sampled_frame"] == 6.5

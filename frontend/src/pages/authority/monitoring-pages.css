@@ -73,3 +73,5 @@
 @media(max-width:800px){.aqi-forecast-summary{padding:11px 13px 3px}.aqi-forecast-chart{padding:10px 13px}.aqi-forecast-footnote{padding:0 13px 12px}.aqi-forecast-chart svg{height:160px}}
 @media(max-width:560px){.aqi-forecast-panel .monitor-panel-heading{flex-direction:column}.forecast-panel-actions{width:100%;justify-content:space-between}.aqi-forecast-summary{grid-template-columns:1fr 1fr;gap:7px}.aqi-forecast-summary article:last-child{grid-column:1/-1}.aqi-forecast-summary article>strong{font-size:20px}.aqi-forecast-chart-meta{align-items:flex-start;flex-direction:column}.aqi-forecast-chart svg{height:145px}.air-overview-page .monitor-panel-heading h3{font-size:15px}}
 .aqi-forecast-summary .forecast-direction.unavailable>strong{color:#849184}
+
+.iot-form-error{margin-top:10px;background:#fff3ef;border-color:#f0d8d0;color:#9a584b}

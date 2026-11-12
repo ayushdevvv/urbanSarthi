@@ -76,8 +76,9 @@ def command_overview(db: Session = Depends(get_db), user=Depends(require_roles("
                     "junctions_high_congestion": high_congestion[:30], "vehicle_count_latest_observations": sum(o.vehicle_count for o in latest_by_junction.values()),
                     "forecasted_junction_count": len(latest_forecast_by_junction)},
         "air_quality": {"stations_with_recent_data": len(latest_aqi), "mean_aqi": round(sum(r.aqi for r in latest_aqi.values() if r.aqi is not None) / len([r for r in latest_aqi.values() if r.aqi is not None]), 1) if any(r.aqi is not None for r in latest_aqi.values()) else None,
-                         "last_observed_at": max((r.observed_at for r in latest_aqi.values()), default=None).isoformat() if latest_aqi else None},
-        "alerts": {"active_count": len(alerts), "items": [{"id": a.id, "public_id": a.public_id, "title": a.title, "severity": a.severity, "category": a.category, "created_at": a.created_at.isoformat()} for a in alerts[:15]]},
+                         "last_observed_at": max((r.observed_at for r in latest_aqi.values()), default=None).isoformat() if latest_aqi else None,
+                         "stations": [{"id": row.id, "station_name": row.station_name, "latitude": row.latitude, "longitude": row.longitude, "aqi": row.aqi, "category": row.category, "source": row.source, "observed_at": row.observed_at.isoformat()} for row in latest_aqi.values()]},
+        "alerts": {"active_count": len(alerts), "items": [{"id": a.id, "public_id": a.public_id, "title": a.title, "severity": a.severity, "category": a.category, "latitude": a.latitude, "longitude": a.longitude, "created_at": a.created_at.isoformat()} for a in alerts[:15]]},
         "data_sources": {"status_counts": source_counts, "configured_sources": len(real_sources),
                          "warning": "Only non-synthetic ingested observations are shown. Registered source records are not considered online until a verified heartbeat or successful sync is received."},
     }

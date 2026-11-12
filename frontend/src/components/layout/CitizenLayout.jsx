@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Activity, Bus, Camera, House, MapPin, Moon, ScanSearch, Sun, TrendingUp, UserRound } from 'lucide-react';
+import { Activity, Bus, House, MapPin, Moon, Route, Sun, UserRound } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 import FloatingAgentWidget from '../shared/FloatingAgentWidget.jsx';
@@ -7,13 +7,10 @@ import DataStatusBanner from '../shared/DataStatusBanner.jsx';
 
 const links = [
   { to: '/citizen', label: 'Home', icon: House, end: true },
-  { to: '/citizen/air-quality', label: 'Air quality', icon: Activity },
-  { to: '/citizen/aqi-forecast', label: 'AQI forecast', icon: TrendingUp },
-  { to: '/citizen/aqi-vision', label: 'AQI Vision', icon: ScanSearch },
-  { to: '/citizen/traffic', label: 'Traffic conditions', icon: Camera },
-  { to: '/citizen/transit', label: 'Public transport', icon: Bus },
-  { to: '/citizen/trips', label: 'My trips', icon: MapPin },
-  { to: '/citizen/account', label: 'Account', icon: UserRound },
+  { to: '/citizen/aqi-forecast', label: 'AQI forecast', icon: Activity },
+  { to: '/citizen/traffic', label: 'Traffic conditions', icon: MapPin },
+  { to: '/citizen/transit', label: 'Bus & train', icon: Bus },
+  { to: '/citizen/trips', label: 'My trips', icon: Route },
 ];
 export default function CitizenLayout() {
   const { dark, setDark, language, toggleLanguage } = useApp();

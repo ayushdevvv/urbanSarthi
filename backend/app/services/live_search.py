@@ -1,0 +1,100 @@
+"""Server-side, source-attributed live search for citizen mobility intelligence.
+
+Tavily is preferred when configured. Google News RSS is a no-key fallback for
+recently indexed reporting; its results are news articles, not traffic telemetry.
+"""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
+from urllib.parse import quote_plus
+import xml.etree.ElementTree as ET
+
+import httpx
+
+from app.core.config import settings
+
+
+def _iso(value: str | None) -> str | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc).isoformat()
+    except (TypeError, ValueError):
+        try:
+            return parsedate_to_datetime(value).astimezone(timezone.utc).isoformat()
+        except (TypeError, ValueError, OverflowError):
+            return None
+
+
+def search_live_news(query: str, *, limit: int = 8, topic: str = "news") -> dict:
+    clean = " ".join(str(query or "").split())[:400]
+    if not clean:
+        return {"status": "unavailable", "provider": None, "items": [], "query": clean,
+                "updated_at": datetime.now(timezone.utc).isoformat(), "note": "A search query is required."}
+
+    if settings.tavily_api_key.strip():
+        try:
+            response = httpx.post(
+                "https://api.tavily.com/search",
+                json={
+                    "api_key": settings.tavily_api_key.strip(),
+                    "query": clean,
+                    "topic": topic,
+                    "search_depth": "advanced",
+                    "max_results": max(1, min(limit, 12)),
+                    "include_answer": False,
+                    "include_raw_content": False,
+                },
+                headers={"Accept": "application/json", "User-Agent": "UrbanSaarthi/1.0"},
+                timeout=14.0,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            items = []
+            for row in payload.get("results") or []:
+                url = str(row.get("url") or "").strip()
+                title = str(row.get("title") or "").strip()
+                if not title or not url.startswith(("https://", "http://")):
+                    continue
+                items.append({
+                    "title": title[:300], "url": url, "snippet": str(row.get("content") or "")[:1000],
+                    "source": str(row.get("source") or "")[:160],
+                    "published_at": _iso(row.get("published_date")),
+                })
+            return {"status": "available" if items else "no_results", "provider": "Tavily Search",
+                    "items": items[:limit], "query": clean, "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "note": "Search results are source-linked reporting. Check publisher timestamps; they are not live vehicle or service telemetry."}
+        except (httpx.HTTPError, ValueError, TypeError, KeyError):
+            # Preserve a working keyless news path; never surface the provider's raw error.
+            pass
+
+    try:
+        response = httpx.get(
+            "https://news.google.com/rss/search",
+            params={"q": clean, "hl": "en-IN", "gl": "IN", "ceid": "IN:en"},
+            headers={"User-Agent": "UrbanSaarthi/1.0 (citizen mobility news)"},
+            timeout=12.0,
+        )
+        response.raise_for_status()
+        root = ET.fromstring(response.content)
+        items = []
+        for item in root.findall("./channel/item")[:limit]:
+            title = (item.findtext("title") or "").strip()
+            url = (item.findtext("link") or "").strip()
+            pub = (item.findtext("pubDate") or "").strip()
+            source_node = item.find("source")
+            source = (source_node.text or "").strip() if source_node is not None else "Google News"
+            if title and url.startswith(("https://", "http://")):
+                items.append({"title": title[:300], "url": url, "snippet": "",
+                              "source": source[:160], "published_at": _iso(pub)})
+        return {"status": "available" if items else "no_results", "provider": "Google News RSS",
+                "items": items, "query": clean, "updated_at": datetime.now(timezone.utc).isoformat(),
+                "note": "Recent news index. Article publication time is shown when supplied by the publisher; this is not live transit telemetry."}
+    except (httpx.HTTPError, ET.ParseError, ValueError, TypeError):
+        return {"status": "unavailable", "provider": None, "items": [], "query": clean,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "note": "Live search is unavailable. Configure TAVILY_API_KEY or retry when news-feed connectivity returns."}

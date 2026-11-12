@@ -84,7 +84,7 @@ function sortRouteOptions(routes = [], preference = 'balanced') {
   }));
 }
 
-function initialPoint(label) { const [lat, lon] = getLocationCoordinates(label); const known = ['New Delhi Railway Station', 'India Gate', 'Delhi NCR', 'New Delhi', 'Rajiv Chowk', 'Akshardham', 'Connaught Place', 'ITO Crossing', 'Mumbai', 'Bengaluru', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Lucknow', 'Ahmedabad', 'Jaipur'].includes(label); return { label, latitude: lat, longitude: lon, resolved: known }; }
+function initialPoint(label = '') { const clean = String(label || '').trim(); const [lat, lon] = clean ? getLocationCoordinates(clean) : [null, null]; const known = ['New Delhi Railway Station', 'India Gate', 'Delhi NCR', 'New Delhi', 'Rajiv Chowk', 'Akshardham', 'Connaught Place', 'ITO Crossing', 'Mumbai', 'Bengaluru', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Lucknow', 'Ahmedabad', 'Jaipur'].includes(clean); return { label: clean, latitude: known ? lat : null, longitude: known ? lon : null, resolved: known }; }
 async function resolveMappedPlace(query) {
   const clean = String(query || '').trim();
   if (!clean) throw new Error('Enter a starting point and destination.');
@@ -102,60 +102,32 @@ async function resolveMappedPlace(query) {
 }
 export default function RoutePlannerPage({ embedded = false }) {
   const { notify } = useApp(); const location = useLocation(); const navigate = useNavigate();
-  const [origin, setOrigin] = useState(() => initialPoint(location.state?.from || 'New Delhi Railway Station'));
-  const [destination, setDestination] = useState(() => initialPoint(location.state?.to || 'India Gate'));
+  const [origin, setOrigin] = useState(() => initialPoint(location.state?.from || ''));
+  const [destination, setDestination] = useState(() => initialPoint(location.state?.to || ''));
   const [nearbyPlaces, setNearbyPlaces] = useState([]); const [nearbyBusy, setNearbyBusy] = useState(false); const [nearbyKind, setNearbyKind] = useState('all');
-  const [resolving, setResolving] = useState({ origin: false, destination: false }); const [currentLocationBusy, setCurrentLocationBusy] = useState(false);
-  const autoPlanTimer = useRef(null); const lastAutoKey = useRef(''); const planRunRef = useRef(0);
+  const [currentLocationBusy, setCurrentLocationBusy] = useState(false);
+  const planRunRef = useRef(0);
   const pointLabelsRef = useRef({ origin: origin.label, destination: destination.label });
-  const geocodeSequenceRef = useRef({ origin: 0, destination: 0 });
-  const isResolving = resolving.origin || resolving.destination;
-  useEffect(() => { if (!origin.resolved) resolveLocation('origin'); if (!destination.resolved) resolveLocation('destination'); }, []);
   const [preference, setPreference] = useState('balanced'); const [mode, setMode] = useState('driving');
   const [result, setResult] = useState(null); const [selectedRouteId, setSelectedRouteId] = useState(null); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [showCoords, setShowCoords] = useState(false);
-  const markers = [{ id: 'origin', lat: origin.latitude, lng: origin.longitude, title: origin.label, kind: 'normal' }, { id: 'destination', lat: destination.latitude, lng: destination.longitude, title: destination.label, kind: 'critical' }];
+  const markers = [origin.resolved && { id: 'origin', lat: origin.latitude, lng: origin.longitude, title: origin.label, kind: 'normal' }, destination.resolved && { id: 'destination', lat: destination.latitude, lng: destination.longitude, title: destination.label, kind: 'critical' }].filter(Boolean);
   const updatePoint = (key, field, value) => {
     // Any edit invalidates an in-flight route response so an older journey
     // cannot overwrite the newer endpoints on the map.
     planRunRef.current += 1;
-    lastAutoKey.current = '';
     setBusy(false);
     if (field === 'label') {
       pointLabelsRef.current[key] = value;
-      geocodeSequenceRef.current[key] += 1;
-      setResolving((state) => ({ ...state, [key]: false }));
     }
     (key === 'origin' ? setOrigin : setDestination)((point) => ({ ...point, [field]: value, ...(field === 'label' ? { resolved: false } : {}) }));
     setResult(null); setError('');
   };
   const swap = () => {
     planRunRef.current += 1;
-    lastAutoKey.current = '';
     setBusy(false);
-    geocodeSequenceRef.current.origin += 1;
-    geocodeSequenceRef.current.destination += 1;
-    setResolving({ origin: false, destination: false });
     pointLabelsRef.current = { origin: destination.label, destination: origin.label };
     setOrigin(destination); setDestination(origin); setResult(null); setError('');
   };
-  async function resolveLocation(key, queryOverride) {
-    const point = key === 'origin' ? origin : destination;
-    const query = String(queryOverride ?? point.label).trim();
-    if (!query || (point.resolved && !queryOverride)) return;
-    const sequence = ++geocodeSequenceRef.current[key];
-    setResolving((state) => ({ ...state, [key]: true }));
-    try {
-      const selected = await resolveMappedPlace(query);
-      if (sequence !== geocodeSequenceRef.current[key] || pointLabelsRef.current[key].trim() !== query) return;
-      pointLabelsRef.current[key] = selected.label;
-      (key === 'origin' ? setOrigin : setDestination)(selected);
-      setResult(null);
-    } catch (err) {
-      if (sequence === geocodeSequenceRef.current[key] && pointLabelsRef.current[key].trim() === query) setError(err.message || 'Could not resolve the location.');
-    } finally {
-      if (sequence === geocodeSequenceRef.current[key]) setResolving((state) => ({ ...state, [key]: false }));
-    }
-  }
   const useCurrentLocation = () => {
     if (!navigator.geolocation) { setError('This browser does not support location access.'); return; }
     setCurrentLocationBusy(true); setError('');
@@ -163,8 +135,8 @@ export default function RoutePlannerPage({ embedded = false }) {
       const latitude = position.coords.latitude, longitude = position.coords.longitude;
       let label = 'My current location';
       try { const reverse = await api.get(`/routing/reverse-geocode?latitude=${latitude}&longitude=${longitude}`); label = reverse.label || label; } catch {}
-      planRunRef.current += 1; lastAutoKey.current = ''; setBusy(false);
-      pointLabelsRef.current.origin = label; geocodeSequenceRef.current.origin += 1;
+      planRunRef.current += 1; setBusy(false);
+      pointLabelsRef.current.origin = label;
       setOrigin({ label, latitude, longitude, resolved: true }); setResult(null); setCurrentLocationBusy(false);
     }, (geoError) => { setCurrentLocationBusy(false); setError(geoError.code === 1 ? 'Location permission was denied. You can still search for any place.' : 'Could not retrieve your current location. Try again or search for a place.'); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   };
@@ -174,7 +146,8 @@ export default function RoutePlannerPage({ embedded = false }) {
     try { const response = await api.get(`/routing/nearby-places?latitude=${destination.latitude}&longitude=${destination.longitude}&radius_m=3000&kind=${nearbyKind}`); setNearbyPlaces(response.places || []); }
     catch { setNearbyPlaces([]); } finally { setNearbyBusy(false); }
   }, [destination.latitude, destination.longitude, destination.resolved, nearbyKind]);
-  async function plan() {
+  async function plan(event) {
+    event?.preventDefault?.();
     const runId = ++planRunRef.current;
     const originQuery = origin.label.trim();
     const destinationQuery = destination.label.trim();
@@ -193,8 +166,6 @@ export default function RoutePlannerPage({ embedded = false }) {
       }
       pointLabelsRef.current = { origin: resolvedOrigin.label, destination: resolvedDestination.label };
       setOrigin(resolvedOrigin); setDestination(resolvedDestination);
-      const routeKey = `${resolvedOrigin.latitude},${resolvedOrigin.longitude}|${resolvedDestination.latitude},${resolvedDestination.longitude}|${mode}`;
-      lastAutoKey.current = routeKey;
       if (Math.abs(Number(resolvedOrigin.latitude) - Number(resolvedDestination.latitude)) < 1e-7
         && Math.abs(Number(resolvedOrigin.longitude) - Number(resolvedDestination.longitude)) < 1e-7) {
         throw new Error('Choose two different locations to plan a route.');
@@ -288,17 +259,7 @@ export default function RoutePlannerPage({ embedded = false }) {
       if (runId === planRunRef.current) setBusy(false);
     }
   }
-  useEffect(() => {
-    if (!origin.resolved || !destination.resolved) return;
-    const key = `${origin.latitude},${origin.longitude}|${destination.latitude},${destination.longitude}|${mode}`;
-    if (lastAutoKey.current === key) return;
-    window.clearTimeout(autoPlanTimer.current);
-    autoPlanTimer.current = window.setTimeout(() => { lastAutoKey.current = key; plan(); }, 450);
-    return () => window.clearTimeout(autoPlanTimer.current);
-    // plan uses the current values; the key scopes automatic updates to actual coordinate/mode changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [origin.latitude, origin.longitude, origin.resolved, destination.latitude, destination.longitude, destination.resolved, mode]);
-  useEffect(() => { loadNearbyPlaces(); }, [loadNearbyPlaces]);
+  useEffect(() => { if (result) loadNearbyPlaces(); }, [result, loadNearbyPlaces]);
   function selectRoute(route) { setSelectedRouteId(route.id ?? `${route.mode}-${route.label}`); notify(`Selected ${route.label || route.mode} route. The map and Google Maps handoff now use this option.`); }
   const displayRoutes = useMemo(() => sortRouteOptions(result?.routes || [], preference), [result, preference]);
   const selectedRoute = displayRoutes.find((route) => routeIdentity(route) === selectedRouteId) || displayRoutes[0] || null;
@@ -320,15 +281,15 @@ export default function RoutePlannerPage({ embedded = false }) {
   return <>
     <PageIntro eyebrow={embedded ? 'CITY TRAVEL' : 'LIVE JOURNEY PLANNER'} title={embedded ? 'Where are you headed today?' : 'Plan a trip'} description="Compare mapped road alternatives by travel time, distance and estimated tailpipe CO₂, then open your chosen route in Google Maps." />
     <ErrorNotice message={error} onRetry={plan}/>
-    <div className="planner-layout"><section className="panel planner-form"><div className="panel-head"><div><div className="eyebrow">YOUR JOURNEY</div><h3>Where to?</h3></div><button className="icon-btn" title="Swap origin and destination" onClick={swap}><ArrowLeftRight size={16}/></button></div>
-      <label className="location-input"><span className="route-origin-dot"/><span><small>Starting from</small><input value={origin.label} onChange={(e) => updatePoint('origin', 'label', e.target.value)} onBlur={() => resolveLocation('origin')} aria-label="Starting location" placeholder="Search a place or address" autoComplete="off"/></span></label>
-      <label className="location-input"><span className="route-destination-dot"/><span><small>Going to</small><input value={destination.label} onChange={(e) => updatePoint('destination', 'label', e.target.value)} onBlur={() => resolveLocation('destination')} aria-label="Destination" placeholder="Search a place or address" autoComplete="off"/></span></label>
-      <div className="route-location-actions"><button className="text-action coordinate-toggle" onClick={() => setShowCoords(!showCoords)}>{showCoords ? 'Hide' : 'Edit'} map coordinates</button><button className="text-action" type="button" onClick={useCurrentLocation} disabled={currentLocationBusy}><LocateFixed size={14}/>{currentLocationBusy ? 'Finding location…' : 'Use my location'}</button></div>{isResolving && <small className="route-resolving"><Search size={12}/> Finding mapped place…</small>}
+    <div className="planner-layout"><form className="panel planner-form" onSubmit={plan}><div className="panel-head"><div><div className="eyebrow">YOUR JOURNEY</div><h3>Where to?</h3></div><button type="button" className="icon-btn" title="Swap origin and destination" onClick={swap}><ArrowLeftRight size={16}/></button></div>
+      <label className="location-input"><span className="route-origin-dot"/><span><small>Starting from</small><input value={origin.label} onChange={(e) => updatePoint('origin', 'label', e.target.value)} aria-label="Starting location" placeholder="Search a place or address" autoComplete="off"/></span></label>
+      <label className="location-input"><span className="route-destination-dot"/><span><small>Going to</small><input value={destination.label} onChange={(e) => updatePoint('destination', 'label', e.target.value)} aria-label="Destination" placeholder="Search a place or address" autoComplete="off"/></span></label>
+      <div className="route-location-actions"><button type="button" className="text-action coordinate-toggle" onClick={() => setShowCoords(!showCoords)}>{showCoords ? 'Hide' : 'Edit'} map coordinates</button><button className="text-action" type="button" onClick={useCurrentLocation} disabled={currentLocationBusy}><LocateFixed size={14}/>{currentLocationBusy ? 'Finding location…' : 'Use my location'}</button></div>
       {showCoords && <div className="coordinates-grid">{[['origin','latitude','Origin latitude'],['origin','longitude','Origin longitude'],['destination','latitude','Destination latitude'],['destination','longitude','Destination longitude']].map(([key,field,label])=><label key={label}>{label}<input type="number" step="any" value={key==='origin'?origin[field]:destination[field]} onChange={(e)=>updatePoint(key,field,e.target.value)} required/></label>)}</div>}
-      <div className="field-label">ROUTE PREFERENCE</div><div className="route-pref-options">{[['fastest','Fastest',Clock],['balanced','Balanced',Route],['cleanest','Cleanest',Leaf]].map(([value,label,Icon])=><button key={value} className={preference===value?'selected':''} onClick={()=>setPreference(value)}><Icon size={14}/>{label}</button>)}</div>
+      <div className="field-label">ROUTE PREFERENCE</div><div className="route-pref-options">{[['fastest','Fastest',Clock],['balanced','Balanced',Route],['cleanest','Cleanest',Leaf]].map(([value,label,Icon])=><button type="button" key={value} className={preference===value?'selected':''} onClick={()=>setPreference(value)}><Icon size={14}/>{label}</button>)}</div>
       <label className="mode-select">Travel mode<select value={mode} onChange={(e)=>setMode(e.target.value)}><option value="driving">Driving</option><option value="walking">Walking</option><option value="cycling">Cycling</option></select></label>
-      <button className="primary full plan-submit" onClick={plan} disabled={busy || isResolving}><Navigation size={16}/>{busy ? 'Updating route…' : 'Show route options'}</button><small className="route-auto-note">Compare driving, walking and cycling paths. For buses and trains, use Public transport.</small>
-    </section><section className="panel planner-map-panel"><div className="panel-head"><div><div className="eyebrow">ROUTE MAP</div><h3>{origin.label} → {destination.label}</h3></div><span className={`status-pill ${mappedRoutes.length >= 3 ? 'status-success' : ''}`}>{busy ? 'Checking live routes…' : mappedRoutes.length >= 3 ? '3 road routes mapped' : mappedRoutes.length ? `${mappedRoutes.length} mapped route${mappedRoutes.length === 1 ? '' : 's'}` : result ? 'Distance estimate only' : 'Awaiting route'}</span></div><CityMap markers={markers} route={selectedRoute?.geometry?.coordinates?.map?.(([lon,lat]) => ({lat,lng:lon})) || []} routeOptions={routeOptions} zoom={12}/><div className="route-map-legend">{routeOptions.filter((item) => item.coordinates.length > 1).slice(0, 3).map((item) => <span key={item.id} className={item.selected ? 'active' : ''}><i style={{ background: item.color }} />{item.label}{item.selected && <small>Selected</small>}</span>)}</div><div className="map-foot"><span><MapPin size={13}/> {mappedRoutes.length ? 'Routes follow mapped roads' : 'No road path is available for this estimate'}</span><small>Map data © OpenStreetMap</small></div>{googleMapsUrl && <div className="route-map-actions"><span>{selectedRoute ? `Selected: ${selectedRoute.label || selectedRoute.mode}` : 'Choose a mapped route'}</span><a className="primary" href={googleMapsUrl} target="_blank" rel="noreferrer"><ExternalLink size={14}/> {selectedRoute?.data_quality === 'estimated' ? 'Calculate directions in Google Maps' : 'Open selected route in Google Maps'}</a></div>}</section></div>
+      <button className="primary full plan-submit" type="submit" disabled={busy}><Navigation size={16}/>{busy ? 'Updating route…' : 'Show route options'}</button><small className="route-auto-note">Enter both places and choose Show route options when you are ready. Bus and train journeys are in Public transport.</small>
+    </form><section className="panel planner-map-panel"><div className="panel-head"><div><div className="eyebrow">ROUTE MAP</div><h3>{origin.label} → {destination.label}</h3></div><span className={`status-pill ${mappedRoutes.length >= 3 ? 'status-success' : ''}`}>{busy ? 'Checking live routes…' : mappedRoutes.length >= 3 ? '3 road routes mapped' : mappedRoutes.length ? `${mappedRoutes.length} mapped route${mappedRoutes.length === 1 ? '' : 's'}` : result ? 'Distance estimate only' : 'Awaiting route'}</span></div><CityMap markers={markers} route={selectedRoute?.geometry?.coordinates?.map?.(([lon,lat]) => ({lat,lng:lon})) || []} routeOptions={routeOptions} zoom={12}/><div className="route-map-legend">{routeOptions.filter((item) => item.coordinates.length > 1).slice(0, 3).map((item) => <span key={item.id} className={item.selected ? 'active' : ''}><i style={{ background: item.color }} />{item.label}{item.selected && <small>Selected</small>}</span>)}</div><div className="map-foot"><span><MapPin size={13}/> {mappedRoutes.length ? 'Routes follow mapped roads' : 'No road path is available for this estimate'}</span><small>Map data © OpenStreetMap</small></div>{googleMapsUrl && <div className="route-map-actions"><span>{selectedRoute ? `Selected: ${selectedRoute.label || selectedRoute.mode}` : 'Choose a mapped route'}</span><a className="primary" href={googleMapsUrl} target="_blank" rel="noreferrer"><ExternalLink size={14}/> {selectedRoute?.data_quality === 'estimated' ? 'Calculate directions in Google Maps' : 'Open selected route in Google Maps'}</a></div>}</section></div>
     <section className="route-results"><div className="section-heading"><div><div className="eyebrow">ROUTE OPTIONS</div><h3>{result ? (mappedRoutes.length ? `${mappedRoutes.length} mapped road routes` : 'Journey estimate') : 'Compare available journeys'}</h3></div>{result?.public_trip_id && <span className="status-pill">Trip ref {result.public_trip_id}</span>}</div>
       {result?.warnings?.length > 0 && <div className="warning-stack">{result.warnings.map((warning, i) => <div key={i}><ShieldAlert size={14}/>{warning}</div>)}</div>}
       {displayRoutes.length > 0 && <div className="route-carbon-insight">

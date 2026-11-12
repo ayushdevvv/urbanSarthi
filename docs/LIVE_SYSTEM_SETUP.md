@@ -119,7 +119,7 @@ Restart the API and verify the integration status / Traffic Lab response identif
 
 Install Eclipse SUMO on the backend/worker machine and set `SUMO_BINARY` to the actual executable path if it is not on `PATH`. Verify the integration status reports native SUMO available.
 
-The included road network is a synthetic reference grid. A native run on it is a software execution test, not a calibrated simulation of Lucknow or another real city. For a city-calibrated model you must provide:
+The included road network is a synthetic 80-edge reference grid. A native run on it is a software execution test, not a calibrated simulation of Lucknow or another real city. The candidate run exports SUMO Floating Car Data (FCD) every 30 simulated seconds for position/heading playback; edge performance metrics are still sampled at 5-minute intervals. The UI caps visible vehicles per frame for rendering performance but shows the full SUMO vehicle count. For a city-calibrated model you must provide:
 
 - licensed/authorized road network converted to SUMO `.net.xml`;
 - stable UrbanSaarthi junction IDs mapped to SUMO edge/lane IDs;
@@ -140,7 +140,7 @@ For live arrivals, create an authorized GTFS-Realtime or partner adapter that re
 
 The repository includes an ESP32/PMS5003 HTTP starter sketch. For real deployment provide the actual sensor board, correct UART wiring/power, Wi-Fi credentials, device identity, calibrated sensor and environmental metadata. Configure the API endpoint and the same ingestion key securely in device firmware or a provisioning mechanism. Test with a co-located reference monitor before publishing readings.
 
-Current ingestion uses authenticated HTTP; an MQTT broker/consumer is not included. If the city requires MQTT, deploy a broker and implement a bridge that validates device identity and timestamps before forwarding normalized readings. Do not expose a shared ingestion key in an untrusted firmware image without a per-device credential strategy.
+Current ingestion uses authenticated HTTP; an MQTT broker/consumer is not included. The bundled ESP32 sketch uses plain HTTP and is only suitable for a trusted private LAN. For public networks, configure TLS/HTTPS and certificate validation in firmware. If the city requires MQTT, deploy a broker and implement a bridge that validates device identity and timestamps before forwarding normalized readings. Do not expose a shared ingestion key in an untrusted firmware image without a per-device credential strategy.
 
 ## 9. Signals / ATCS boundary
 

@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     # Server-side OpenWeather credential. Never expose this value in frontend env or responses.
     weather_api_key: str = ""
     tomtom_api_key: str = ""
+    # Optional server-side Tavily search for location-aware traffic and transit news.
+    tavily_api_key: str = ""
     model_path: str = ""
     # Optional LLM API keys for agentic tool-calling; rule-based fallback active when omitted
     gemini_api_key: str = ""

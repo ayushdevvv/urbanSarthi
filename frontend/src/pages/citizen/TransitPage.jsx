@@ -1,52 +1,155 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowRight, Bus, Clock, MapPin, Navigation, RefreshCw, Train, LocateFixed, Footprints } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { AlertTriangle, ArrowRight, Bus, Clock3, ExternalLink, LocateFixed, MapPin, Newspaper, Navigation, RefreshCw, Search, Train } from 'lucide-react';
 import PageIntro from '../../components/shared/PageIntro.jsx';
 import { EmptyState, ErrorNotice } from '../../components/shared/Toast.jsx';
 import useApiResource from '../../hooks/useApiResource.js';
 import { api, endpoints } from '../../services/api/client.js';
-import CityMap, { getLocationCoordinates } from '../../components/maps/CityMap.jsx';
-import { useApp } from '../../context/AppContext.jsx';
+import CityMap from '../../components/maps/CityMap.jsx';
+import './transit-premium.css';
+
+const publishedAt = (value) => value ? new Date(value).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Publication time unavailable';
+const displayMode = (mode) => ({ rail: 'Train', metro: 'Metro', bus: 'Bus', tram: 'Tram' }[String(mode || '').toLowerCase()] || 'Transit');
 
 export default function TransitPage() {
-  const { notify } = useApp(); const [mode, setMode] = useState('all'); const [from, setFrom] = useState('Rajiv Chowk'); const [to, setTo] = useState('Akshardham');
-  const [nearbyPoint, setNearbyPoint] = useState(() => { const [latitude, longitude] = getLocationCoordinates('Rajiv Chowk'); return { latitude, longitude, label: 'Rajiv Chowk' }; });
-  const [nearbyStops, setNearbyStops] = useState([]); const [nearbyRoutes, setNearbyRoutes] = useState([]); const [nearbyBusy, setNearbyBusy] = useState(false); const [nearbyMessage, setNearbyMessage] = useState(''); const [locating, setLocating] = useState(false);
-  const [journeys, setJourneys] = useState(null); const [planError, setPlanError] = useState(''); const [busy, setBusy] = useState(false);
-  const { data: routes, loading: routesLoading, error: routesError, reload: reloadRoutes } = useApiResource(() => api.get(`${endpoints.transitRoutes}${mode === 'all' ? '' : `?mode=${mode}`}`), [mode]);
+  const [mode, setMode] = useState('all');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [city, setCity] = useState('');
+  const [topic, setTopic] = useState('');
+  const [news, setNews] = useState(null);
+  const [newsBusy, setNewsBusy] = useState(false);
+  const [newsError, setNewsError] = useState('');
+  const [nearby, setNearby] = useState(null);
+  const [nearbyBusy, setNearbyBusy] = useState(false);
+  const [nearbyError, setNearbyError] = useState('');
+  const [selectedStop, setSelectedStop] = useState(null);
+  const [arrivals, setArrivals] = useState(null);
+  const [arrivalBusy, setArrivalBusy] = useState(false);
+  const [journeys, setJourneys] = useState(null);
+  const [planError, setPlanError] = useState('');
+  const [planBusy, setPlanBusy] = useState(false);
+  const [locating, setLocating] = useState(false);
+
+  const { data: routes, loading: routesLoading, error: routesError, reload: reloadRoutes } = useApiResource(() => api.get(endpoints.transitRoutes), []);
   const { data: stops, loading: stopsLoading } = useApiResource(() => api.get(endpoints.transitStops()), []);
-  const { data: alerts, error: alertsError } = useApiResource(() => api.get(endpoints.transitAlerts), []);
-  const stopOptions = useMemo(() => stops || [], [stops]);
-  const matchingRoutes = Array.isArray(routes) && routes.length ? routes : nearbyRoutes.filter((route) => mode === 'all' || route.mode === mode);
-  const allStopOptions = useMemo(() => [...stopOptions, ...nearbyStops], [stopOptions, nearbyStops]);
-  const loadNearby = useCallback(async (point = nearbyPoint) => { setNearbyBusy(true); setNearbyMessage(''); try { const data = await api.get(`/transit/nearby?latitude=${point.latitude}&longitude=${point.longitude}&radius_m=4000`); setNearbyStops(data.stops || []); setNearbyRoutes(data.routes || []); setNearbyMessage(data.note || ''); } catch (err) { setNearbyStops([]); setNearbyRoutes([]); setNearbyMessage(err.message || 'Nearby transit data is unavailable right now.'); } finally { setNearbyBusy(false); } }, [nearbyPoint]);
-  useEffect(() => { loadNearby(); }, [nearbyPoint.latitude, nearbyPoint.longitude]);
-  const useCurrentLocation = () => { if (!navigator.geolocation) { setNearbyMessage('Location access is not supported by this browser.'); return; } setLocating(true); navigator.geolocation.getCurrentPosition(async ({ coords }) => { let label = 'Your current location'; try { const reverse = await api.get(`/routing/reverse-geocode?latitude=${coords.latitude}&longitude=${coords.longitude}`); label = reverse.label || label; } catch {} setNearbyPoint({ latitude: coords.latitude, longitude: coords.longitude, label }); setLocating(false); }, (err) => { setLocating(false); setNearbyMessage(err.code === 1 ? 'Location permission was denied. Allow location access and retry.' : 'Could not get your current location.'); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }); };
-  async function planTransit(event) {
-    event.preventDefault(); setBusy(true); setPlanError(''); setJourneys(null);
-    const origin = allStopOptions.find((stop) => (stop.name || '').toLowerCase() === from.toLowerCase()) || allStopOptions.find((stop) => (stop.name || '').toLowerCase().includes(from.toLowerCase()));
-    const destination = allStopOptions.find((stop) => (stop.name || '').toLowerCase() === to.toLowerCase()) || allStopOptions.find((stop) => (stop.name || '').toLowerCase().includes(to.toLowerCase()));
-    let originCoords = origin?.latitude != null && origin?.longitude != null ? [origin.latitude, origin.longitude] : null;
-    let destCoords = destination?.latitude != null && destination?.longitude != null ? [destination.latitude, destination.longitude] : null;
-    try { if (!originCoords) { const found = await api.get(`/routing/geocode?q=${encodeURIComponent(from)}&limit=1`); if (found.results?.[0]) originCoords = [found.results[0].latitude, found.results[0].longitude]; } if (!destCoords) { const found = await api.get(`/routing/geocode?q=${encodeURIComponent(to)}&limit=1`); if (found.results?.[0]) destCoords = [found.results[0].latitude, found.results[0].longitude]; } } catch {}
-    if (!originCoords || !destCoords) { setPlanError('Search for mapped origin and destination places, or pick a nearby stop.'); setBusy(false); return; }
+  const { data: alerts, error: alertsError, reload: reloadAlerts } = useApiResource(() => api.get(endpoints.transitAlerts), []);
+  const routeList = Array.isArray(routes) ? routes : [];
+  const stopList = Array.isArray(stops) ? stops : [];
+  const filteredRoutes = useMemo(() => routeList.filter((route) => mode === 'all' || (mode === 'train' ? ['rail', 'train'].includes(String(route.mode).toLowerCase()) : String(route.mode).toLowerCase() === mode)), [routeList, mode]);
+  const nearbyStops = nearby?.stops || [];
+
+  async function searchUpdates(event) {
+    event.preventDefault();
+    if (!city.trim()) { setNewsError('Enter a city or region to search for service updates.'); return; }
+    setNewsBusy(true); setNewsError(''); setNews(null);
     try {
-      const query = new URLSearchParams({ origin_latitude: originCoords[0], origin_longitude: originCoords[1], destination_latitude: destCoords[0], destination_longitude: destCoords[1] });
-      setJourneys(await api.get(`/transit/plan?${query.toString()}`));
-    } catch (err) { setPlanError(err.message); }
-    finally { setBusy(false); }
+      const params = new URLSearchParams({ city: city.trim(), mode, query: topic.trim(), limit: '10' });
+      const result = await api.get(`/transit/live-intel?${params.toString()}`, { timeoutMs: 20000 });
+      setNews(result);
+      if (result.status === 'unavailable') setNewsError(result.note || 'Live search is unavailable.');
+    } catch (err) { setNewsError(err.message || 'Could not search transport updates.'); }
+    finally { setNewsBusy(false); }
   }
-  return <>
-    <PageIntro eyebrow="PUBLIC TRANSPORT" title="Metro and bus, in one place" description="Find nearby mapped stops and route information; scheduled departures appear when a timetable is available." action={<button className="utility" onClick={reloadRoutes}><RefreshCw size={14}/> Refresh feeds</button>} />
-    <ErrorNotice message={routesError} onRetry={reloadRoutes}/>
-    <div className="transport-tabs">{[['all','All modes'],['metro','Metro'],['bus','Bus']].map(([value,label])=><button className={mode===value?'active':''} onClick={()=>setMode(value)} key={value}>{value==='bus'?<Bus size={15}/>:value==='metro'?<Train size={15}/>:<Navigation size={15}/>} {label}</button>)}</div>
-    <div className="transit-layout"><section className="panel transit-planner"><div className="panel-head"><div><div className="eyebrow">LIVE JOURNEY PLANNER</div><h3>Public transport trip</h3></div><Bus size={18}/></div><form onSubmit={planTransit} className="transit-form"><label>Starting from<input list="transit-stops" value={from} onChange={(e)=>setFrom(e.target.value)} required/><small>Use a stop name from the loaded GTFS feed when available.</small></label><label>Going to<input list="transit-stops" value={to} onChange={(e)=>setTo(e.target.value)} required/></label><datalist id="transit-stops">{allStopOptions.map((stop)=><option key={stop.id || `${stop.latitude}-${stop.longitude}`} value={stop.name}/>)}</datalist><button className="primary full" disabled={busy}><Navigation size={15}/>{busy?'Finding journeys…':'Find public transport'}</button></form>
-      {planError && <div className="notice notice-error">{planError}</div>}{journeys && <div className="transit-journey-results"><b>{journeys.status === 'available' ? `${journeys.options?.length || 0} journey options` : 'No journey found'}</b>{(journeys.options || []).map((option, index) => <div className="transit-option" key={option.id || `${option.route_id}-${index}`}><div><b>{option.label || option.route_name || option.route_short_name || `Journey ${index + 1}`}</b><small>{option.mode || option.route_mode || 'Mode not supplied'}</small></div><span>{option.duration_seconds != null ? `${Math.round(option.duration_seconds / 60)} min` : 'Duration —'}</span></div>)}{(journeys.limitations || []).map((limitation) => <p className="api-note" key={limitation}>{limitation}</p>)}</div>}{!journeys && <div className="transit-result-placeholder"><MapPin size={16}/><span>Journey alternatives will appear after a successful API response.</span></div>}</section>
-      <section className="panel transit-routes"><div className="panel-head"><div><div className="eyebrow">NETWORK STATUS</div><h3>Configured public transport</h3></div><span className="status-pill">{matchingRoutes.length} routes</span></div>{routesLoading ? <div className="loading-lines">Loading public transport routes…</div> : matchingRoutes.length ? matchingRoutes.slice(0, 30).map((route) => <div className="transit-route-row" key={route.id}><span className="route-mode-icon" style={{borderColor: route.route_color ? `#${String(route.route_color).replace('#','')}` : undefined}}>{/bus/i.test(route.mode)?<Bus size={16}/>:<Train size={16}/>}</span><div><b>{route.short_name || route.long_name || route.external_id}</b><small>{route.long_name || route.agency_name || route.mode}</small></div><span className="route-mode-label">{route.mode}</span></div>) : <EmptyState title="No transit routes configured" description="No route metadata is available for this area yet. Nearby stop locations can still be browsed; departure times need an operator timetable or live feed."/>}</section></div>
-    <section className="panel nearby-transit-panel"><div className="panel-head"><div><div className="eyebrow">NEARBY NETWORK</div><h3>Transit stops around you</h3><p>{nearbyPoint.label} · 4 km radius</p></div><button className="utility" type="button" onClick={useCurrentLocation} disabled={locating}><LocateFixed size={14}/>{locating ? 'Finding location…' : 'Use my location'}</button></div>
-      {nearbyBusy ? <div className="loading-lines">Searching nearby stops…</div> : nearbyStops.length ? <><div className="nearby-transit-map"><CityMap city="Delhi NCR" markers={[{id:'transit-origin',lat:nearbyPoint.latitude,lng:nearbyPoint.longitude,title:nearbyPoint.label,kind:'critical'}, ...nearbyStops.slice(0,40).map((stop)=>({id:stop.id,lat:stop.latitude,lng:stop.longitude,title:stop.name,description:`${stop.mode} · ${(stop.distance_meters/1000).toFixed(1)} km`,kind:'normal'}))]} zoom={13}/></div><div className="nearby-transit-list">{nearbyStops.slice(0,12).map((stop)=><button type="button" className="nearby-transit-stop" key={stop.id} onClick={()=>setFrom(stop.name)}><span className="nearby-transit-icon">{stop.mode==='bus'?<Bus size={16}/>:<Train size={16}/>}</span><span><b>{stop.name}</b><small>{stop.mode.toUpperCase()}{stop.operator ? ` · ${stop.operator}` : ''} · {(stop.distance_meters/1000).toFixed(1)} km</small></span><span className="nearby-transit-select">Use as origin</span></button>)}</div></> : <EmptyState title="No nearby stops found" description={nearbyMessage || 'Try another location or increase the search radius. Stops are sourced from mapped OpenStreetMap data.'}/>}
-      {nearbyMessage && nearbyStops.length > 0 && <p className="api-note">{nearbyMessage}</p>}<p className="api-note">Mapped stop locations do not provide departure times by themselves. Schedules are displayed only when a matching GTFS timetable or real-time feed is available.</p>
+
+  async function findNearby(point) {
+    setNearbyBusy(true); setNearbyError(''); setNearby(null); setSelectedStop(null); setArrivals(null);
+    try {
+      const params = new URLSearchParams({ latitude: point.latitude, longitude: point.longitude, radius_m: '4000' });
+      const result = await api.get(`/transit/nearby?${params.toString()}`, { timeoutMs: 22000 });
+      setNearby({ ...result, point });
+      if (!result.stops?.length) setNearbyError(result.note || 'No mapped stops found in this area.');
+    } catch (err) { setNearbyError(err.message || 'Nearby transport stops are unavailable.'); }
+    finally { setNearbyBusy(false); }
+  }
+
+  const useMyLocation = () => {
+    if (!navigator.geolocation) { setNearbyError('This browser does not support location access.'); return; }
+    setLocating(true); setNearbyError('');
+    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
+      let label = 'Your current location';
+      try { const reverse = await api.get(`/routing/reverse-geocode?latitude=${coords.latitude}&longitude=${coords.longitude}`); label = reverse?.label || label; } catch { /* coordinates remain usable */ }
+      setLocating(false);
+      await findNearby({ latitude: coords.latitude, longitude: coords.longitude, label });
+    }, (error) => { setLocating(false); setNearbyError(error.code === 1 ? 'Location permission was denied. Search for a city or retry.' : 'Could not retrieve your current location.'); }, { enableHighAccuracy: true, timeout: 14000, maximumAge: 60000 });
+  };
+
+  async function loadArrivals(stop) {
+    setSelectedStop(stop); setArrivals(null); setArrivalBusy(true);
+    const externalId = stop.external_id || stop.ref || stop.id;
+    if (!externalId || stop.schedule_available === false || String(externalId).startsWith('osm-')) {
+      setArrivals({ status: 'no_arrival_data', arrivals: [], note: 'This stop is mapped, but it has no connected operator timetable. Live arrivals require a GTFS schedule and preferably GTFS-Realtime.' });
+      setArrivalBusy(false); return;
+    }
+    try { setArrivals(await api.get(`/transit/stops/${encodeURIComponent(externalId)}/arrivals?minutes_ahead=180&limit=30`)); }
+    catch (err) { setArrivals({ status: 'unavailable', arrivals: [], note: err.message || 'Arrival data is unavailable for this stop.' }); }
+    finally { setArrivalBusy(false); }
+  }
+
+  async function planJourney(event) {
+    event.preventDefault(); setPlanBusy(true); setPlanError(''); setJourneys(null);
+    try {
+      if (!from.trim() || !to.trim()) throw new Error('Enter both the starting place and destination.');
+      const geocode = async (text) => {
+        const response = await api.get(`/routing/geocode?q=${encodeURIComponent(text)}&limit=5`, { timeoutMs: 12000 });
+        const first = (response.results || []).find((item) => String(item.label || '').toLowerCase() === text.toLowerCase()) || response.results?.[0];
+        if (!first) throw new Error(`Could not find “${text}”. Try a station or landmark.`);
+        return first;
+      };
+      const [origin, destination] = await Promise.all([geocode(from.trim()), geocode(to.trim())]);
+      const params = new URLSearchParams({ origin_latitude: origin.latitude, origin_longitude: origin.longitude, destination_latitude: destination.latitude, destination_longitude: destination.longitude });
+      setJourneys(await api.get(`/transit/plan?${params.toString()}`, { timeoutMs: 15000 }));
+    } catch (err) { setPlanError(err.message || 'Could not plan this public transport trip.'); }
+    finally { setPlanBusy(false); }
+  }
+
+  return <div className="transit-premium-page">
+    <PageIntro eyebrow="PUBLIC TRANSPORT" title="Bus & train" description="Explore transport networks, search current service updates and check timetable data where an operator feed is connected." action={<button className="utility" type="button" onClick={() => { reloadRoutes(); reloadAlerts(); }}><RefreshCw size={14}/>Refresh feeds</button>} />
+    <ErrorNotice message={routesError || alertsError} onRetry={() => { reloadRoutes(); reloadAlerts(); }}/>
+
+    <section className="panel transit-intel-panel">
+      <div className="transit-section-heading"><div><span className="eyebrow">LATEST SERVICE INTELLIGENCE</span><h3>What's happening on your network?</h3><p>Search recent reporting about delays, disruptions, new services and travel advisories.</p></div><Newspaper size={21}/></div>
+      <form className="transit-intel-form" onSubmit={searchUpdates}>
+        <label><small>City / region</small><input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Lucknow, Delhi, Mumbai" required/></label>
+        <label><small>What are you looking for?</small><input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Delays, route changes, service alerts…"/></label>
+        <label><small>Transport mode</small><select value={mode} onChange={(e) => setMode(e.target.value)}><option value="all">All transport</option><option value="bus">Bus</option><option value="train">Train</option><option value="metro">Metro</option></select></label>
+        <button className="primary" type="submit" disabled={newsBusy}><Search size={15}/>{newsBusy ? 'Searching…' : 'Find latest updates'}</button>
+      </form>
+      {newsError && <div className="transit-error"><AlertTriangle size={14}/>{newsError}</div>}
+      {news?.items?.length ? <div className="transit-news-grid">{news.items.map((item, index) => <article className="transit-news-card" key={item.url || index}><div className="transit-news-meta"><span>{item.source || news.provider}</span><time>{publishedAt(item.published_at)}</time></div><a href={item.url} target="_blank" rel="noreferrer">{item.title}<ExternalLink size={13}/></a>{item.snippet && <p>{item.snippet}</p>}</article>)}</div> : !newsBusy && news && <EmptyState title="No recent service stories found" description={news.note || 'Try a broader city or topic.'}/>}
+      <div className="transit-source-note"><span>{news?.provider || 'Tavily Search / Google News RSS fallback'}</span><small>News results are reporting, not live vehicle locations, arrivals or proof of current delay.</small></div>
     </section>
-    <div className="transit-status-cards"><section className="panel status-card"><Clock size={17}/><div><small>Stops in feed</small><b>{stopsLoading?'Loading…':stopOptions.length + nearbyStops.length}</b><span>Imported and nearby mapped stops</span></div></section><section className="panel status-card"><AlertTriangle size={17}/><div><small>Active service alerts</small><b>{Array.isArray(alerts)?alerts.length:'—'}</b><span>{alertsError?'Alerts unavailable':'From configured transit feed'}</span></div></section><section className="panel status-card"><Train size={17}/><div><small>Feed source</small><b>{matchingRoutes.some((route) => route.source === 'OpenStreetMap') ? 'OpenStreetMap' : 'GTFS / operator feed'}</b><span>Mapped routes do not include departure times</span></div></section></div>
-    {(Array.isArray(alerts) && alerts.length > 0) && <section className="panel transit-alerts"><div className="panel-head"><div><div className="eyebrow">SERVICE ALERTS</div><h3>Current notices</h3></div></div>{alerts.map((alert, index)=><div className="alert-row" key={alert.id || index}><span className="severity-dot severity-high"/><div><b>{alert.title || alert.summary || 'Service notice'}</b><small>{alert.description || alert.status || 'Details were not supplied by the feed.'}</small></div><ArrowRight size={14}/></div>)}</section>}
-  </>;
+
+    <div className="transit-main-grid">
+      <section className="panel transit-planner-panel">
+        <div className="transit-section-heading"><div><span className="eyebrow">JOURNEY PLANNER</span><h3>Plan by public transport</h3></div><Navigation size={19}/></div>
+        <form className="transit-plan-form" onSubmit={planJourney}>
+          <label><small>From</small><input value={from} onChange={(e) => setFrom(e.target.value)} placeholder="Starting station or area" required/></label>
+          <label><small>To</small><input value={to} onChange={(e) => setTo(e.target.value)} placeholder="Destination station or area" required/></label>
+          <button className="primary full" type="submit" disabled={planBusy}><Navigation size={15}/>{planBusy ? 'Finding options…' : 'Find public transport'}</button>
+        </form>
+        {planError && <div className="transit-error">{planError}</div>}
+        {journeys && <div className="transit-journey-list"><b>{journeys.status === 'available' ? `${journeys.options?.length || 0} journey options` : 'No timetable journey found'}</b>{(journeys.options || []).map((option, index) => <article key={option.id || index}><div><strong>{option.label || option.route_name || option.route_short_name || `Option ${index + 1}`}</strong><small>{displayMode(option.mode || option.route_mode)}</small></div><span>{option.duration_seconds == null ? '—' : `${Math.max(1, Math.round(option.duration_seconds / 60))} min`}</span></article>)}{(journeys.limitations || []).map((item) => <small className="transit-limitation" key={item}>{item}</small>)}</div>}
+        {!journeys && <div className="transit-planner-empty"><MapPin size={17}/><span>Journey options appear when a connected timetable covers the selected places.</span></div>}
+      </section>
+
+      <section className="panel transit-feed-panel">
+        <div className="transit-section-heading"><div><span className="eyebrow">CONNECTED NETWORK</span><h3>Routes & service alerts</h3></div><span className="status-pill">{routeList.length} routes</span></div>
+        <div className="transit-mode-tabs">{[['all','All'],['bus','Bus'],['train','Train'],['metro','Metro']].map(([value,label]) => <button key={value} type="button" className={mode === value ? 'active' : ''} onClick={() => setMode(value)}>{value === 'bus' ? <Bus size={14}/> : value === 'all' ? <Navigation size={14}/> : <Train size={14}/>} {label}</button>)}</div>
+        {routesLoading ? <div className="loading-lines">Loading connected routes…</div> : filteredRoutes.length ? <div className="transit-route-list">{filteredRoutes.slice(0, 10).map((route) => <article key={route.id}><span className="transit-route-icon">{String(route.mode).toLowerCase() === 'bus' ? <Bus size={16}/> : <Train size={16}/>}</span><div><b>{route.short_name || route.long_name || route.external_id}</b><small>{route.long_name || route.agency_name || displayMode(route.mode)}</small></div><em>{displayMode(route.mode)}</em></article>)}</div> : <EmptyState title="No operator routes connected" description="Nearby mapped stops are still discoverable. Timetables require an agency GTFS feed."/>}
+        <div className="transit-alerts"><div className="transit-alert-heading"><AlertTriangle size={15}/><b>Active service alerts</b><span>{Array.isArray(alerts) ? alerts.length : 0}</span></div>{Array.isArray(alerts) && alerts.length ? alerts.slice(0, 4).map((alert, index) => <article key={alert.id || index}><b>{alert.header || alert.title || 'Service advisory'}</b><small>{alert.description || alert.effect || 'Check the operator for details.'}</small></article>) : <small>No active operator alerts returned.</small>}</div>
+      </section>
+    </div>
+
+    <section className="panel transit-nearby-panel">
+      <div className="transit-section-heading"><div><span className="eyebrow">NEAR YOU</span><h3>Nearby bus stops & stations</h3><p>{nearby?.point?.label || 'Location is only requested when you tap the button.'}</p></div><button className="secondary" type="button" onClick={useMyLocation} disabled={locating || nearbyBusy}><LocateFixed size={15}/>{locating ? 'Locating…' : nearbyBusy ? 'Searching…' : 'Use my location'}</button></div>
+      {nearbyError && <div className="transit-error">{nearbyError}</div>}
+      {nearbyBusy && <div className="loading-lines">Finding nearby stations and stops…</div>}
+      {nearby && <>
+        {!!nearbyStops.length && <div className="transit-nearby-map"><CityMap markers={[{ id: 'nearby-position', lat: nearby.point.latitude, lng: nearby.point.longitude, title: nearby.point.label, kind: 'critical' }, ...nearbyStops.slice(0, 50).map((stop) => ({ id: stop.id, lat: stop.latitude, lng: stop.longitude, title: stop.name, description: `${displayMode(stop.mode)} · ${Math.round(stop.distance_meters)} m`, kind: 'normal' }))]} zoom={13}/></div>}
+        {nearbyStops.length ? <div className="transit-stops-grid">{nearbyStops.slice(0, 20).map((stop) => <button type="button" className={`transit-stop-card ${selectedStop?.id === stop.id ? 'active' : ''}`} key={stop.id} onClick={() => loadArrivals(stop)}><span>{stop.mode === 'bus' ? <Bus size={16}/> : <Train size={16}/>}</span><div><b>{stop.name}</b><small>{displayMode(stop.mode)} · {Math.round(stop.distance_meters)} m · {stop.source}</small></div><ArrowRight size={14}/></button>)}</div> : <EmptyState title="No nearby stops returned" description={nearby.note || 'No mapped transit stops were found around your location.'}/>}
+      </>}
+      {!nearby && !nearbyBusy && <div className="transit-location-empty"><LocateFixed size={18}/><span>Tap Use my location to find mapped stops and stations around you.</span></div>}
+      {selectedStop && <div className="transit-arrivals-panel"><div className="transit-section-heading"><div><span className="eyebrow">STOP INFORMATION</span><h3>{selectedStop.name}</h3></div><span className="status-pill">{displayMode(selectedStop.mode)}</span></div>{arrivalBusy ? <div className="loading-lines">Checking timetable…</div> : arrivals?.arrivals?.length ? <div className="transit-arrivals-list">{arrivals.arrivals.map((arrival, index) => <article key={`${arrival.expected_at}-${index}`}><div><b>{arrival.route || 'Service'}</b><small>{arrival.source || arrival.data_quality || 'Operator feed'}</small></div><strong>{new Date(arrival.expected_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong><span>{arrival.delay_seconds == null ? 'Delay n/a' : `${Math.round(arrival.delay_seconds / 60)} min delay`}</span></article>)}</div> : <p className="transit-limitation">{arrivals?.note || 'No schedule data is available for this stop.'}</p>}</div>}
+    </section>
+  </div>;
 }
