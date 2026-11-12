@@ -131,6 +131,7 @@ export default function AirIntelligencePage() {
   const [planBusy, setPlanBusy] = useState(false);
   const [comparison, setComparison] = useState(null);
   const [compareBusy, setCompareBusy] = useState(false);
+  const [detailedComparisonReady, setDetailedComparisonReady] = useState(false);
   const [message, setMessage] = useState('');
 
   const city = CITIES[cityKey] || CITIES.Kanpur;
@@ -171,6 +172,13 @@ export default function AirIntelligencePage() {
 
   useEffect(() => { refreshAir(); }, [refreshAir]);
   useEffect(() => { loadHotspots(); }, [loadHotspots]);
+  useEffect(() => {
+    let active = true;
+    api.get('/traffic/simulation/capabilities', { timeoutMs: 9000, fallbackGraceMs: 0 })
+      .then((value) => { if (active) setDetailedComparisonReady(Boolean(value?.native_simulation_available)); })
+      .catch(() => { if (active) setDetailedComparisonReady(false); });
+    return () => { active = false; };
+  }, []);
 
   const current = air?.current || {};
   const ambientIndex = getAqiValue(current);
@@ -202,14 +210,14 @@ export default function AirIntelligencePage() {
 
   function importVisionCounts() {
     const evidence = readVisionEvidence();
-    if (!evidence) { setMessage('Run a YOLO analysis in Traffic Lab first.'); return; }
+    if (!evidence) { setMessage('Run a vehicle analysis in Traffic Lab first.'); return; }
     setVisionEvidence(evidence);
     setVehicleCounts({
       car: String(evidence.counts.car || 0), motorbike: String(evidence.counts.motorbike || 0),
       bus: String(evidence.counts.bus || 0), truck: String(evidence.counts.truck || 0),
       bicycle: String(evidence.counts.bicycle || 0),
     });
-    setMessage('Latest YOLO vehicle mix imported. Set corridor distance, then calculate.');
+    setMessage('Latest vehicle counts imported. Set corridor distance, then calculate.');
   }
 
   async function generatePlan() {
@@ -235,7 +243,7 @@ export default function AirIntelligencePage() {
       });
       setComparison(data);
       notify('Baseline and intervention comparison completed.');
-    } catch (error) { setMessage(error.message || 'SUMO comparison could not run. Check that native SUMO is installed and configured.'); }
+    } catch (error) { setMessage(error.message || 'The detailed comparison is unavailable right now. Check the simulation service and try again.'); }
     finally { setCompareBusy(false); }
   }
 
@@ -256,7 +264,7 @@ export default function AirIntelligencePage() {
         <div className="ai-hero-overline"><span className="ai-pulse-dot"/> INNOVATEX 2026–27 <i/> THEME 02 · RISING URBAN AQI</div>
         <h1>Air quality <em>intelligence.</em></h1>
         <p>From street-level traffic evidence to air-quality intelligence. Detect pollution pressure, estimate vehicle emissions and test targeted interventions before an operator signs off.</p>
-        <div className="ai-hero-tags"><span><Cpu size={13}/> YOLO + OpenCV</span><span><Wind size={13}/> AQI forecasting</span><span><Bot size={13}/> AI decision support</span></div>
+        <div className="ai-hero-tags"><span><Cpu size={13}/> Vehicle detection</span><span><Wind size={13}/> AQI forecasting</span><span><Bot size={13}/> AI decision support</span></div>
       </div>
       <div className="ai-hero-visual" aria-hidden="true"><div className="ai-orbit ai-orbit-one"/><div className="ai-orbit ai-orbit-two"/><div className="ai-globe"><Wind size={43}/><span/></div><i className="ai-orbit-node node-one"/><i className="ai-orbit-node node-two"/><i className="ai-orbit-node node-three"/></div>
     </section>
@@ -290,7 +298,7 @@ export default function AirIntelligencePage() {
         <div className="ai-panel-head"><div><span className="ai-kicker">AIR QUALITY RESPONSE LOOP</span><h3>From road activity to cleaner air</h3></div><span className="ai-source-pill">END-TO-END</span></div>
         <div className="ai-pipeline">
           {[
-            [Cpu, 'Detect', 'YOLO + OpenCV', 'Vehicle mix'],
+            [Cpu, 'Detect', 'Vehicle detection', 'Vehicle mix'],
             [BarChart3, 'Quantify', 'Emission factors', 'CO₂ · NOx · PM · CO'],
             [MapPin, 'Prioritise', 'Hotspot engine', 'Junction ranking'],
             [Zap, 'Intervene', 'Signal optimisation', 'Human-approved plan'],
@@ -325,7 +333,7 @@ export default function AirIntelligencePage() {
 
       <article className="ai-panel ai-estimator-panel">
         <div className="ai-panel-head"><div><span className="ai-kicker">02 / TRAFFIC-TO-EMISSIONS</span><h3>Carbon & pollutant estimator</h3><p>Translate a detected vehicle mix into estimated tailpipe emissions.</p></div><span className="ai-source-pill">{factors?.factor_version || 'BS-VI PROXY'}</span></div>
-        <div className="ai-vision-import"><div><span className="ai-vision-mark"><Cpu size={16}/></span><span><b>{visionEvidence?.source_filename || 'YOLO evidence not imported'}</b><small>{visionEvidence ? `Latest video analysis · ${visionEvidence.sampled_frames || 1} sampled frames` : 'Run a video in Traffic Lab to import detected vehicle counts.'}</small></span></div><button onClick={importVisionCounts}><RefreshCw size={13}/> Import</button></div>
+        <div className="ai-vision-import"><div><span className="ai-vision-mark"><Cpu size={16}/></span><span><b>{visionEvidence?.source_filename || 'Vehicle evidence not imported'}</b><small>{visionEvidence ? `Latest video analysis · ${visionEvidence.sampled_frames || 1} sampled frames` : 'Run a video in Traffic Lab to import detected vehicle counts.'}</small></span></div><button onClick={importVisionCounts}><RefreshCw size={13}/> Import</button></div>
         <div className="ai-count-grid">
           {[['car', 'Cars'], ['motorbike', 'Two-wheelers'], ['bus', 'Buses'], ['truck', 'Trucks'], ['bicycle', 'Bicycles']].map(([key, label]) => <label key={key}><span>{label}</span><input type="number" min="0" max="1000000" value={vehicleCounts[key]} onChange={(event) => setVehicleCounts((old) => ({ ...old, [key]: event.target.value }))}/></label>)}
         </div>
@@ -358,18 +366,19 @@ export default function AirIntelligencePage() {
         <div className="ai-plan-head"><div><span className="ai-kicker">CANDIDATE PLAN #{plan.id}</span><h4>{plan.cycle_seconds}s adaptive cycle</h4></div><span className={`ai-status-pill ${plan.projected_outcomes?.optimized ? 'optimized' : 'fallback'}`}>{plan.projected_outcomes?.optimized ? 'EMISSIONS-AWARE DRAFT' : 'EQUAL-SPLIT FALLBACK'}</span></div>
         <p>{plan.rationale}</p>
         <div className="ai-phase-bars">{plan.phases?.map((phase) => <div key={phase.movement || phase.name}><div><b>{MOVEMENT_LABELS[phase.movement] || phase.name}</b><span>{phase.green_seconds}s green</span></div><div className="ai-phase-track"><i style={{ width: `${Math.min(100, phase.green_seconds / Math.max(1, plan.cycle_seconds) * 100)}%` }}/></div><small>{phase.yellow_seconds}s yellow · {phase.all_red_seconds}s all-red</small></div>)}</div>
-        <div className="ai-plan-actions"><span><ShieldCheck size={15}/> Draft saved. Review and approve it in Signal Plans.</span><button className="ai-primary-button" onClick={comparePlan} disabled={compareBusy}>{compareBusy ? <><LoaderCircle size={15} className="ai-spin"/> Running SUMO…</> : <><Activity size={15}/> Compare baseline vs intervention</>}</button></div>
+        <div className="ai-plan-actions"><span><ShieldCheck size={15}/> Draft saved. Review and approve it in Signal Plans.</span><button className="ai-primary-button" onClick={comparePlan} disabled={compareBusy || !detailedComparisonReady}>{compareBusy ? <><LoaderCircle size={15} className="ai-spin"/> Running comparison…</> : <><Activity size={15}/> Compare baseline vs intervention</>}</button></div>
       </div>}
+      {plan && !detailedComparisonReady && <p className="ai-footnote">Detailed before-and-after impact comparison is unavailable on this server yet. The 60-minute traffic forecast remains available in Traffic Simulation.</p>}
       {message && <div className="ai-inline-error"><AlertTriangle size={15}/>{message}</div>}
     </section>
 
     {comparison && <section className="ai-panel ai-comparison-panel">
-      <div className="ai-panel-head"><div><span className="ai-kicker">04 / ENVIRONMENTAL IMPACT</span><h3>Baseline versus intervention</h3><p>Same generated demand, with the candidate signal timing applied in the SUMO experiment.</p></div><span className="ai-native-pill"><CheckCircle2 size={13}/> {comparison.engine}</span></div>
+      <div className="ai-panel-head"><div><span className="ai-kicker">04 / ENVIRONMENTAL IMPACT</span><h3>Baseline versus intervention</h3><p>Same generated demand, with the candidate signal timing applied in the road-network experiment.</p></div><span className="ai-native-pill"><CheckCircle2 size={13}/> Detailed road simulation</span></div>
       <div className="ai-comparison-grid"><div><span>Average waiting time</span><b>{number(trafficComparison?.average_wait_seconds?.baseline, 1)}s <em>→</em> {number(trafficComparison?.average_wait_seconds?.proposed, 1)}s</b><small>{number(trafficComparison?.average_wait_seconds?.change_percent, 1)}% change</small></div><div><span>Queue at 60 min</span><b>{number(trafficComparison?.queue_at_60m?.baseline, 0)} <em>→</em> {number(trafficComparison?.queue_at_60m?.proposed, 0)}</b><small>{number(trafficComparison?.queue_at_60m?.change_percent, 1)}% change</small></div><div><span>Vehicles completed</span><b>{number(trafficComparison?.vehicles_completed?.baseline, 0)} <em>→</em> {number(trafficComparison?.vehicles_completed?.proposed, 0)}</b><small>{number(trafficComparison?.vehicles_completed?.change_percent, 1)}% change</small></div></div>
       <div className="ai-emissions-comparison"><div className="ai-emissions-comparison-head"><div><span className="ai-kicker">ESTIMATED TAILPIPE EMISSIONS</span><h4>{emissionComparison?.available ? 'Pollution change after intervention' : 'Emissions comparison unavailable'}</h4></div><Leaf size={21}/></div>
-        {emissionComparison?.available ? <div className="ai-impact-grid">{[['CO₂', 'co2_g'], ['NOx', 'nox_g'], ['PM', 'pm_g'], ['CO', 'co_g']].map(([label, key]) => { const delta = Number(emissionComparison.change_percent?.[key] ?? 0); return <div key={key}><span>{label}</span><b>{number(emissionComparison.proposed?.totals?.[key], 2)} g</b><strong className={delta <= 0 ? 'is-down' : 'is-up'}>{delta > 0 ? '+' : ''}{number(delta, 2)}%</strong><small>{delta <= 0 ? 'estimated reduction' : 'estimated increase'}</small></div>; })}</div> : <p className="ai-footnote">SUMO completed but trip-distance records were unavailable, so no emissions delta is shown.</p>}
+        {emissionComparison?.available ? <div className="ai-impact-grid">{[['CO₂', 'co2_g'], ['NOx', 'nox_g'], ['PM', 'pm_g'], ['CO', 'co_g']].map(([label, key]) => { const delta = Number(emissionComparison.change_percent?.[key] ?? 0); return <div key={key}><span>{label}</span><b>{number(emissionComparison.proposed?.totals?.[key], 2)} g</b><strong className={delta <= 0 ? 'is-down' : 'is-up'}>{delta > 0 ? '+' : ''}{number(delta, 2)}%</strong><small>{delta <= 0 ? 'estimated reduction' : 'estimated increase'}</small></div>; })}</div> : <p className="ai-footnote">The road simulation completed but trip-distance records were unavailable, so no emissions comparison is shown.</p>}
       </div>
-      <div className="ai-report-actions"><p>{comparison.caveats?.[0] || 'SUMO uses the bundled synthetic road network. This is not a mapped city-junction field result.'}</p><button className="ai-secondary-button" onClick={downloadImpactReport}><ArrowDownToLine size={15}/> Download environmental report</button></div>
+      <div className="ai-report-actions"><p>{comparison.caveats?.[0] || 'This experiment uses the bundled reference road network. It is not a mapped, calibrated city-junction field result.'}</p><button className="ai-secondary-button" onClick={downloadImpactReport}><ArrowDownToLine size={15}/> Download environmental report</button></div>
     </section>}
 
     <section className="ai-source-panel"><div><span className="ai-kicker">MODEL TRANSPARENCY</span><h3>What the numbers mean</h3><p>{factors?.method_note || 'Ambient AQI, forecast pollutants and estimated tailpipe emissions are separate data products. Each keeps its own scale, source and limitations.'}</p></div><div className="ai-source-links"><a href={factors?.factor_source?.url} target="_blank" rel="noreferrer">{factors?.factor_source?.title || 'Indian BS-VI source-apportionment factors'}</a><a href={factors?.co2_method_source?.url} target="_blank" rel="noreferrer">{factors?.co2_method_source?.title || 'Fuel carbon-factor method'}</a></div></section>

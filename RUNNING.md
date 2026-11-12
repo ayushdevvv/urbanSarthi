@@ -41,7 +41,7 @@ npm run dev
 
 ## Vercel
 
-Choose `frontend` as the Vercel Root Directory, set `VITE_API_URL` to the deployed backend host plus `/api/v1`, and add the deployed frontend origin to backend `CORS_ORIGINS`. `frontend/vercel.json` handles client-side SPA paths.
+Choose `frontend` as the Vercel Root Directory. Production API calls use `/api/v1`, and `frontend/vercel.json` forwards that path to the existing Render host before the SPA fallback. Keep `CORS_ORIGINS=https://urbansarthi.vercel.app` on Render for direct API access.
 
 ## Forecast and provider boundaries
 

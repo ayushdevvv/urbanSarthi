@@ -57,7 +57,7 @@ def status() -> dict[str, Any]:
     except (ImportError, ValueError):
         pass
     return {
-        "model": "YOLO11 traffic detector",
+        "model": "UrbanSaarthi vehicle detector",
         "weights_present": path.is_file(),
         "inference_dependency_available": installed,
         "ready": path.is_file() and installed,
@@ -117,7 +117,7 @@ def analyze_image(raw: bytes, confidence: float = 0.25) -> dict[str, Any]:
 
     return {
         "mode": "model",
-        "model": "YOLO11",
+        "model": "UrbanSaarthi vehicle detector",
         "image_size": {"width": original_size[0], "height": original_size[1]},
         "counts": counts,
         "total_vehicles": total,

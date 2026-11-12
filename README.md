@@ -73,13 +73,13 @@ npm ci
 npm run dev
 ```
 
-`VITE_API_URL` must include `/api/v1`. Provider credentials, database passwords and device-ingestion keys must never be placed in frontend variables.
+`VITE_API_URL` must include `/api/v1` for local development overrides. Production always uses a same-origin `/api/v1` Vercel rewrite to the existing Render service. Provider credentials, database passwords and device-ingestion keys must never be placed in frontend variables.
 
 ## Live deployment
 
 For the hackathon deployment, use PostgreSQL, an explicit non-wildcard `CORS_ORIGINS`, and a separate 32+ character `INGESTION_API_KEY`. There is no human login in this public demo. For a real city-authority production rollout, re-enable proper identity and role-based access controls before exposing administrative actions.
 
-See **[Public hackathon mode and Render settings](./docs/PUBLIC_HACKATHON_NO_AUTH_AND_RENDER.md)** for no-login behavior, exact Docker/Render configuration, environment variables and deployment checks. See **[Feature readiness](./docs/FEATURE_READINESS.md)** for what runs now versus what requires external access, feeds, devices or calibration. For the latest latency fixes, production API URL and native SUMO deployment option, see **[Traffic, AQI and simulation fixes](./docs/TRAFFIC_AQI_SIMULATION_FIX.md)**. The optional `render-sumo.yaml` Blueprint deploys an API worker with SUMO installed.
+See **[Public hackathon mode and Render settings](./docs/PUBLIC_HACKATHON_NO_AUTH_AND_RENDER.md)** for no-login behavior, exact native Python Render configuration, environment variables and deployment checks. See **[Feature readiness](./docs/FEATURE_READINESS.md)** for what runs now versus what requires external access, feeds, devices or calibration. For the latest latency fixes, production API URL and native SUMO deployment option, see **[Traffic, AQI and simulation fixes](./docs/TRAFFIC_AQI_SIMULATION_FIX.md)**. The root `render.yaml` targets the existing native Python service `urbansarthi`, installs the official `eclipse-sumo` Linux wheel through pip, pins Python 3.12.16, and keeps the existing Alembic migration and Uvicorn start command; no `apt-get`, Docker runtime or second service is needed. See [native SUMO wheel setup](./RENDER_NATIVE_SUMO_PIP_SETUP.md) for the corrected Render build command and verification steps.
 
 ## Data-source truth and limitations
 

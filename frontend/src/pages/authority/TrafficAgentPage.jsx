@@ -97,7 +97,7 @@ export default function TrafficAgentPage() {
       }, { timeoutMs: 40000 });
       setWorkflow(result);
       saveLocalRecord('traffic-agent-last-workflow', result);
-      notify(result.agent?.agent_mode === 'langgraph_groq_tool_calling' ? 'TrafficSaarthi completed its LangGraph tool run.' : 'TrafficSaarthi completed its analysis workflow.');
+      notify(result.agent?.agent_mode === 'langgraph_groq_tool_calling' ? 'TrafficSaarthi completed its analysis run.' : 'TrafficSaarthi completed its analysis workflow.');
     } catch (err) {
       setError(err?.message || 'The Traffic Agent could not complete the workflow.');
       if (!automatic) notify('The live agent workflow did not complete. No result was substituted.');
@@ -106,7 +106,7 @@ export default function TrafficAgentPage() {
     }
   }, [report, junctionId, scenario, prompt, cycleSeconds, distanceKm, notify]);
 
-  // With saved YOLO evidence, the agent starts its workflow automatically once a
+  // With saved camera evidence, the agent starts its workflow automatically once a
   // registered junction is available. The operator can still change settings and rerun.
   useEffect(() => {
     if (!hasEvidence || !junctionId || autoStarted.current) return;
@@ -144,13 +144,13 @@ export default function TrafficAgentPage() {
         const details = item.detection_summary || {};
         return Boolean(details.camera_id || String(item.source || '').startsWith('camera:'));
       });
-      if (!row) throw new Error('No camera detections have reached this junction in the last 15 minutes. Check the RTSP worker, source registration and ingestion key.');
+      if (!row) throw new Error('No camera detections have reached this junction in the last 15 minutes. Check the camera processing worker, source registration and device key.');
       const details = row.detection_summary || {};
       const counts = details.counts && typeof details.counts === 'object' ? details.counts : {};
       const measuredAt = row.observed_at;
       const cameraId = details.camera_id || row.source || 'registered camera';
       const cameraReport = {
-        mode: 'edge_camera', model: details.model || 'YOLO edge inference',
+        mode: 'edge_camera', model: details.model || 'Vehicle detection',
         source_filename: `Live camera · ${cameraId}`,
         video: { sampled_frames: 1, duration_seconds: 0, sampling_interval_seconds: 0 },
         counts, total_vehicles: Number(row.vehicle_count || details.total_detections || 0),
@@ -219,8 +219,8 @@ export default function TrafficAgentPage() {
       </div>
       <div className="ta-hero-status">
         <span className={`ta-status-icon ${systemStatus?.agent_tools_ready ? 'is-ready' : ''}`}><Bot size={22}/></span>
-        <div><b>{loading ? 'Agent working' : workflow ? (preview ? 'Preview available' : 'Workflow completed') : 'Agent ready'}</b><small>{systemStatus?.llm_tool_calling_ready ? 'LangGraph + Groq available' : 'Deterministic tools available · Groq optional'}</small></div>
-        <span className={`ta-status-chip ${loading ? 'working' : preview ? 'preview' : workflow ? 'done' : ''}`}>{loading ? 'RUNNING' : preview ? 'LOCAL PREVIEW' : workflow ? 'COMPLETE' : 'READY'}</span>
+        <div><b>{loading ? 'Agent working' : workflow ? (preview ? 'Preview available' : 'Workflow completed') : 'Agent ready'}</b><small>{systemStatus?.llm_tool_calling_ready ? 'Enhanced reasoning available' : 'Decision tools available'}</small></div>
+        <span className={`ta-status-chip ${loading ? 'working' : preview ? 'preview' : workflow ? 'done' : ''}`}>{loading ? 'RUNNING' : preview ? 'REFERENCE PREVIEW' : workflow ? 'COMPLETE' : 'READY'}</span>
       </div>
     </header>
 
@@ -228,9 +228,9 @@ export default function TrafficAgentPage() {
       <div className="ta-panel ta-source-panel">
         <div className="ta-panel-heading"><div><span>INPUT EVIDENCE</span><h2>What the agent is analysing</h2></div><span className="ta-soft-icon"><Activity size={18}/></span></div>
         {hasEvidence ? <>
-          <div className="ta-evidence-source"><div className="ta-file-icon"><Gauge size={20}/></div><div><b>{report.source_filename || 'Saved traffic evidence'}</b><small>{report.model || 'YOLO model'} · {report.source_observed_at ? `Camera sample · ${new Date(report.source_observed_at).toLocaleString()}` : `${report.video?.sampled_frames || 1} sampled frames`}{reportSavedAt ? ` · ${new Date(reportSavedAt).toLocaleString()}` : ''}</small></div><span>YOLO REPORT</span></div>
+          <div className="ta-evidence-source"><div className="ta-file-icon"><Gauge size={20}/></div><div><b>{report.source_filename || 'Saved traffic evidence'}</b><small>Vehicle detection · {report.source_observed_at ? `Camera sample · ${new Date(report.source_observed_at).toLocaleString()}` : `${report.video?.sampled_frames || 1} sampled frames`}{reportSavedAt ? ` · ${new Date(reportSavedAt).toLocaleString()}` : ''}</small></div><span>VEHICLE REPORT</span></div>
           <div className="ta-source-metrics"><div><small>Vehicles</small><b>{Number(totalVehicles).toLocaleString()}</b></div><div><small>Scene density</small><b>{report.congestion_estimate || '—'}</b></div><div><small>Confidence</small><b>{Math.round(Number(report.confidence_threshold || 0.3) * 100)}%</b></div></div>
-        </> : <div className="ta-no-evidence"><div><Gauge size={22}/></div><b>No saved YOLO report yet</b><p>Run a real upload in Traffic Lab or load a recent edge-camera sample below. The agent will start when measured evidence is available.</p><Link to="/authority/traffic-lab" className="ta-inline-link">Create traffic evidence <ArrowRight size={14}/></Link></div>}
+        </> : <div className="ta-no-evidence"><div><Gauge size={22}/></div><b>No saved vehicle report yet</b><p>Run a real upload in Traffic Lab or load a recent edge-camera sample below. The agent will start when measured evidence is available.</p><Link to="/authority/traffic-lab" className="ta-inline-link">Create traffic evidence <ArrowRight size={14}/></Link></div>}
         <div className="ta-control-grid">
           <label><span>Junction</span><select value={junctionId} onChange={(event) => setJunctionId(event.target.value)}><option value="">Choose junction</option>{junctions.map((item) => <option key={item.id} value={item.id}>{item.name} · #{item.id}</option>)}</select></label>
           <label><span>Forecast scenario</span><select value={scenario} onChange={(event) => setScenario(event.target.value)}><option value="baseline">Baseline</option><option value="signal_priority">Signal priority sensitivity</option><option value="demand_surge">Demand surge sensitivity</option></select></label>
@@ -238,11 +238,11 @@ export default function TrafficAgentPage() {
           <label><span>Corridor distance (km)</span><input type="number" min="0.001" max="100" step="0.1" value={distanceKm} onChange={(event) => setDistanceKm(event.target.value)}/></label>
         </div>
         <div className="ta-live-camera-action">
-          <div><b><Camera size={15}/> Latest edge-camera evidence</b><small>Pull the newest authenticated YOLO sample from this junction (last 15 minutes).</small></div>
+          <div><b><Camera size={15}/> Latest camera evidence</b><small>Pull the newest authenticated vehicle sample from this junction (last 15 minutes).</small></div>
           <button type="button" className="ta-secondary-action" onClick={loadLatestCameraEvidence} disabled={!junctionId || cameraLoading || loading}>{cameraLoading ? <LoaderCircle className="ta-spin" size={15}/> : <RefreshCw size={15}/>} Load live sample</button>
         </div>
         <label className="ta-prompt-field"><span>Operator instruction</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={700} rows={3}/></label>
-        {junctions.length === 0 && <div className="ta-inline-note"><Clock3 size={15}/> No junction list is available yet. Register a real junction and connect a camera edge worker to run a live workflow.</div>}
+        {junctions.length === 0 && <div className="ta-inline-note"><Clock3 size={15}/><span>No monitored junctions are registered yet. Add a real junction in Traffic Lab to connect camera evidence and unlock the full operations workflow.</span><Link to="/authority/traffic-lab" className="ta-inline-link">Set up a junction <ArrowRight size={13}/></Link></div>}
       </div>
 
       <div className="ta-panel ta-execution-panel">
@@ -263,12 +263,12 @@ export default function TrafficAgentPage() {
         {loading && <div className="ta-running-callout"><span className="ta-running-orb"><Bot size={18}/></span><div><b>TrafficSaarthi is working through the evidence</b><p>The operations workflow is running as one job. Results and the executed-tool trace appear when the backend returns.</p></div><span className="ta-elapsed"><Timer size={13}/> {waitSeconds}s</span></div>}
         {error && <div className="ta-error-note"><XCircle size={15}/><span>{error}</span></div>}
         {preview && <div className="ta-preview-disclosure"><Sparkles size={15}/><span><b>Illustrative preview</b> · locally calculated from the saved report (or an example scenario). It is not a live backend result and cannot be approved or dispatched.</span></div>}
-        {!workflow && !loading && <div className="ta-waiting-state"><span><Bot size={24}/></span><b>Waiting for an evidence-backed run</b><small>When a saved YOLO report and registered junction are available, the agent starts automatically.</small></div>}
+        {!workflow && !loading && <div className="ta-waiting-state"><span><Bot size={24}/></span><b>Waiting for an evidence-backed run</b><small>When a saved vehicle report and registered junction are available, the agent starts automatically.</small></div>}
       </div>
     </section>
 
     {workflow && <>
-      <div className="ta-results-heading"><div><span>WORKFLOW OUTPUT</span><h2>{preview ? 'Illustrative operations preview' : 'Analysis, plan and forecast'}</h2></div><span className={`ta-result-mode ${preview ? 'preview' : ''}`}>{preview ? 'LOCAL CALCULATION' : workflow.agent?.agent_mode === 'langgraph_groq_tool_calling' ? 'LANGGRAPH + GROQ' : 'DETERMINISTIC TOOL RUN'}</span></div>
+      <div className="ta-results-heading"><div><span>WORKFLOW OUTPUT</span><h2>{preview ? 'Illustrative operations preview' : 'Analysis, plan and forecast'}</h2></div><span className={`ta-result-mode ${preview ? 'preview' : ''}`}>{preview ? 'REFERENCE CALCULATION' : workflow.agent?.agent_mode === 'langgraph_groq_tool_calling' ? 'ASSISTED WORKFLOW' : 'OPERATIONS WORKFLOW'}</span></div>
       <section className="ta-metrics-grid">
         <article className="ta-metric-card ta-metric-primary"><span>ESTIMATED CO₂</span><strong>{emissions ? `${Number(emissions.co2_g || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} g` : '—'}</strong><small>Tailpipe proxy · indicative factors</small><Leaf size={19}/></article>
         <article className="ta-metric-card"><span>ESTIMATED NOx</span><strong>{emissions ? `${Number(emissions.nox_g || 0).toFixed(3)} g` : '—'}</strong><small>Vehicle class × corridor distance</small><Wind size={18}/></article>

@@ -59,3 +59,25 @@ def test_native_vehicle_playback_does_not_fall_back_when_sumo_omits_fcd(tmp_path
         sumo_runner._run_one(
             'sumo', NETWORK, route_path, tmp_path, 'candidate', capture_fcd=True
         )
+
+
+def test_sumo_binary_discovers_official_python_wheel_when_legacy_paths_are_stale(tmp_path, monkeypatch):
+    import os
+    import sys
+    from types import SimpleNamespace
+    from app.services import sumo_runner
+
+    home = tmp_path / "eclipse-sumo"
+    binary = home / "bin" / "sumo"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("#!/bin/sh\necho SUMO test binary\n", encoding="utf-8")
+    binary.chmod(0o755)
+
+    monkeypatch.setitem(sys.modules, "sumo", SimpleNamespace(SUMO_HOME=str(home)))
+    monkeypatch.setenv("SUMO_BINARY", "/usr/bin/sumo")
+    monkeypatch.setenv("SUMO_HOME", "/usr/share/sumo")
+    monkeypatch.setattr(sumo_runner.shutil, "which", lambda _name: None)
+
+    assert sumo_runner.sumo_binary() == str(binary)
+    assert os.environ["SUMO_HOME"] == str(home)
+    assert str(home / "bin") in os.environ["PATH"].split(os.pathsep)

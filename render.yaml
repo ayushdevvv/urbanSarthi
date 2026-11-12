@@ -1,16 +1,18 @@
-# UrbanSaarthi production API. The name matches the existing
-# https://urbansarthi.onrender.com service so Blueprint sync updates that resource.
-# Do not create a second API service or use render-sumo.yaml.
+# UrbanSaarthi API — preserve the existing native Python Render service.
+# This Blueprint targets the existing service by name; it does not create a second API.
 services:
   - type: web
     name: urbansarthi
-    runtime: docker
-    dockerfilePath: ./backend/Dockerfile.sumo
-    dockerContext: ./backend
+    runtime: python
+    rootDir: ./backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: "alembic upgrade heads && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
     healthCheckPath: /healthz
     envVars:
       - key: APP_ENV
         value: production
+      - key: PYTHON_VERSION
+        value: "3.12.16"
       - key: DATABASE_URL
         sync: false
       - key: CORS_ORIGINS
@@ -37,7 +39,3 @@ services:
         sync: false
       - key: TRAFFIC_MODEL_PATH
         sync: false
-      - key: SUMO_BINARY
-        value: /usr/bin/sumo
-      - key: SUMO_HOME
-        value: /usr/share/sumo

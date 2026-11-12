@@ -24,6 +24,13 @@ STEP_SECONDS = 300
 
 
 def sumo_binary() -> str | None:
+    """Resolve the native SUMO executable or the official eclipse-sumo wheel.
+
+    Render's native Python runtime cannot install apt packages in this service.
+    The ``eclipse-sumo`` wheel ships its own binaries and exposes ``SUMO_HOME``.
+    Invalid legacy paths such as /usr/bin/sumo are ignored so wheel discovery can
+    still succeed after an old Render environment variable is removed or retained.
+    """
     configured = os.getenv("SUMO_BINARY", "").strip()
     if not configured:
         try:
@@ -31,8 +38,30 @@ def sumo_binary() -> str | None:
             configured = settings.sumo_binary.strip()
         except Exception:
             configured = ""
-    if configured and Path(configured).exists():
-        return configured
+    if configured:
+        candidate = Path(configured).expanduser()
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+        resolved = shutil.which(configured)
+        if resolved:
+            return resolved
+
+    # Official Eclipse SUMO Python wheel: SUMO_HOME contains both bin/ and tools/.
+    try:
+        import sumo as sumo_package
+
+        package_home = Path(str(getattr(sumo_package, "SUMO_HOME", ""))).expanduser()
+        wheel_binary = package_home / "bin" / ("sumo.exe" if os.name == "nt" else "sumo")
+        if package_home.is_dir() and wheel_binary.is_file() and os.access(wheel_binary, os.X_OK):
+            os.environ["SUMO_HOME"] = str(package_home)
+            bin_dir = str(package_home / "bin")
+            current_path = os.environ.get("PATH", "").split(os.pathsep)
+            if bin_dir not in current_path:
+                os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
+            return str(wheel_binary)
+    except (ImportError, OSError, TypeError, ValueError):
+        pass
+
     return shutil.which("sumo") or shutil.which("sumo.exe")
 
 

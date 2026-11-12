@@ -31,3 +31,6 @@ langchain-groq>=0.2,<2
 
 # Portable FFmpeg decoder fallback for phone-recorded / cloud-incompatible video codecs
 imageio-ffmpeg>=0.5.1,<1
+
+# Official SUMO application wheel (includes the Linux binaries; no apt/Docker required).
+eclipse-sumo==1.28.0

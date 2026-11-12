@@ -1,6 +1,6 @@
 import { readApiSnapshot, storeApiSnapshot, publishDataStatus, createDataStatusContext } from '../apiSnapshot.js';
 
-const DEFAULT_API_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000/api/v1' : 'https://urbansarthi.onrender.com/api/v1';
+const DEFAULT_API_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000/api/v1' : '/api/v1';
 const FALLBACK_GRACE_MS = 5_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 70_000;
 const ATTEMPT_TIMEOUT_MS = 18_000;
@@ -25,7 +25,16 @@ function getVisitorId() {
   }
 }
 
-export const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || DEFAULT_API_URL).replace(/\/$/, '');
+function needsVisitorIdentity(path) {
+  return /^\/(?:routing\/plan|trips(?:\/|$)|analytics\/my-mobility(?:\?|$)|ticketing(?:\/|\?|$))/.test(String(path || ""));
+}
+
+// Production always uses the same-origin Vercel rewrite. This deliberately
+// ignores stale VITE_API_URL values that may still point directly at Render.
+// Local development can continue to override the backend URL.
+export const API_BASE_URL = (import.meta.env.DEV
+  ? (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || DEFAULT_API_URL)
+  : DEFAULT_API_URL).replace(/\/$/, '');
 
 export class ApiError extends Error {
   constructor(message, status, payload) {
@@ -54,7 +63,7 @@ export async function request(path, options = {}) {
   const statusContext = createDataStatusContext(routePathAtRequestStart);
   const publishStatus = (detail) => publishDataStatus(detail, statusContext);
   const headers = new Headers(options.headers || {});
-  if (!headers.has('X-Visitor-ID')) headers.set('X-Visitor-ID', getVisitorId());
+  if (needsVisitorIdentity(path) && !headers.has('X-Visitor-ID')) headers.set('X-Visitor-ID', getVisitorId());
   const method = String(options.method || 'GET').toUpperCase();
   const cacheEligible = method === 'GET' || (options.cacheResponse === true && typeof options.body === 'string');
   const cacheKey = method === 'GET' ? path : requestCacheKey(path, options.body);

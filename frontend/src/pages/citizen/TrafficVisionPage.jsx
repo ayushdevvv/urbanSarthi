@@ -139,7 +139,7 @@ export default function TrafficVisionPage() {
           captured_at: new Date().toISOString(),
         });
       }
-      notify(mode === 'video' ? `Video analyzed with YOLO. Decoder: ${data.video?.decoder || 'OpenCV'}.` : 'Road image analyzed with YOLO.');
+      notify(mode === 'video' ? `Video analysis completed successfully.` : 'Road image analysis completed.');
     } catch (e) {
       if (report) setReportRestored(true);
       const availabilityFailure = e?.status === 0 || e?.status >= 500 || /timed out|could not be reached|refresh/i.test(e?.message || '');
@@ -149,7 +149,7 @@ export default function TrafficVisionPage() {
 
   function downloadReport() {
     if (!report) return;
-    const payload = { project: 'UrbanSaarthi Traffic Lab', generated_at: new Date().toISOString(), evidence: compactReport(report), note: 'YOLO/OpenCV detections from the uploaded source. Object counts are not calibrated queue length or speed measurements.' };
+    const payload = { project: 'UrbanSaarthi Traffic Lab', generated_at: new Date().toISOString(), evidence: compactReport(report), note: 'Vehicle detections from the uploaded source. Object counts are not calibrated queue length or speed measurements.' };
     const href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
     const link = document.createElement('a'); link.href = href; link.download = `urbansarthi-traffic-report-${Date.now()}.json`; link.click(); URL.revokeObjectURL(href);
   }
@@ -174,7 +174,7 @@ export default function TrafficVisionPage() {
     try {
       await api.post('/admin/data-sources', {
         external_id: sourceId, name: `${cameraForm.name.trim()} camera`, source_type: 'camera',
-        provider: 'OpenCV + YOLO edge worker', status: 'not_configured', freshness_seconds: 120,
+        provider: 'Road-scene vehicle detection', status: 'not_configured', freshness_seconds: 120,
         safe_config: { junction_external_id: cleanId, ingestion: 'edge_worker' },
       });
       const q = (value) => `'${String(value).replaceAll("'", "'\''")}'`;
@@ -193,24 +193,24 @@ export default function TrafficVisionPage() {
         <h1>Traffic intelligence <em>lab.</em></h1>
         <p>Turn road footage into verified vehicle evidence, a reviewable signal strategy, and a 60-minute traffic forecast.</p>
       </div>
-      <div className="ul-head-status"><span className={`ul-status-dot ${videoReadiness ? 'ready' : ''}`}/><div><b>{videoReadiness ? 'Vision pipeline ready' : 'Vision setup incomplete'}</b><small>{systemStatus?.readiness_note || (systemStatus?.ready ? 'YOLO weights detected' : 'Check weights and dependencies')}</small></div></div>
+      <div className="ul-head-status"><span className={`ul-status-dot ${videoReadiness ? 'ready' : ''}`}/><div><b>{videoReadiness ? 'Vision pipeline ready' : 'Vision setup incomplete'}</b><small>{systemStatus?.readiness_note || (systemStatus?.ready ? 'Vehicle detection is ready' : 'Check weights and dependencies')}</small></div></div>
     </header>
 
     <div className="ul-status-strip">
-      <div className="ul-status-item"><span className={modelReadiness ? 'ready' : ''}><Cpu size={15}/></span><div><b>YOLO detector</b><small>{modelReadiness ? 'Weights + inference ready' : 'Not ready'}</small></div></div>
-      <div className="ul-status-item"><span className={systemStatus?.decoder_ready && systemStatus?.opencv_available ? 'ready' : ''}><ScanLine size={15}/></span><div><b>OpenCV video</b><small>{systemStatus?.opencv_available ? `OpenCV ${systemStatus.opencv_version || ''} · ${systemStatus?.ffmpeg_fallback_available ? 'FFmpeg fallback ready' : 'native decoder'}` : 'OpenCV package unavailable'}</small></div></div>
-      <div className="ul-status-item"><span className={systemStatus?.forecast_ready ? 'ready' : ''}><Activity size={15}/></span><div><b>60 min scenario</b><small>{systemStatus?.native_sumo_available ? 'Native SUMO detected' : systemStatus?.forecast_ready ? 'XGBoost fallback ready' : 'Install forecast requirements'}</small></div></div>
-      <div className="ul-status-item"><span className={systemStatus?.agent_tools_ready ? 'ready' : ''}><Bot size={15}/></span><div><b>Operations agent</b><small>{systemStatus?.llm_tool_calling_ready ? 'Groq LLM + tools ready' : 'Local tools ready · Groq optional'}</small></div></div>
+      <div className="ul-status-item"><span className={modelReadiness ? 'ready' : ''}><Cpu size={15}/></span><div><b>Vehicle detection</b><small>{modelReadiness ? 'Weights + inference ready' : 'Not ready'}</small></div></div>
+      <div className="ul-status-item"><span className={systemStatus?.decoder_ready && systemStatus?.opencv_available ? 'ready' : ''}><ScanLine size={15}/></span><div><b>Video processing</b><small>{systemStatus?.opencv_available ? 'Video decoding available' : 'Video processing unavailable'}</small></div></div>
+      <div className="ul-status-item"><span className={systemStatus?.forecast_ready ? 'ready' : ''}><Activity size={15}/></span><div><b>60 min scenario</b><small>{systemStatus?.native_sumo_available ? 'Detailed vehicle simulation ready' : systemStatus?.forecast_ready ? '60-minute road forecast ready' : 'Forecast service unavailable'}</small></div></div>
+      <div className="ul-status-item"><span className={systemStatus?.agent_tools_ready ? 'ready' : ''}><Bot size={15}/></span><div><b>Operations agent</b><small>{systemStatus?.llm_tool_calling_ready ? 'Assistant tools ready' : 'Decision tools available'}</small></div></div>
     </div>
 
     <section className="ul-camera-connect-panel">
-      <div className="ul-camera-connect-heading"><div><span className="ul-panel-kicker">CONTINUOUS SOURCE</span><h2>Connect a live CCTV stream</h2><p>Register a junction and its camera source, then run the OpenCV + YOLO edge worker on a machine that can reach the authorized RTSP stream.</p></div><span className="ul-camera-connect-badge"><Video size={15}/> RTSP EDGE WORKER</span></div>
+      <div className="ul-camera-connect-heading"><div><span className="ul-panel-kicker">CONTINUOUS SOURCE</span><h2>Connect a live CCTV stream</h2><p>Register a junction and its camera source, then run the Camera edge worker on a secure machine that can reach the authorized camera stream.</p></div><span className="ul-camera-connect-badge"><Video size={15}/> CAMERA PROCESSING</span></div>
       <form className="ul-camera-connect-form" onSubmit={registerCamera}>
         <label>Camera / junction name<input value={cameraForm.name} onChange={(e) => setCameraForm((v) => ({ ...v, name: e.target.value }))} placeholder="Hazratganj junction camera" required/></label>
         <label>Junction external ID<input value={cameraForm.externalId} onChange={(e) => setCameraForm((v) => ({ ...v, externalId: e.target.value }))} placeholder="JUNC-LKO-001" required/></label>
         <label>Latitude<input type="number" min="-90" max="90" step="any" value={cameraForm.latitude} onChange={(e) => setCameraForm((v) => ({ ...v, latitude: e.target.value }))} placeholder="26.8467" required/></label>
         <label>Longitude<input type="number" min="-180" max="180" step="any" value={cameraForm.longitude} onChange={(e) => setCameraForm((v) => ({ ...v, longitude: e.target.value }))} placeholder="80.9462" required/></label>
-        <label className="wide">Authorized RTSP stream URL<input type="password" autoComplete="off" value={cameraForm.rtspUrl} onChange={(e) => setCameraForm((v) => ({ ...v, rtspUrl: e.target.value }))} placeholder="rtsp://camera-host:554/stream" required/><small>Used only to generate the local worker command. Never sent to or stored by the UrbanSaarthi API.</small></label>
+        <label className="wide">Authorized camera stream URL<input type="password" autoComplete="off" value={cameraForm.rtspUrl} onChange={(e) => setCameraForm((v) => ({ ...v, rtspUrl: e.target.value }))} placeholder="rtsp://camera-host:554/stream" required/><small>Used only to generate the local worker command. Never sent to or stored by the UrbanSaarthi API.</small></label>
         <label className="wide">UrbanSaarthi API base URL<input value={cameraForm.apiUrl} onChange={(e) => setCameraForm((v) => ({ ...v, apiUrl: e.target.value }))} placeholder="https://your-api.example.com/api/v1" required/></label>
         <button className="ul-primary-button" type="submit" disabled={cameraBusy}>{cameraBusy ? <><LoaderCircle size={15} className="ul-spin"/> Registering…</> : <><Video size={15}/> Register camera source</>}</button>
       </form>
@@ -244,16 +244,16 @@ export default function TrafficVisionPage() {
         </details>}
         {error && <div className="ul-inline-error"><AlertTriangle size={15}/><span>{error}</span></div>}
         <button className="ul-primary-button ul-analyze-button" onClick={analyzeScene} disabled={!file || busy}>
-          {busy ? <><LoaderCircle size={16} className="ul-spin"/> Processing real frames…</> : <><ScanLine size={16}/> Run YOLO analysis <ArrowUpRight size={16}/></>}
+          {busy ? <><LoaderCircle size={16} className="ul-spin"/> Processing real frames…</> : <><ScanLine size={16}/> Analyze road scene <ArrowUpRight size={16}/></>}
         </button>
         {systemStatus && !videoReadiness && <div className="ul-setup-hint"><CircleHelp size={15}/><span>{systemStatus.readiness_note || systemStatus.note || 'Video analysis is not ready.'} Install <code>backend/requirements.txt</code>, verify <code>backend/models/best.pt</code>, then restart the API.</span></div>}
-        {systemStatus?.ffmpeg_fallback_available && <div className="ul-setup-hint"><ShieldCheck size={15}/><span>Codec compatibility mode is available. If OpenCV cannot decode a phone-recorded clip, the bundled FFmpeg decoder will decode frames for the same YOLO pipeline.</span></div>}
+        {systemStatus?.ffmpeg_fallback_available && <div className="ul-setup-hint"><ShieldCheck size={15}/><span>Codec compatibility mode is available. If a phone-recorded clip is not compatible with the primary decoder, an alternate decoder will prepare it for the same vehicle detection process.</span></div>}
       </section>
 
       <section className="ul-panel ul-evidence-panel">
         <div className="ul-panel-head"><div><span className="ul-panel-kicker">SCENE OUTPUT</span><h3>Scene report</h3></div>{report && <button className="ul-text-button" onClick={downloadReport}><ArrowDownToLine size={14}/> Export JSON</button>}</div>
         {!visibleReport ? <div className="ul-empty-evidence"><div className="ul-scan-illustration"><span/><span/><span/><i/></div><b>Waiting for source evidence</b><p>Run the detector to populate class counts, track metrics and a report tied to your uploaded footage.</p><div className="ul-empty-track"><span>01 Capture</span><i/><span>02 Detect</span><i/><span>03 Verify</span></div></div> : <>
-          <div className="ul-report-status"><span><CheckCircle2 size={16}/></span><div><b>{reportRestored ? 'Last successful analysis' : 'Inference completed'}</b><small>{visibleReport.model || 'YOLO detector'} · {visibleReport.source_filename || file?.name}</small></div><em>{reportRestored ? 'SAVED RESULT' : 'MODEL OUTPUT'}</em></div>
+          <div className="ul-report-status"><span><CheckCircle2 size={16}/></span><div><b>{reportRestored ? 'Last successful analysis' : 'Inference completed'}</b><small>Vehicle detection · {visibleReport.source_filename || file?.name}</small></div><em>{reportRestored ? 'SAVED RESULT' : 'MODEL OUTPUT'}</em></div>
           {reportRestored && <div className="ul-saved-report-note">Restored from this browser · {reportSavedAt ? new Date(reportSavedAt).toLocaleString() : 'Saved earlier'}. This is a previous analysis, not a new inference.</div>}
           <div className="ul-metric-grid">
             <div className="ul-metric-card"><span>{visibleReport.tracking_ids_available ? 'Tracked vehicles' : visibleReport.mode === 'video' ? 'Peak vehicles' : 'Vehicles detected'}</span><strong>{vehicleTotal}</strong><small>{visibleReport.tracking_ids_available ? 'Unique IDs across sampled frames' : visibleReport.mode === 'video' ? 'IDs not returned by tracker' : 'From this frame only'}</small></div>
@@ -268,7 +268,7 @@ export default function TrafficVisionPage() {
           })}</div>
           <div className="ul-report-foot"><div><Clock3 size={14}/><span>{formatDuration(visibleReport.video?.duration_seconds)}</span></div><div><ScanLine size={14}/><span>{visibleReport.video?.sampled_frames ?? 1} frames</span></div><div><Gauge size={14}/><span>{Math.round((visibleReport.confidence_threshold ?? confidence) * 100)}% threshold</span></div></div>
           <div className="ul-disclaimer"><AlertTriangle size={14}/><span>{visibleReport.congestion_note || 'The report describes detected objects, not calibrated queue length or speed.'}</span></div>
-          {(visibleReport.annotated_frame || visibleReport.annotated_image) && <details className="ul-annotated-details" open><summary>Inspect annotated frame <ChevronDown size={14}/></summary><img src={`data:image/jpeg;base64,${visibleReport.annotated_frame || visibleReport.annotated_image}`} alt="YOLO annotated road frame"/></details>}
+          {(visibleReport.annotated_frame || visibleReport.annotated_image) && <details className="ul-annotated-details" open><summary>Inspect annotated frame <ChevronDown size={14}/></summary><img src={`data:image/jpeg;base64,${visibleReport.annotated_frame || visibleReport.annotated_image}`} alt="Annotated road frame"/></details>}
         </>}
       </section>
     </div>
@@ -277,11 +277,11 @@ export default function TrafficVisionPage() {
       <div className="ul-agent-handoff-copy">
         <span className="ul-panel-kicker">02 / AUTONOMOUS DECISION SUPPORT</span>
         <h2>Evidence captured. Let TrafficSaarthi work.</h2>
-        <p>Your saved YOLO report is ready for the operations agent. It can inspect the evidence, estimate corridor emissions, draft signal phases and run a 60-minute forecast before asking an operator to review.</p>
+        <p>Your saved road-scene report is ready for the operations agent. It can inspect the evidence, estimate corridor emissions, draft signal phases and run a 60-minute forecast before asking an operator to review.</p>
         <div className="ul-handoff-points"><span>Evidence inspection</span><span>Signal-plan drafting</span><span>60-minute forecast</span><span>Human approval</span></div>
       </div>
       <Link className="ul-agent-handoff-button" to="/authority/traffic-agent">Open Traffic Agent <ArrowUpRight size={17}/></Link>
     </section>
-    <footer className="ul-lab-footer"><div><ShieldCheck size={14}/><span>YOLO evidence</span><i/> <span>Operator-reviewed decisions</span></div><span>URBANSARTHI · TRAFFIC INTELLIGENCE</span></footer>
+    <footer className="ul-lab-footer"><div><ShieldCheck size={14}/><span>Road-scene evidence</span><i/> <span>Operator-reviewed decisions</span></div><span>URBANSARTHI · TRAFFIC INTELLIGENCE</span></footer>
   </main>;
 }

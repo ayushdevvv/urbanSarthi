@@ -12,7 +12,7 @@ This document records the performance and integration fixes included in the curr
 
 ## Traffic simulation behavior
 
-- The root `render.yaml` now deploys the backend as a Docker web service using `backend/Dockerfile.sumo` and Docker context `backend`.
+- The root `render.yaml` keeps the existing backend on Render native Python, with root directory `backend` and a build command that installs Debian `sumo` and `sumo-tools`. No Docker runtime is required.
 - That image installs native `sumo` and `sumo-tools`; the Render backend therefore runs SUMO in the cloud rather than depending on SUMO installed on a developer's laptop.
 - Native SUMO is preferred. If the SUMO executable is unavailable or the native run cannot be completed, the API can return the explicitly labelled XGBoost network forecast fallback.
 - Native SUMO output includes FCD vehicle positions for playback and five-minute road-edge telemetry. XGBoost is a forecast overlay and does not create individual microscopic vehicle trajectories.
@@ -39,7 +39,7 @@ TomTom enriches nearby road speeds/incidents; Tavily is an optional traffic/tran
 
 Human login has intentionally been removed for the public hackathon build. Do not configure `AUTH_ENABLED`, `JWT_SECRET`, bootstrap-admin variables or `VITE_REQUIRE_AUTH`. Camera/IoT ingestion remains protected by `INGESTION_API_KEY`.
 
-For exact Render dashboard values, required environment variables, Vercel API URL, deployment steps and security limitations, follow **[Public hackathon mode and Render settings](./PUBLIC_HACKATHON_NO_AUTH_AND_RENDER.md)**. The authoritative Blueprint is the repository-root `render.yaml`; `render-sumo.yaml` is an optional separately named service definition and should not be deployed in addition to the root Blueprint unless a second API service is deliberately required.
+For exact Render dashboard values, required environment variables, Vercel API URL, deployment steps and security limitations, follow **[Public hackathon mode and Render settings](./PUBLIC_HACKATHON_NO_AUTH_AND_RENDER.md)**. The authoritative Blueprint is the repository-root `render.yaml`; The root Blueprint is the only supported Render service definition for this release; do not create a second API service.
 
 ## Verification boundaries
 

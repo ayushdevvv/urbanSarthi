@@ -8,22 +8,21 @@
 - Authority demo write APIs use a shared demo operator. This configuration is for a public hackathon demonstration only.
 - Camera/IoT edge ingestion remains protected by the server-side `INGESTION_API_KEY`.
 
-## Existing Render backend
+## Existing Render backend (native Python)
 
-The backend is the existing service at `https://urbansarthi.onrender.com`. Do not create a new service. The root `render.yaml` uses `name: urbansarthi` to match the existing Render resource and points that service to the SUMO-enabled Dockerfile.
+The backend is the existing service at `https://urbansarthi.onrender.com`. Do not create a new service and do not switch the current service to Docker.
 
 | Render field | Value |
 |---|---|
 | Existing service | `urbansarthi` |
-| Runtime | Docker |
-| Root directory | Leave blank (repository root) |
-| Dockerfile path | `backend/Dockerfile.sumo` |
-| Docker context | `backend` |
+| Runtime | Python 3 (native runtime) |
+| Root directory | `backend` |
+| Build command | `pip install -r requirements.txt` |
+| Start command | `alembic upgrade heads && uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
 | Health check | `/healthz` |
-| Start command | Blank; Dockerfile `CMD` runs migrations and Uvicorn |
-| Database | Keep existing Render PostgreSQL attached |
+| Database | Keep the existing Render PostgreSQL attachment |
 
-The Blueprint intentionally omits `plan` so it does not change the existing service's billing tier. Check available memory/CPU if SUMO exits under load.
+The native runtime is Debian 12. The build command installs the Debian SUMO CLI and tools. `backend/Dockerfile.sumo` is not used by this setup.
 
 ## Render environment
 
@@ -32,8 +31,8 @@ APP_ENV=production
 DATABASE_URL=<existing Render PostgreSQL internal URL>
 CORS_ORIGINS=https://urbansarthi.vercel.app
 INGESTION_API_KEY=<existing random secret with at least 32 characters>
-SUMO_BINARY=/usr/bin/sumo
-SUMO_HOME=/usr/share/sumo
+PYTHON_VERSION=3.12.16
+# SUMO_BINARY and SUMO_HOME are auto-detected from eclipse-sumo; leave unset.
 ```
 
 Production CORS accepts exact HTTPS origins only. Add a second origin only when you actually deploy another frontend domain. Keep the existing database and ingestion key values; optional provider secrets remain server-side on Render.
@@ -41,7 +40,7 @@ Production CORS accepts exact HTTPS origins only. Add a second origin only when 
 ## Vercel environment
 
 ```env
-VITE_API_URL=https://urbansarthi.onrender.com/api/v1
+VITE_API_URL=/api/v1
 ```
 
 Set it in the existing Vercel project and redeploy. Do not place backend secrets in Vercel.
@@ -62,9 +61,9 @@ Set it in the existing Vercel project and redeploy. Do not place backend secrets
 2. `GET https://urbansarthi.onrender.com/readyz` reports `database: reachable`.
 3. The OPTIONS request for `/api/v1/trips` with `Origin: https://urbansarthi.vercel.app` and `Access-Control-Request-Headers: x-visitor-id` returns the matching `Access-Control-Allow-Origin` and allowed header.
 4. Open `/authority/control` and `/citizen` without a login prompt.
-5. In DevTools, API calls target `https://urbansarthi.onrender.com/api/v1`. No browser requests should target Nominatim, Photon, OSRM or Valhalla.
+5. In DevTools, API calls target `https://urbansarthi.vercel.app/api/v1`. No browser requests should target Nominatim, Photon, OSRM or Valhalla.
 6. A valid edge ingestion key succeeds; a missing/wrong key returns 401.
-7. Traffic Simulation reports native SUMO execution. If it returns 424, inspect the Docker build and installed SUMO paths.
+7. Traffic Simulation reports native SUMO execution only after the native Python build installs SUMO. If it returns 424, inspect the Render build log for the apt install step and the startup log for the SUMO version check.
 
 ## Public demo security boundary
 

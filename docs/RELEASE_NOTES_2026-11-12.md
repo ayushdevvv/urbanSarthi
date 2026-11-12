@@ -1,5 +1,7 @@
 > Chronological release history: the later “Public hackathon access update” section supersedes the earlier auth-enabled deployment notes. The current release has no human login.
 
+> Deployment note: the older notes below refer to the pre-proxy frontend API URL and an optional SUMO Blueprint. The later [Production stability release](./PRODUCTION_STABILITY_RELEASE.md) supersedes those deployment settings: one existing Render service and a same-origin Vercel `/api/v1` rewrite.
+
 # UrbanSaarthi release notes — 12 November 2026
 
 ## What changed in this release

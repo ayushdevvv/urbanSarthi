@@ -64,7 +64,7 @@ function NativeVehicle({ vehicle }) {
   const spec = specs[type] || specs.car;
   const x = Math.max(0, Math.min(1000, Number(vehicle.map_x) || 0));
   const y = Math.max(0, Math.min(1000, Number(vehicle.map_y) || 0));
-  // SUMO angles are clockwise from north; SVG vehicle length is horizontal at 90°.
+  // Vehicle headings are converted to the road-map display orientation.
   const rotation = Number(vehicle.angle || 0) - 90;
   return <g transform={`translate(${x} ${y}) rotate(${rotation})`}>
     <title>{`${vehicle.id} · ${type} · ${Number(vehicle.speed_kmph || 0).toFixed(1)} km/h`}</title>
@@ -93,13 +93,13 @@ function NativeSumoScene({ roads = [], frame, playing = false, areaName, signalT
   const vehicles = frame?.vehicle_positions || [];
   const rendered = Number(frame?.vehicle_count_rendered ?? vehicles.length);
   const actual = Number(frame?.vehicle_count_actual ?? frame?.vehicles ?? 0);
-  return <section className={`panel traffic-sim-scene native-sumo-scene ${playing ? 'is-playing' : ''}`} aria-label="Native SUMO simulation with Floating Car Data vehicle positions. Synthetic reference road network, not live city telemetry.">
+  return <section className={`panel traffic-sim-scene native-sumo-scene ${playing ? 'is-playing' : ''}`} aria-label="Detailed road simulation with sampled vehicle positions on a reference network, not live city telemetry.">
     <div className="traffic-sim-scene-head">
-      <div><span className="eyebrow">NATIVE SUMO · FLOATING CAR DATA</span><h3>{areaName} · Vehicle movement</h3><p>Cars are plotted at their sampled SUMO coordinates and headings. Road geometry comes from the loaded SUMO network; signal colours reflect the candidate timing program.</p></div>
+      <div><span className="eyebrow">DETAILED ROAD SIMULATION</span><h3>{areaName} · Vehicle movement</h3><p>Vehicles are plotted at their sampled positions and headings. Road geometry comes from the reference network; signal colours reflect the candidate timing program.</p></div>
       <div className="traffic-sim-live"><i/>{playing ? 'SIMULATION PLAYING' : 'SIMULATION PAUSED'} <b>MIN {Number(frame?.minute ?? 0).toFixed(1)}</b></div>
     </div>
     <div className="traffic-sim-scene-canvas native-sumo-canvas">
-      <svg viewBox="0 0 1000 1000" role="img" aria-label={`SUMO FCD map at minute ${frame?.minute ?? 0}, ${actual} vehicles on network, signal phase ${active}`}>
+      <svg viewBox="0 0 1000 1000" role="img" aria-label={`Road network map at minute ${frame?.minute ?? 0}, ${actual} vehicles on network, signal phase ${active}`}>
         <defs>
           <pattern id="sumo-ground-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#d5e0d2" strokeWidth="1"/></pattern>
           <pattern id="sumo-road-mark" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M0 16H32" stroke="#e8e2b8" strokeWidth="2" strokeDasharray="8 9"/></pattern>
@@ -116,7 +116,7 @@ function NativeSumoScene({ roads = [], frame, playing = false, areaName, signalT
             <polyline points={points} fill="none" stroke="#e7dfad" strokeWidth="1.7" strokeDasharray="10 12" opacity=".9"/>
           </g>;
         })}
-        {!mapRoads.length && <text x="500" y="500" textAnchor="middle" fill="#65776b" fontSize="25">SUMO road geometry is unavailable</text>}
+        {!mapRoads.length && <text x="500" y="500" textAnchor="middle" fill="#65776b" fontSize="25">Reference road geometry is unavailable</text>}
         {junctions.map((junction) => <NativeSignal key={junction.id} junction={junction} active={active}/>)}
         {vehicles.map((vehicle) => <NativeVehicle key={vehicle.id} vehicle={vehicle}/>)}
         {mapRoads.length > 0 && vehicles.length === 0 && <g><rect x="330" y="465" width="340" height="70" rx="14" fill="#f7faf5" stroke="#c7d5c2"/><text x="500" y="493" textAnchor="middle" fill="#50675a" fontSize="18" fontWeight="800">No FCD vehicles in this sample</text><text x="500" y="518" textAnchor="middle" fill="#829083" fontSize="12">Move the timeline to inspect another point in the run</text></g>}
@@ -124,25 +124,58 @@ function NativeSumoScene({ roads = [], frame, playing = false, areaName, signalT
     </div>
     <div className="traffic-sim-scene-footer native-sumo-footer">
       <div className="traffic-sim-signal-summary"><span className={active === 'NS' ? 'go' : 'stop'}><i/>{active === 'NS' ? 'N/S GREEN' : active === 'NS_YELLOW' ? 'N/S AMBER' : 'N/S RED'}</span><span className={active === 'EW' ? 'go' : 'stop'}><i/>{active === 'EW' ? 'E/W GREEN' : active === 'EW_YELLOW' ? 'E/W AMBER' : 'E/W RED'}</span><small>Candidate signal program · simulated, not connected to field controllers</small></div>
-      <div className="traffic-sim-road-key"><span><i className="light-road"/> {mapRoads.length} SUMO edges</span><span><i className="light-car"/> {rendered} / {actual} vehicles rendered</span><span><i className="light-person"/> {junctions.length} signalized junctions</span></div>
+      <div className="traffic-sim-road-key"><span><i className="light-road"/> {mapRoads.length} road segments</span><span><i className="light-car"/> {rendered} / {actual} vehicles rendered</span><span><i className="light-person"/> {junctions.length} signalized junctions</span></div>
     </div>
   </section>;
 }
 
 
-function ModelForecastScene({ frame, areaName = 'Bundled reference network', networkGeometry, signalTimings }) {
+function pointAlongRoad(points, progress) {
+  if (!Array.isArray(points) || points.length < 2) return null;
+  const segments = [];
+  let total = 0;
+  for (let i = 1; i < points.length; i += 1) {
+    const dx = Number(points[i].x) - Number(points[i - 1].x);
+    const dy = Number(points[i].y) - Number(points[i - 1].y);
+    const length = Math.hypot(dx, dy);
+    if (length > 0) { segments.push({ from: points[i - 1], dx, dy, length }); total += length; }
+  }
+  if (!total) return null;
+  let remaining = ((progress % 1) + 1) % 1 * total;
+  for (const segment of segments) {
+    if (remaining <= segment.length) {
+      const ratio = remaining / segment.length;
+      return { x: Number(segment.from.x) + segment.dx * ratio, y: Number(segment.from.y) + segment.dy * ratio, angle: Math.atan2(segment.dy, segment.dx) * 180 / Math.PI };
+    }
+    remaining -= segment.length;
+  }
+  const last = segments[segments.length - 1];
+  return { x: Number(last.from.x) + last.dx, y: Number(last.from.y) + last.dy, angle: Math.atan2(last.dy, last.dx) * 180 / Math.PI };
+}
+
+function ModelForecastScene({ frame, areaName = 'Reference road network', networkGeometry, signalTimings, playing = false }) {
   const mapRoads = networkGeometry?.roads || [];
   const junctions = networkGeometry?.junctions || [];
   const roadData = new Map((frame?.roads || []).map((road) => [String(road.road), road]));
   const colorFor = (level) => level === 'Heavy' ? '#c95c52' : level === 'Moderate' ? '#d4a044' : '#438d66';
   const active = signalPhase(Number(frame?.minute || 0), 'baseline', signalTimings);
-  return <section className="panel traffic-sim-scene native-sumo-scene model-forecast-scene" aria-label="XGBoost network queue forecast on the bundled reference road network; no individual vehicle trajectories">
+  const trafficMarkers = useMemo(() => mapRoads.slice(0, 42).flatMap((road, index) => {
+    const measured = roadData.get(String(road.id));
+    const queue = Math.max(0, Number(measured?.queue || 0));
+    if (!measured || queue < 1) return [];
+    const count = Math.min(2, Math.max(1, Math.ceil(queue / 28)));
+    return Array.from({ length: count }, (_, vehicleIndex) => {
+      const position = pointAlongRoad(road.points, Number(frame?.minute || 0) / 60 * 1.8 + index * .137 + vehicleIndex * .43);
+      return position ? { id: `${road.id}-${vehicleIndex}`, ...position, road: road.id, level: measured.level } : null;
+    }).filter(Boolean);
+  }), [mapRoads, roadData, frame?.minute]);
+  return <section className={`panel traffic-sim-scene native-sumo-scene model-forecast-scene ${playing ? 'is-playing' : ''}`} aria-label="60-minute reference road network forecast with illustrative traffic flow markers">
     <div className="traffic-sim-scene-head">
-      <div><span className="eyebrow">XGBOOST · 30 / 60-MINUTE QUEUE FORECAST</span><h3>{areaName} · Network forecast</h3><p>Road colours show per-edge modelled queue levels. These are forecast estimates, not live camera data or individual moving vehicles. Install SUMO for microscopic vehicle trajectories.</p></div>
-      <div className="traffic-sim-live"><i/>{`FORECAST · MIN ${Number(frame?.minute ?? 0)}`}</div>
+      <div><span className="eyebrow">60-MINUTE ROAD NETWORK</span><h3>{areaName} · Traffic flow</h3><p>Road colours and queue values update at each forecast step. Moving vehicle markers illustrate flow direction; they are not individual tracked vehicles or live CCTV positions.</p></div>
+      <div className="traffic-sim-live"><i/>{playing ? 'PLAYING' : 'PAUSED'} · MIN {Number(frame?.minute ?? 0)}</div>
     </div>
     <div className="traffic-sim-scene-canvas native-sumo-canvas model-forecast-canvas">
-      <svg viewBox="0 0 1000 1000" role="img" aria-label={`XGBoost forecast road network at minute ${frame?.minute ?? 0}`}>
+      <svg viewBox="0 0 1000 1000" role="img" aria-label={`Forecast road network at minute ${frame?.minute ?? 0}`}>
         <defs><pattern id="model-ground-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#d5e0d2" strokeWidth="1"/></pattern></defs>
         <rect width="1000" height="1000" fill="#e7eee3"/><rect width="1000" height="1000" fill="url(#model-ground-grid)"/>
         {Array.from({ length: 16 }, (_, i) => <rect key={`model-block-${i}`} x={72 + (i % 4) * 225} y={72 + Math.floor(i / 4) * 225} width="150" height="150" rx="15" fill={i % 3 === 0 ? '#dce7d5' : '#e1e9dc'} stroke="#d0dccb" strokeWidth="2"/>)}
@@ -157,13 +190,14 @@ function ModelForecastScene({ frame, areaName = 'Bundled reference network', net
             <polyline points={points} fill="none" stroke="#fff" strokeWidth="1.5" strokeDasharray="8 12" opacity=".8"/>
           </g>;
         })}
-        {junctions.map((junction) => <g key={junction.id} transform={`translate(${junction.x} ${junction.y})`}><circle r="12" fill="#f6faf3" stroke="#607769" strokeWidth="2"/><circle r="4" fill={active === 'ALL_RED' ? '#d75a52' : active.includes('YELLOW') ? '#dfa83e' : '#48a275'}/><title>{junction.id} · proposed cycle illustration</title></g>)}
+        {junctions.map((junction) => <g key={junction.id} transform={`translate(${junction.x} ${junction.y})`}><circle r="12" fill="#f6faf3" stroke="#607769" strokeWidth="2"/><circle r="4" fill={active === 'ALL_RED' ? '#d75a52' : active.includes('YELLOW') ? '#dfa83e' : '#48a275'}/><title>{junction.id} · proposed signal phase</title></g>)}
+        {trafficMarkers.map((vehicle) => <g key={vehicle.id} transform={`translate(${vehicle.x} ${vehicle.y}) rotate(${vehicle.angle})`} style={{ transition: playing ? 'transform .75s linear' : 'none' }}><title>{`${vehicle.road} · ${vehicle.level} forecast · representative flow marker`}</title><rect x="-10" y="-5" width="20" height="10" rx="3" fill={vehicle.level === 'Heavy' ? '#f0bd61' : vehicle.level === 'Moderate' ? '#82b7dc' : '#77c49a'} stroke="#284d3c" strokeWidth="1.4"/><rect x="-3.5" y="-3.2" width="7" height="6.4" rx="1.4" fill="#315a62"/><path d="M-7 -4 h2 M5 -4 h2" stroke="#fff8d6" strokeWidth="1.4" strokeLinecap="round"/></g>)}
         {!mapRoads.length && <text x="500" y="500" textAnchor="middle" fill="#65776b" fontSize="25">Reference road geometry unavailable</text>}
       </svg>
     </div>
     <div className="traffic-sim-scene-footer native-sumo-footer">
       <div className="traffic-sim-signal-summary"><span className={active === 'NS' ? 'go' : 'stop'}><i/>N/S {active === 'NS' ? 'GREEN' : active === 'NS_YELLOW' ? 'AMBER' : 'RED'}</span><span className={active === 'EW' ? 'go' : 'stop'}><i/>E/W {active === 'EW' ? 'GREEN' : active === 'EW_YELLOW' ? 'AMBER' : 'RED'}</span><small>Illustrative proposed phase · no field-controller link</small></div>
-      <div className="traffic-sim-road-key"><span><i className="light-road"/> {mapRoads.length} reference edges</span><span><i style={{background:'#438d66'}}/> Free</span><span><i style={{background:'#d4a044'}}/> Moderate</span><span><i style={{background:'#c95c52'}}/> Heavy</span></div>
+      <div className="traffic-sim-road-key"><span><i className="light-road"/> {mapRoads.length} road segments</span><span><i className="light-car"/> {trafficMarkers.length} flow markers</span><span><i style={{background:'#438d66'}}/> Free</span><span><i style={{background:'#d4a044'}}/> Moderate</span><span><i style={{background:'#c95c52'}}/> Heavy</span></div>
     </div>
   </section>;
 }
@@ -202,9 +236,9 @@ export default function TrafficSimulationScene(props) {
   for (let i = 0; i < w; i++) cars.push(<Car key={`w-${i}`} x={28 + i * 27} y={229 + (i % 2) * 30} direction="E" index={i + 2} moving={playing && active === 'EW'}/>);
   for (let i = 0; i < e; i++) cars.push(<Car key={`e-${i}`} x={952 - i * 27} y={269 - (i % 2) * 30} direction="W" index={i + 3} moving={playing && active === 'EW'}/>);
   const phaseLabel = active === 'NS' ? 'N/S GREEN' : active === 'EW' ? 'E/W GREEN' : active === 'NS_YELLOW' ? 'N/S AMBER' : active === 'EW_YELLOW' ? 'E/W AMBER' : 'ALL RED';
-  return <section className={`panel traffic-sim-scene ${playing ? 'is-playing' : ''}`} aria-label={`${nativeSumo ? 'SUMO simulation visualization' : 'Illustrative traffic model visualization'}; not live CCTV or a physical controller`}>
+  return <section className={`panel traffic-sim-scene ${playing ? 'is-playing' : ''}`} aria-label={`${nativeSumo ? 'Detailed road simulation view' : 'Illustrative traffic model visualization'}; not live CCTV or a physical controller`}>
     <div className="traffic-sim-scene-head">
-      <div><span className="eyebrow">{nativeSumo ? 'NATIVE SUMO · SYNTHETIC GRID NETWORK' : 'REFERENCE MODEL PLAYBACK'}</span><h3>{areaName} · {nativeSumo ? 'SUMO intersection view' : 'Modelled intersection'}</h3><p>{nativeSumo ? 'Vehicle counts, speed and road conditions come from SUMO edge intervals. This is a schematic four-way view: edge IDs are mapped to visual approaches, not geographic lanes or individual tracked vehicle coordinates.' : 'This reference playback is not a live camera feed or a signal-controller connection.'}</p></div>
+      <div><span className="eyebrow">{nativeSumo ? 'DETAILED ROAD SIMULATION · REFERENCE NETWORK' : 'REFERENCE MODEL PLAYBACK'}</span><h3>{areaName} · {nativeSumo ? 'Signalized intersection view' : 'Modelled intersection'}</h3><p>{nativeSumo ? 'Vehicle counts, speed and road conditions come from road-segment measurements. This is a schematic four-way view: edge IDs are mapped to visual approaches, not geographic lanes or individual tracked vehicle coordinates.' : 'This reference playback is not a live camera feed or a signal-controller connection.'}</p></div>
       <div className="traffic-sim-live"><i/>{playing ? 'SIMULATION PLAYING' : 'SIMULATION PAUSED'} <b>MIN {frame?.minute ?? 0}</b></div>
     </div>
     <div className="traffic-sim-scene-canvas">
@@ -255,7 +289,7 @@ export default function TrafficSimulationScene(props) {
       </svg>
     </div>
     <div className="traffic-sim-scene-footer">
-      <div className="traffic-sim-signal-summary"><span className={active === 'NS' ? 'go' : 'stop'}><i/>{active === 'NS' ? 'N/S GREEN' : active === 'NS_YELLOW' ? 'N/S AMBER' : 'N/S RED'}</span><span className={active === 'EW' ? 'go' : 'stop'}><i/>{active === 'EW' ? 'E/W GREEN' : active === 'EW_YELLOW' ? 'E/W AMBER' : 'E/W RED'}</span><small>{nativeSumo ? `SUMO phase: ${phaseLabel} · simulated only` : 'Illustrative phase · no controller connection'}</small></div>
+      <div className="traffic-sim-signal-summary"><span className={active === 'NS' ? 'go' : 'stop'}><i/>{active === 'NS' ? 'N/S GREEN' : active === 'NS_YELLOW' ? 'N/S AMBER' : 'N/S RED'}</span><span className={active === 'EW' ? 'go' : 'stop'}><i/>{active === 'EW' ? 'E/W GREEN' : active === 'EW_YELLOW' ? 'E/W AMBER' : 'E/W RED'}</span><small>{nativeSumo ? `Signal phase: ${phaseLabel} · simulated only` : 'Illustrative phase · no controller connection'}</small></div>
       <div className="traffic-sim-road-key"><span><i className="light-road"/> Road network</span><span><i className="light-car"/> {nativeSumo ? '5-min vehicle entries' : 'Vehicles'}</span><span><i className="light-person"/> Pedestrian zones</span></div>
     </div>
   </section>;

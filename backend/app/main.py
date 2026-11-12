@@ -65,12 +65,22 @@ for route_module in (agent, mobility, traffic, traffic_detection, air_intelligen
 # Keep CORS outside FastAPI's exception middleware. This ensures even framework
 # errors and preflight responses receive the correct Access-Control headers.
 # The production allow-list is intentionally exact and comes from CORS_ORIGINS.
+# The production Vercel origin is a code-level trusted origin as well as an
+# environment setting. This prevents a missing / stale Render CORS_ORIGINS value
+# from silently breaking every browser request after a deploy.
+PUBLIC_FRONTEND_ORIGIN = "https://urbansarthi.vercel.app"
+trusted_origins = list(settings.cors_origin_list)
+if PUBLIC_FRONTEND_ORIGIN not in trusted_origins:
+    trusted_origins.append(PUBLIC_FRONTEND_ORIGIN)
+
 app = CORSMiddleware(
     app=api,
-    allow_origins=settings.cors_origin_list,
+    allow_origins=trusted_origins,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
-    allow_headers=["Accept", "Authorization", "Content-Type", "X-Ingestion-Key", "X-Visitor-ID"],
+    allow_methods=["*"],
+    # This is a public API (no cookie authentication). Wildcard request headers
+    # avoid brittle preflight failures when a browser adds a harmless header.
+    allow_headers=["*"],
     expose_headers=["Retry-After"],
     max_age=600,
 )

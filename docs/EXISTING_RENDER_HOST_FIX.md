@@ -1,3 +1,5 @@
+> This earlier host-fix note is superseded by [Production stability release](./PRODUCTION_STABILITY_RELEASE.md), which adds same-origin API proxying and the capability-aware simulation fallback.
+
 # Existing Render host fix
 
 This source release keeps UrbanSaarthi on the existing Render API:
@@ -8,8 +10,8 @@ This source release keeps UrbanSaarthi on the existing Render API:
 
 ## What changed
 
-- The frontend production API fallback and Vercel env example use the existing backend hostname.
-- The root `render.yaml` declares one Docker web service named `urbansarthi`, with `backend/Dockerfile.sumo`, backend build context, and `/healthz` health check.
+- The production frontend always uses the same-origin `/api/v1` path; Vercel proxies it to the existing Render hostname and ignores stale external `VITE_API_URL` values.
+- The root `render.yaml` declares the existing `urbansarthi` service as a native Python web service, rooted at `backend`, with a build step that installs Debian SUMO packages and a `/healthz` health check. No Docker runtime is required.
 - The duplicate `render-sumo.yaml` Blueprint was removed to avoid proposing a second Render service.
 - CORS wraps the complete ASGI application, permits the exact Vercel origin, and includes the `X-Visitor-ID` and `X-Ingestion-Key` headers used by the app.
 - The browser's geocoding and road-routing requests now use the UrbanSaarthi API. The API performs provider requests server-side, avoiding browser CORS preflights against public geocoding and routing services.
@@ -26,8 +28,8 @@ APP_ENV=production
 DATABASE_URL=<keep the existing Render PostgreSQL internal URL>
 CORS_ORIGINS=https://urbansarthi.vercel.app
 INGESTION_API_KEY=<keep the existing random secret, at least 32 characters>
-SUMO_BINARY=/usr/bin/sumo
-SUMO_HOME=/usr/share/sumo
+PYTHON_VERSION=3.12.16
+# SUMO_BINARY and SUMO_HOME are auto-detected from eclipse-sumo; leave unset.
 ```
 
 Keep optional provider keys on Render only. Do not expose database credentials, ingestion secrets, or provider keys through Vercel.
@@ -35,16 +37,16 @@ Keep optional provider keys on Render only. Do not expose database credentials, 
 ### Existing Vercel project
 
 ```env
-VITE_API_URL=https://urbansarthi.onrender.com/api/v1
+VITE_API_URL=/api/v1
 ```
 
 Redeploy the existing Vercel project after updating the variable.
 
-## Render deployment safety
+## Render native-runtime deployment safety
 
 1. Push this source to the Git branch already connected to the existing Render service.
 2. Open the service whose URL is `https://urbansarthi.onrender.com` and confirm its Render resource name is `urbansarthi` before syncing the root Blueprint.
-3. Sync the existing Blueprint only if the service is already Blueprint-managed. Do not create a New Blueprint or another Web Service. If it is dashboard-managed, update the existing service's Docker settings to match the root `render.yaml` instead.
+3. Sync the existing Blueprint only if the service is already Blueprint-managed. Do not create a New Blueprint or another Web Service. If it is dashboard-managed, update the existing service's Python settings to match the root `render.yaml` instead.
 4. Keep the existing PostgreSQL database and `INGESTION_API_KEY`. The Blueprint intentionally leaves those values unsynchronised and does not set a plan.
 5. Redeploy that existing Render service, then redeploy the existing Vercel project.
 
@@ -62,18 +64,18 @@ curl -i -X OPTIONS \
   -H 'Access-Control-Request-Headers: x-visitor-id'
 ```
 
-Expected: `/healthz` returns 200; `/readyz` reports a reachable database; preflight returns 200 and `Access-Control-Allow-Origin: https://urbansarthi.vercel.app`. In browser DevTools, API requests should use `https://urbansarthi.onrender.com/api/v1`. Geocoding and route-planning calls should not go directly from the browser to Nominatim, Photon, OSRM, or Valhalla.
+Expected: `/healthz` returns 200; `/readyz` reports a reachable database; preflight returns 200 and `Access-Control-Allow-Origin: https://urbansarthi.vercel.app`. In browser DevTools, API requests should use `https://urbansarthi.vercel.app/api/v1`; Vercel forwards them to Render. Geocoding and route-planning calls should not go directly from the browser to Nominatim, Photon, OSRM, or Valhalla.
 
 ## Verification performed on this source package
 
-- Backend pytest: 62 passed.
+- Backend pytest: 65 passed in the current production stability release.
 - Frontend workspace smoke test: passed.
 - Frontend public-routing regression test: passed.
 - Python compileall and JavaScript syntax checks: passed.
 - Render Blueprint parsed and contains one service named `urbansarthi`.
 - Local ASGI CORS integration: health check 200, allowed Vercel preflight 200 with `X-Visitor-ID`, and unapproved origin denied.
 
-A complete Vite production bundle was not verified in this environment because `npm ci` could not reach the npm registry (DNS `EAI_AGAIN`). Install dependencies and run `npm run build` in `frontend` in your normal network environment before final production sign-off.
+A complete Vite production bundle is not verified in this environment because all npm packages were not available in the local cache and registry DNS was unavailable. Install dependencies and run `npm run build` in `frontend` in your normal network environment before final production sign-off.
 
 ## Public hackathon demo boundary
 

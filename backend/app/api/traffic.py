@@ -270,6 +270,34 @@ def traffic_news(latitude: float = Query(ge=-90, le=90), longitude: float = Quer
     return result
 
 
+@router.get("/simulation/capabilities")
+def simulation_capabilities():
+    """Report which traffic playback modes are actually available on this worker."""
+    from importlib.util import find_spec
+    from app.services.sumo_runner import NETWORK
+    from app.services.traffic_simulation import BASE as SIMULATION_BASE
+
+    native_ready = bool(sumo_binary() and NETWORK.is_file())
+    forecast_files = (
+        "queue_model.json", "queue_model_60min.json", "metrics.json",
+        "metrics_60min.json", "edge_mean.json",
+    )
+    forecast_artifacts = all((SIMULATION_BASE / "models" / name).is_file() for name in forecast_files)
+    forecast_artifacts = forecast_artifacts and (SIMULATION_BASE / "data" / "raw.csv").is_file()
+    try:
+        forecast_dependency = find_spec("xgboost") is not None
+    except (ImportError, ValueError):
+        forecast_dependency = False
+    forecast_ready = bool(forecast_artifacts and forecast_dependency)
+    return {
+        "native_simulation_available": native_ready,
+        "forecast_available": forecast_ready,
+        "reference_network_available": NETWORK.is_file(),
+        "recommended_mode": "microscopic" if native_ready else "forecast" if forecast_ready else "unavailable",
+        "message": None if native_ready else "A 60-minute network forecast is available; detailed vehicle tracking is not enabled on this worker." if forecast_ready else "No traffic simulation engine is ready on this worker.",
+    }
+
+
 @router.post("/sumo/run")
 def run_sumo_signal_experiment(payload: NativeSumoRunIn, _user=Depends(require_roles("operator", "admin"))):
     """Run a reproducible native SUMO baseline vs. signal-timing intervention.
@@ -322,7 +350,7 @@ def run_xgboost_signal_experiment(payload: NativeSumoRunIn, _user=Depends(requir
             name=payload.name,
         )
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"XGBoost network forecast failed ({type(exc).__name__}). Check the model files and backend ML dependencies.") from exc
+        raise HTTPException(status_code=503, detail="The 60-minute traffic forecast could not be completed. Please check the server forecast files and try again.") from exc
 
 
 @router.get("/simulation")

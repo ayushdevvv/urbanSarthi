@@ -69,7 +69,7 @@ console.log('✓ IoT observation ingestion and device registry verified');
 
 
 const trafficScene = read('src/pages/authority/TrafficSimulationScene.jsx');
-assert(trafficScene.includes('NATIVE SUMO · FLOATING CAR DATA') && trafficScene.includes('XGBOOST · 30 / 60-MINUTE QUEUE FORECAST') && trafficScene.includes('vehicle_positions') && trafficScene.includes('networkGeometry') && trafficScene.includes('signalTimings') && trafficScene.includes('NativeVehicle'), 'Simulation scene must support native SUMO trajectories and a truthful XGBoost network forecast view');
+assert(trafficScene.includes('DETAILED ROAD SIMULATION') && trafficScene.includes('60-MINUTE ROAD NETWORK') && trafficScene.includes('vehicle_positions') && trafficScene.includes('networkGeometry') && trafficScene.includes('signalTimings') && trafficScene.includes('NativeVehicle') && trafficScene.includes('trafficMarkers'), 'Simulation scene must support tracked trajectories and clearly-labelled forecast flow markers');
 const citizenTraffic = read('src/pages/citizen/TrafficConditionsPage.jsx');
 assert(citizenTraffic.includes('getCurrentPosition') && citizenTraffic.includes('Use my location') && citizenTraffic.includes('/traffic/nearby') && citizenTraffic.includes('/traffic/news'), 'Citizen traffic must require explicit location and load nearby roads plus traffic news');
 assert(citizenTraffic.includes('fallbackGraceMs: 6500') && airService.includes('fallbackGraceMs: 7000'), 'Citizen traffic and AQI browser deadlines must allow their bounded backend provider lookups to complete');
@@ -83,12 +83,19 @@ assert(traffic.includes('saveLatestVisionEvidence'), 'Traffic Lab must hand vehi
 const evidenceStore = read('src/services/visionEvidence.js');
 assert(evidenceStore.includes('airtraffic.latestVisionEvidence') && evidenceStore.includes('LEGACY_STORAGE_KEY'), 'Video evidence storage must use the neutral key and preserve existing saved evidence');
 const sumoPage = read('src/pages/authority/TrafficSimulationPage.jsx');
-assert(sumoPage.includes("api.post('/traffic/sumo/run'") && sumoPage.includes("api.post('/traffic/simulation/model-scenario'") && sumoPage.includes('north_south_green_seconds') && sumoPage.includes('east_west_green_seconds') && sumoPage.includes('XGBOOST FORECAST'), 'Simulation workbench must prefer native SUMO and fall back to the trained XGBoost forecast without fake vehicle trajectories');
-assert(sumoPage.includes('30s / 5m') && sumoPage.includes('SUMO FCD every 30s; edge metrics every 5 min'), 'SUMO page must disclose actual vehicle-position and road-metric sampling intervals');
+assert(sumoPage.includes("api.post('/traffic/sumo/run'") && sumoPage.includes("api.post('/traffic/simulation/model-scenario'") && sumoPage.includes("api.get('/traffic/simulation/capabilities'") && sumoPage.includes('native_simulation_available') && sumoPage.includes('north_south_green_seconds') && sumoPage.includes('east_west_green_seconds') && sumoPage.includes('NETWORK FORECAST'), 'Simulation workbench must probe engine availability and avoid calling an unavailable native engine');
+assert(sumoPage.includes('Forecast frames update every five minutes') && sumoPage.includes('Detailed vehicle positions, when enabled, are sampled every 30 seconds.'), 'Simulation page must disclose forecast and detailed vehicle sampling intervals');
 assert(app.includes('RouteErrorBoundary') && app.includes('traffic-lab" element={<RouteErrorBoundary'), 'Traffic Lab route must show a recoverable error state instead of going blank on a render exception');
 const routeBoundary = read('src/components/shared/RouteErrorBoundary.jsx');
 assert(routeBoundary.includes('Traffic Lab could not load') && routeBoundary.includes('Try again') && routeBoundary.includes('/authority/control'), 'Traffic Lab render fallback must give the operator a recovery path');
-assert(read('src/services/api/client.js').includes('https://urbansarthi.onrender.com/api/v1'), 'Production API fallback must use the existing Render backend hostname');
+assert(read('src/services/api/client.js').includes("  : DEFAULT_API_URL).replace(/\\/$/, '')"), 'Production API requests must use Vercel same-origin API routing even if old Vercel env values point elsewhere');
+const vercelRouting = JSON.parse(read('vercel.json'));
+const rootVercelRouting = JSON.parse(read('../vercel.json'));
+assert(rootVercelRouting.rewrites[0].destination === 'https://urbansarthi.onrender.com/api/v1/:path*', 'Repository-root Vercel config must proxy to the existing Render host too');
+assert(vercelRouting.rewrites[0].source === '/api/v1/:path*' && vercelRouting.rewrites[0].destination === 'https://urbansarthi.onrender.com/api/v1/:path*', 'Vercel must proxy API requests to the existing Render backend before the SPA rewrite');
+assert(read('.env.production.example').includes('VITE_API_URL=/api/v1'), 'Vercel production must use the same-origin API URL');
+assert(read('src/pages/authority/AirIntelligencePage.jsx').includes('detailedComparisonReady') && read('src/pages/authority/AirIntelligencePage.jsx').includes('disabled={compareBusy || !detailedComparisonReady}'), 'Air impact comparison must not call an unavailable native simulation engine');
+assert(read('src/components/shared/DataStatusBanner.jsx').includes("detail.path.startsWith('/traffic-detection/')" ) && read('src/components/layout/AuthorityLayout.jsx').includes("event.key === 'Escape'"), 'Traffic workspaces must use local error states and the mobile drawer must be keyboard-dismissible');
 console.log('✓ Citizen traffic, camera evidence and native SUMO workflows verified');
 const html = read('index.html');
 const brand = read('src/components/shared/BrandMark.jsx');
@@ -170,18 +177,19 @@ console.log('✓ Live-first loading, error-only fallback, route sorting, AQI pro
 const apiClientSource = read('src/services/api/client.js')
   .replace(/^import .*;\s*/gm, '')
   .replaceAll('import.meta.env.DEV', 'false')
-  .replaceAll('import.meta.env.VITE_API_URL', 'undefined')
-  .replaceAll('import.meta.env.VITE_API_BASE_URL', 'undefined')
+  .replaceAll('import.meta.env.VITE_API_URL', "'https://old-api.onrender.com/api/v1'")
+  .replaceAll('import.meta.env.VITE_API_BASE_URL', "'https://old-api.onrender.com/api/v1'")
   .replace(/^export /gm, '');
 let snapshotReads = 0;
 let statusSequence = 0;
-const runtimeFactory = new Function('readApiSnapshot', 'storeApiSnapshot', 'publishDataStatus', 'createDataStatusContext', `${apiClientSource}\nreturn { request, ApiError };`);
+const runtimeFactory = new Function('readApiSnapshot', 'storeApiSnapshot', 'publishDataStatus', 'createDataStatusContext', `${apiClientSource}\nreturn { request, ApiError, API_BASE_URL };`);
 const runtimeClient = runtimeFactory(
   () => { snapshotReads += 1; return { payload: { source: 'saved-snapshot' }, savedAt: Date.now() }; },
   () => {},
   () => {},
   (routePath) => ({ routePath, requestId: ++statusSequence }),
 );
+assert(runtimeClient.API_BASE_URL === '/api/v1', 'Production runtime must ignore stale cross-origin Vercel environment values');
 const originalFetch = globalThis.fetch;
 try {
   globalThis.fetch = async () => new Response(JSON.stringify({ source: 'live-backend' }), { status: 200, headers: { 'content-type': 'application/json' } });

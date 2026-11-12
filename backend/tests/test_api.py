@@ -87,7 +87,7 @@ def test_traffic_detection_status_and_rejects_unsupported_upload(client):
     status = client.get('/api/v1/traffic-detection/status')
     assert status.status_code == 200
     payload = status.json()
-    assert payload['model'] == 'YOLO11 traffic detector'
+    assert payload['model'] == 'UrbanSaarthi vehicle detector'
     assert payload['classes_counted_as_vehicles'] == ['car', 'bus', 'motorbike', 'bicycle', 'truck']
     rejected = client.post(
         '/api/v1/traffic-detection/analyze',
@@ -340,3 +340,38 @@ def test_public_demo_trip_history_isolated_by_browser_visitor_id(client, monkeyp
     trips_b = client.get("/api/v1/trips", headers=visitor_b)
     assert len(trips_a.json()) == 1
     assert trips_b.status_code == 200 and trips_b.json() == []
+
+
+def test_public_vercel_origin_cors_preflight_is_always_allowed_for_api(client):
+    origin = "https://urbansarthi.vercel.app"
+    response = client.options(
+        "/api/v1/traffic-detection/video-status",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "x-visitor-id,content-type",
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.headers.get("access-control-allow-origin") == origin
+    assert "GET" in response.headers.get("access-control-allow-methods", "GET")
+
+
+def test_untrusted_origin_does_not_receive_cors_access(client):
+    response = client.get(
+        "/api/v1/traffic-detection/video-status",
+        headers={"Origin": "https://untrusted.example"},
+    )
+    assert response.status_code == 200
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_simulation_capabilities_reports_available_forecast_without_native_engine(client, monkeypatch):
+    from app.services import sumo_runner
+    monkeypatch.setattr(sumo_runner, "sumo_binary", lambda: None)
+    response = client.get("/api/v1/traffic/simulation/capabilities")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["native_simulation_available"] is False
+    assert "forecast_available" in body
+    assert body["recommended_mode"] in {"forecast", "unavailable"}

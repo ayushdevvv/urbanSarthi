@@ -99,11 +99,11 @@ async def analyze_traffic_video(
     except (ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=503, detail="YOLO traffic model weights are unavailable. Set TRAFFIC_MODEL_PATH or install backend/models/best.pt.") from exc
+        raise HTTPException(status_code=503, detail="Vehicle detection is unavailable because the required model files are missing.") from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Video inference failed. Confirm OpenCV, PyTorch, Ultralytics and YOLO weights are installed ({type(exc).__name__}).") from exc
+        raise HTTPException(status_code=503, detail=f"Video analysis could not complete. Check the server video-processing setup and model files.") from exc
 
 
 @router.post("/ops-workflow", status_code=201)
@@ -181,7 +181,7 @@ def run_traffic_ops_workflow(payload: OpsWorkflowIn, request: Request, db: Sessi
             forecast = run_forecast(payload.scenario)
         except Exception as exc:
             db.rollback()
-            raise HTTPException(status_code=503, detail=f"60-minute model forecast unavailable. Check bundled XGBoost model/data files ({type(exc).__name__}).") from exc
+            raise HTTPException(status_code=503, detail=f"The 60-minute traffic forecast is temporarily unavailable. Check the server model files and try again.") from exc
     timeline = forecast.get("timeline") or []
     compact_timeline = [{key: point.get(key) for key in ("minute", "queue_total", "vehicles", "heavy_roads", "moderate_roads", "free_roads")} for point in timeline]
     summary = forecast.get("summary") or {}

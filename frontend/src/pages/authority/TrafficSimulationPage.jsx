@@ -36,7 +36,7 @@ function QueueChart({ baseline = [], proposed = [] }) {
   }).join(' ');
   return <div className="sumo-chart">
     <div className="sumo-chart-legend"><span><i className="base-line"/> Baseline</span><span><i className="candidate-line"/> Signal plan</span></div>
-    <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Five-minute SUMO queue comparison chart">
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Five-minute road queue comparison chart">
       {[20, 40, 60, 80].map((y) => <line key={y} x1="0" x2="100" y1={y} y2={y} stroke="currentColor" strokeOpacity=".1" strokeDasharray="1 2"/>)}
       {baseline.length > 1 && <polyline points={points(baseline)} fill="none" stroke="#9ba99b" strokeWidth="1.6" vectorEffect="non-scaling-stroke"/>}
       {proposed.length > 1 && <polyline points={points(proposed)} fill="none" stroke="#4b8a56" strokeWidth="2.2" vectorEffect="non-scaling-stroke"/>}
@@ -53,6 +53,7 @@ export default function TrafficSimulationPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [runAt, setRunAt] = useState('');
+  const [capabilities, setCapabilities] = useState(null);
 
   const timeline = result?.timeline || [];
   const baseline = result?.baseline_timeline || [];
@@ -65,13 +66,21 @@ export default function TrafficSimulationPage() {
   const totalCycle = Number(form.north_south_green_seconds) + Number(form.east_west_green_seconds) + 2 * (Number(form.yellow_seconds) + Number(form.all_red_seconds));
 
   useEffect(() => {
+    let active = true;
+    api.get('/traffic/simulation/capabilities', { timeoutMs: 9000, fallbackGraceMs: 0 })
+      .then((value) => { if (active) setCapabilities(value); })
+      .catch(() => { if (active) setCapabilities({ native_simulation_available: false, forecast_available: true, recommended_mode: 'forecast' }); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
     if (!playing || timeline.length < 2) return undefined;
     const timer = window.setInterval(() => {
       setMinuteIndex((current) => {
         if (current >= timeline.length - 1) { setPlaying(false); return current; }
         return current + 1;
       });
-    }, 500);
+    }, 800);
     return () => window.clearInterval(timer);
   }, [playing, timeline.length]);
 
@@ -83,24 +92,34 @@ export default function TrafficSimulationPage() {
     try {
       let response;
       let nativeError = null;
-      try {
-        response = await api.post('/traffic/sumo/run', form, { timeoutMs: 600000, fallbackGraceMs: 0 });
-      } catch (err) {
-        nativeError = err;
-        // Fall back only when the native engine is absent or fails to start. Auth,
-        // validation and permission errors remain visible rather than being hidden.
-        if (![424, 503].includes(Number(err?.status))) throw err;
+      let activeCapabilities = capabilities;
+      if (!activeCapabilities) {
+        try { activeCapabilities = await api.get('/traffic/simulation/capabilities', { timeoutMs: 9000, fallbackGraceMs: 0 }); }
+        catch { activeCapabilities = { native_simulation_available: false, forecast_available: true }; }
+      }
+      // Do not call an unavailable optional engine. This avoids an expected 424
+      // network error on every run and keeps the fallback path clean in DevTools.
+      if (activeCapabilities?.native_simulation_available) {
+        try {
+          response = await api.post('/traffic/sumo/run', form, { timeoutMs: 600000, fallbackGraceMs: 0 });
+        } catch (err) {
+          nativeError = err;
+          if (![424, 503].includes(Number(err?.status))) throw err;
+        }
       }
       if (!response) {
+        if (activeCapabilities?.forecast_available === false) {
+          throw new Error('Traffic simulation is not ready on the server yet. Check the Render deployment and model files.');
+        }
         response = await api.post('/traffic/simulation/model-scenario', form, { timeoutMs: 45000, fallbackGraceMs: 0 });
-        response.engine_fallback_note = 'Native SUMO is not available on this API worker. Showing the trained XGBoost network forecast with a clearly labelled signal sensitivity overlay.';
-        response.native_engine_note = nativeError?.payload?.detail || nativeError?.message || 'SUMO is not installed.';
+        if (nativeError) response.engine_fallback_note = 'Detailed vehicle simulation could not start, so this run uses the available 60-minute network forecast.';
       }
       if (!['native_sumo_simulation', 'xgboost_model_scenario'].includes(response?.mode) || !Array.isArray(response.timeline)) {
         throw new Error('The API did not return a supported simulation or forecast result.');
       }
       setResult(response);
       setRunAt(new Date().toLocaleString());
+      setPlaying(true);
     } catch (err) {
       const detail = err?.payload?.detail || err?.message || 'The simulation could not complete.';
       setError(typeof detail === 'string' ? detail : 'The simulation could not complete. Check API worker logs and ML dependencies.');
@@ -110,12 +129,12 @@ export default function TrafficSimulationPage() {
   function reset() { setForm(DEFAULTS); setResult(null); setError(''); setMinuteIndex(0); setPlaying(false); }
 
   return <div className="sumo-page">
-    <PageIntro eyebrow="TRAFFIC OPERATIONS / DIGITAL TWIN" title="Traffic simulation" description="Run microscopic SUMO when installed, or use the trained XGBoost network forecast until the simulator is connected." action={<span className="sumo-engine-chip"><span/>{result?.mode === 'native_sumo_simulation' ? 'Native SUMO result' : result?.mode === 'xgboost_model_scenario' ? 'XGBoost forecast' : 'SUMO + XGBoost available'}</span>} />
+    <PageIntro eyebrow="TRAFFIC OPERATIONS / DIGITAL TWIN" title="Traffic simulation" description="Explore a 60-minute road network, tune signal timings and watch traffic conditions change through the playback." action={<span className="sumo-engine-chip"><span/>{result ? (result.mode === 'native_sumo_simulation' ? 'Detailed simulation' : 'Network forecast') : capabilities?.native_simulation_available ? 'Simulation ready' : capabilities?.forecast_available ? 'Forecast ready' : 'Checking availability'}</span>} />
 
     <section className="sumo-intro-strip">
       <div className="sumo-intro-icon"><Route size={20}/></div>
-      <div><b>Baseline vs. proposed signal plan</b><p>Native SUMO runs a microscopic baseline and intervention. If SUMO is missing, UrbanSaarthi returns the trained XGBoost queue forecast with a transparent timing sensitivity overlay.</p></div>
-      <span className="sumo-network-tag">BUNDLED GRID NETWORK</span>
+      <div><b>Baseline vs. proposed signal plan</b><p>Compare the current timing with your proposed cycle. Road conditions, vehicle flow indicators, queues and signal phases update as the 60-minute timeline plays.</p></div>
+      <span className="sumo-network-tag">REFERENCE ROAD NETWORK</span>
     </section>
 
     <div className="sumo-workspace">
@@ -129,13 +148,13 @@ export default function TrafficSimulationPage() {
           <label><span>All-red clearance</span><div><input type="number" min="1" max="5" value={form.all_red_seconds} onChange={(event) => update('all_red_seconds', Number(event.target.value))}/><small>sec</small></div></label>
         </div>
         <label className="sumo-demand-field"><span>Traffic demand <b>{Number(form.demand_multiplier).toFixed(1)}×</b></span><input type="range" min="0.5" max="2" step="0.1" value={form.demand_multiplier} onChange={(event) => update('demand_multiplier', Number(event.target.value))}/><div><small>0.5× lighter</small><small>2× heavier</small></div></label>
-        <div className="sumo-cycle-row"><div><small>Total cycle</small><b>{totalCycle}s</b></div><div><small>Simulation horizon</small><b>60 min</b></div><div><small>Vehicle / road data</small><b>30s / 5m</b></div></div>
+        <div className="sumo-cycle-row"><div><small>Total cycle</small><b>{totalCycle}s</b></div><div><small>Simulation horizon</small><b>60 min</b></div><div><small>Forecast interval</small><b>5 min</b></div></div>
         {error && <div className="sumo-error"><AlertTriangle size={16}/><span>{error}</span></div>}
         <button className="sumo-run-button" type="submit" disabled={busy || totalCycle < 40 || totalCycle > 240 || form.north_south_green_seconds < 8 || form.east_west_green_seconds < 8}>
           {busy ? <><span className="sumo-spinner"/> Running simulation…</> : <><Play size={16} fill="currentColor"/> Run simulation</>}
         </button>
         <button type="button" className="sumo-reset-button" onClick={reset} disabled={busy}><RotateCcw size={14}/> Reset experiment</button>
-        <p className="sumo-control-foot"><AlertTriangle size={13}/> Changing a signal value changes the SUMO candidate phase plan. This is not a command to physical traffic lights.</p>
+        <p className="sumo-control-foot"><AlertTriangle size={13}/> Forecast frames update every five minutes. Detailed vehicle positions, when enabled, are sampled every 30 seconds. Signal changes affect this experiment only and never control physical traffic lights.</p>
       </form>
 
       <div className="sumo-visual-column">
@@ -149,14 +168,14 @@ export default function TrafficSimulationPage() {
           </div>
         </> : <section className="sumo-empty sumo-panel">
           <div className="sumo-empty-visual"><div className="sumo-road-cross"><i/><i/><i/><i/><span><Signal size={26}/></span></div></div>
-          <span className="sumo-empty-eyebrow">NATIVE SUMO · XGBOOST FALLBACK</span><h2>Ready to run an experiment</h2><p>Set signal timings and demand, then run a native SUMO experiment. If SUMO is not installed, the trained XGBoost queue forecast will run instead. No pre-filled demo animation is shown.</p>
-          <div className="sumo-empty-pills"><span><CarFront size={14}/> Multi-class vehicle flow</span><span><Gauge size={14}/> Edge-level telemetry</span><span><Clock3 size={14}/> 60-minute run</span></div>
+          <span className="sumo-empty-eyebrow">ROAD NETWORK / 60-MINUTE PLAYBACK</span><h2>Ready to run an experiment</h2><p>Choose the signal timings and traffic demand, then start the road simulation. Vehicles, junction signals and network metrics will move with the timeline.</p>
+          <div className="sumo-empty-pills"><span><CarFront size={14}/> Vehicle flow</span><span><Gauge size={14}/> Road conditions</span><span><Clock3 size={14}/> 60-minute run</span></div>
         </section>}
       </div>
     </div>
 
     {result && <>
-      <div className="sumo-results-head"><div><span>EXPERIMENT RESULTS</span><h2>{result.experiment?.name || 'Signal timing experiment'}</h2><small>Completed {runAt || (result.generated_at ? new Date(result.generated_at).toLocaleString() : '—')} · {result.engine}</small></div><span className="sumo-complete-chip"><i/> {result.mode === 'native_sumo_simulation' ? 'EXECUTED IN SUMO' : 'XGBOOST FORECAST'}</span></div>
+      <div className="sumo-results-head"><div><span>EXPERIMENT RESULTS</span><h2>{result.experiment?.name || 'Signal timing experiment'}</h2><small>Completed {runAt || (result.generated_at ? new Date(result.generated_at).toLocaleString() : '—')} · {result.mode === 'native_sumo_simulation' ? 'Detailed road simulation' : 'Modelled network forecast'}</small></div><span className="sumo-complete-chip"><i/> {result.mode === 'native_sumo_simulation' ? 'DETAILED SIMULATION' : 'NETWORK FORECAST'}</span></div>
       <div className="sumo-metrics-grid">
         {result.mode === 'native_sumo_simulation' ? <>
           <Metric icon={CarFront} label="Vehicles completed" value={number(summary.vehicles_completed)} hint="Candidate run" delta={comparison.vehicles_completed?.change_percent} goodDirection={1}/>
@@ -164,19 +183,19 @@ export default function TrafficSimulationPage() {
           <Metric icon={Gauge} label="Final mean speed" value={number(summary.mean_speed_kmph_final, ' km/h')} hint="Candidate run"/>
           <Metric icon={Activity} label="Queue at 60 min" value={number(summary.queue_end)} hint="Halted vehicles" delta={comparison.queue_at_60m?.change_percent}/>
         </> : <>
-          <Metric icon={Activity} label="Forecast queue at 60 min" value={number(summary.queue_end)} hint="XGBoost + sensitivity overlay" delta={comparison.queue_at_60m?.change_percent}/>
-          <Metric icon={Route} label="Heavy roads" value={number(summary.heavy_roads_end)} hint="Forecast edge classification"/>
-          <Metric icon={Gauge} label="30 min model accuracy" value={number(result.models?.horizon_30?.level_accuracy_percent, '%')} hint="Held-out model metric"/>
-          <Metric icon={Clock3} label="60 min model accuracy" value={number(result.models?.horizon_60?.level_accuracy_percent, '%')} hint="Held-out model metric"/>
+          <Metric icon={Activity} label="Forecast queue at 60 min" value={number(summary.queue_end)} hint="Signal timing what-if" delta={comparison.queue_at_60m?.change_percent}/>
+          <Metric icon={Route} label="Heavy roads" value={number(summary.heavy_roads_end)} hint="Forecast road classification"/>
+          <Metric icon={Gauge} label="30 min forecast accuracy" value={number(result.models?.horizon_30?.level_accuracy_percent, '%')} hint="Held-out model metric"/>
+          <Metric icon={Clock3} label="60 min forecast accuracy" value={number(result.models?.horizon_60?.level_accuracy_percent, '%')} hint="Held-out model metric"/>
         </>}
       </div>
       <div className="sumo-result-grid">
         <section className="sumo-panel sumo-chart-panel"><div className="sumo-panel-head"><div><span>NETWORK PERFORMANCE</span><h2>Queue comparison</h2></div><span className="sumo-chart-icon"><Activity size={17}/></span></div><QueueChart baseline={baseline} proposed={timeline}/><div className="sumo-chart-foot"><div><small>Baseline queue</small><b>{number(comparison.queue_at_60m?.baseline)}</b></div><div><small>Signal plan queue</small><b>{number(comparison.queue_at_60m?.proposed)}</b></div><div><small>Change</small><b className={Number(comparison.queue_at_60m?.change_percent) < 0 ? 'positive' : 'negative'}>{pct(comparison.queue_at_60m?.change_percent)}</b></div></div></section>
-        <section className="sumo-panel sumo-road-panel"><div className="sumo-panel-head"><div><span>EDGE DATA · {number(frame?.road_telemetry_count)}</span><h2>Road conditions</h2></div><span className="sumo-chart-icon"><Route size={17}/></span></div>
-          {roadRows.length ? <div className="sumo-road-list">{roadRows.map((road) => <div className="sumo-road-row" key={road.road}><div><b>{road.road}</b><small>{result.mode === 'native_sumo_simulation' ? `${number(road.density, ' veh/km/lane')} · ${number(road.occupancy, '%')} occupancy` : `Forecast queue · ${number(road.queue)} halted · ${number(road.vehicles)} observed at baseline`}</small></div><div><strong>{number(result.mode === 'native_sumo_simulation' ? road.entered_vehicles : road.queue)}</strong><small>{result.mode === 'native_sumo_simulation' ? 'entered / 5 min' : 'forecast queue'}</small></div><span className={`sumo-road-level ${String(road.level || '').toLowerCase()}`}>{road.level}</span></div>)}</div> : <p className="sumo-no-roads">SUMO did not return edge interval records for this frame.</p>}
+        <section className="sumo-panel sumo-road-panel"><div className="sumo-panel-head"><div><span>ROAD DATA · {number(frame?.road_telemetry_count)}</span><h2>Road conditions</h2></div><span className="sumo-chart-icon"><Route size={17}/></span></div>
+          {roadRows.length ? <div className="sumo-road-list">{roadRows.map((road) => <div className="sumo-road-row" key={road.road}><div><b>{road.road}</b><small>{result.mode === 'native_sumo_simulation' ? `${number(road.density, ' veh/km/lane')} · ${number(road.occupancy, '%')} occupancy` : `Forecast queue · ${number(road.queue)} halted · ${number(road.vehicles)} observed at baseline`}</small></div><div><strong>{number(result.mode === 'native_sumo_simulation' ? road.entered_vehicles : road.queue)}</strong><small>{result.mode === 'native_sumo_simulation' ? 'entered / 5 min' : 'forecast queue'}</small></div><span className={`sumo-road-level ${String(road.level || '').toLowerCase()}`}>{road.level}</span></div>)}</div> : <p className="sumo-no-roads">No road-segment values were returned for this point in the timeline.</p>}
         </section>
       </div>
-      <div className="sumo-provenance"><Zap size={14}/><span>{result.mode === 'native_sumo_simulation' ? `${result.training_data?.network_file || 'grid.net.xml'} · ${number(result.training_data?.road_edges)} reference edges · fixed seed 42 · ${number(result.training_data?.routes)} generated routes · ${result.models?.simulated_seconds || 3600}s per run. Vehicle coordinates/headings: SUMO FCD every 30s; edge metrics every 5 min.` : `XGBoost forecast trained on ${number(result.training_data?.records)} records across ${number(result.training_data?.simulation_runs)} SUMO-generated runs and ${number(result.training_data?.road_edges)} reference edges. Per-edge queues are forecast; no per-vehicle trajectories are generated.`}</span></div>
+      <div className="sumo-provenance"><Zap size={14}/><span>{result.mode === 'native_sumo_simulation' ? `${number(result.training_data?.road_edges)} reference road segments · ${number(result.training_data?.routes)} generated routes · 60-minute run. Vehicle positions and road measurements come from the simulation output.` : `Forecast based on ${number(result.training_data?.records)} historical reference records across ${number(result.training_data?.simulation_runs)} model runs and ${number(result.training_data?.road_edges)} road segments. Road colours and queue values are estimates; moving markers are illustrative flow indicators, not tracked vehicles.`}</span></div>
       {result.engine_fallback_note && <div className="sumo-provenance"><AlertTriangle size={14}/><span>{result.engine_fallback_note} {result.native_engine_note}</span></div>}
       <div className="sumo-notes">{(result.notes || []).slice(0, 4).map((note, index) => <p key={index}>{note}</p>)}</div>
     </>}

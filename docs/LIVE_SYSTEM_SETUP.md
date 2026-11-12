@@ -1,6 +1,6 @@
 # Live system setup
 
-This is a short pointer for the current public hackathon release. Human login has been removed and native SUMO is packaged inside the Render backend Docker image.
+This is a short pointer for the current public hackathon release. Human login has been removed and SUMO is installed during the existing Render native Python service build; Docker is not required.
 
 Follow [`PUBLIC_HACKATHON_NO_AUTH_AND_RENDER.md`](PUBLIC_HACKATHON_NO_AUTH_AND_RENDER.md) for the authoritative no-login behavior, required environment variables, Render service settings, Vercel API URL and post-deploy checks.
 

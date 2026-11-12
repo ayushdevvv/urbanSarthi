@@ -47,6 +47,17 @@ export default function AuthorityLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const closeOnEscape = (event) => { if (event.key === 'Escape') setMobileOpen(false); };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [mobileOpen]);
   const [crumb, title] = meta[location.pathname] || meta['/authority/control'];
 
   return <div className={`app authority-app ${dark ? 'dark' : ''}`}>

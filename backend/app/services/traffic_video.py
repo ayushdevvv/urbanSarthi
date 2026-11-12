@@ -10,6 +10,7 @@ import os
 import tempfile
 from contextlib import suppress
 from collections import defaultdict
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,7 @@ MAX_SAMPLED_FRAMES = 180
 MAX_SIDE = 1280
 
 
+@lru_cache(maxsize=1)
 def video_status() -> dict[str, Any]:
     """Report actual import/runtime health instead of only checking package metadata."""
     opencv_available = False
@@ -60,15 +62,15 @@ def video_status() -> dict[str, Any]:
     forecast_artifacts_present = all((simulation_base / "models" / name).is_file() for name in ("queue_model.json", "queue_model_60min.json", "metrics.json", "metrics_60min.json", "edge_mean.json")) and (simulation_base / "data" / "raw.csv").is_file()
     agent_packages_available = all(find_spec(name) is not None for name in ("langgraph", "langchain_core", "langchain_groq"))
     if not model_status.get("weights_present"):
-        readiness_note = "YOLO traffic weights are missing. Restore backend/models/best.pt or set TRAFFIC_MODEL_PATH."
+        readiness_note = "Vehicle detection is not configured on this server yet. Restore the required model files and restart the service."
     elif not model_status.get("inference_dependency_available"):
-        readiness_note = "Ultralytics is not installed. Install backend/requirements.txt and restart the API."
+        readiness_note = "Vehicle detection services are not installed on this server yet. Rebuild the service with its required dependencies."
     elif not opencv_available:
-        readiness_note = opencv_note or "OpenCV is not installed or could not be imported."
+        readiness_note = "Video processing is not available on this server yet. Rebuild the service with video support enabled."
     elif not (opencv_ffmpeg_enabled or ffmpeg_fallback_available):
-        readiness_note = "OpenCV is installed but no supported video decoder was detected. Install imageio-ffmpeg."
+        readiness_note = "No compatible video decoder is available on this server yet."
     else:
-        readiness_note = "YOLO, OpenCV and a video decoder are ready."
+        readiness_note = "Vehicle detection and video processing are ready."
     return {
         **model_status,
         "opencv_available": opencv_available,
