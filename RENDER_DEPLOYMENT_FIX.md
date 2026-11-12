@@ -1,3 +1,14 @@
-# Render deployment
+# Existing Render host fix
 
-Use [`docs/RENDER_SUMO_HACKATHON_DEPLOY.md`](docs/RENDER_SUMO_HACKATHON_DEPLOY.md) as the canonical guide. The current source has no human login, installs SUMO inside the Render Docker service, and keeps IoT / edge ingestion protected with `INGESTION_API_KEY`. Configure Vercel with `VITE_API_URL`.
+The API host is `https://urbansarthi.onrender.com`. Keep the existing Render Web Service and PostgreSQL database; do not create another backend.
+
+- Render service: `urbansarthi`
+- Runtime: Docker
+- Root directory: blank
+- Dockerfile: `backend/Dockerfile.sumo`
+- Docker context: `backend`
+- Health check: `/healthz`
+- Render `CORS_ORIGINS`: `https://urbansarthi.vercel.app`
+- Vercel `VITE_API_URL`: `https://urbansarthi.onrender.com/api/v1`
+
+See [`docs/RENDER_SUMO_HACKATHON_DEPLOY.md`](docs/RENDER_SUMO_HACKATHON_DEPLOY.md) for the full safe-sync and verification steps.

@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pydantic import model_validator
+from urllib.parse import urlparse
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -52,7 +53,12 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> list[str]:
-        return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
+        origins: list[str] = []
+        for item in self.cors_origins.split(","):
+            origin = item.strip().rstrip("/")
+            if origin and origin not in origins:
+                origins.append(origin)
+        return origins
 
     @model_validator(mode="after")
     def validate_production_security(self):
@@ -61,6 +67,10 @@ class Settings(BaseSettings):
         origins = self.cors_origin_list
         if not origins or "*" in origins:
             raise ValueError("Production CORS_ORIGINS must list explicit frontend origins; wildcard is not allowed")
+        for origin in origins:
+            parsed = urlparse(origin)
+            if parsed.scheme != "https" or not parsed.netloc or parsed.path or parsed.query or parsed.fragment or parsed.username or parsed.password:
+                raise ValueError("Every production CORS_ORIGINS entry must be an exact HTTPS origin without a path")
         if self.database_url.lower().startswith("sqlite"):
             raise ValueError("Production deployments must use PostgreSQL; SQLite is for local development and tests")
         # Human login has been removed from this public hackathon release.

@@ -6,7 +6,7 @@ import CityMap, { getLocationCoordinates } from '../../components/maps/CityMap.j
 import { EmptyState, ErrorNotice } from '../../components/shared/Toast.jsx';
 import { api } from '../../services/api/client.js';
 import { useApp } from '../../context/AppContext.jsx';
-import { estimateRouteOnly, findPublicRoadRoutes, searchPublicPlaces } from '../../services/publicRouting.js';
+import { estimateRouteOnly, searchPublicPlaces } from '../../services/publicRouting.js';
 
 const formatDuration = (seconds) => seconds == null ? '—' : seconds >= 3600 ? `${Math.floor(seconds / 3600)} hr ${Math.round((seconds % 3600) / 60)} min` : `${Math.max(1, Math.round(seconds / 60))} min`;
 const formatDistance = (meters) => meters == null ? '—' : meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
@@ -14,12 +14,6 @@ const formatCO2 = (grams) => grams == null || !Number.isFinite(Number(grams)) ? 
 
 const routePalette = ['#26764f', '#8b9f4e', '#b17b3d', '#497d78', '#806c98'];
 const routeIdentity = (route) => route?.id ?? `${route?.mode}-${route?.label}`;
-let geocodeQueue = Promise.resolve();
-function queueGeocode(task) {
-  const current = geocodeQueue.then(task, task);
-  geocodeQueue = current.then(() => new Promise((resolve) => window.setTimeout(resolve, 1100))).catch(() => {});
-  return current;
-}
 function buildGoogleMapsUrl(route, origin, destination, mode) {
   if (!origin?.resolved || !destination?.resolved) return '';
   const coordinates = route?.geometry?.coordinates || [];
@@ -88,12 +82,7 @@ function initialPoint(label = '') { const clean = String(label || '').trim(); co
 async function resolveMappedPlace(query) {
   const clean = String(query || '').trim();
   if (!clean) throw new Error('Enter a starting point and destination.');
-  let results = [];
-  try {
-    const response = await queueGeocode(() => api.get(`/routing/geocode?q=${encodeURIComponent(clean)}&limit=5`, { timeoutMs: 9000 }));
-    results = response?.results || [];
-  } catch { /* direct public geocoder below */ }
-  if (!results.length) results = await searchPublicPlaces(clean, 5);
+  const results = await searchPublicPlaces(clean, 5);
   if (!results.length) throw new Error(`No mapped location matched “${clean}”. Try a nearby landmark or full address.`);
   const selected = results.find((item) => String(item.label || '').toLowerCase() === clean.toLowerCase()) || results[0];
   const latitude = Number(selected.latitude), longitude = Number(selected.longitude);
@@ -179,65 +168,36 @@ export default function RoutePlannerPage({ embedded = false }) {
         origin_label: resolvedOrigin.label, destination_label: resolvedDestination.label, preference, modes: [mode],
       };
 
-      // Query the configured backend and browser-accessible OSM routing in
-      // parallel. A slow/cold backend must not prevent the road router from
-      // returning a real route geometry as soon as it is available.
-      const [backendResult, publicResult] = await Promise.allSettled([
-        api.post('/routing/plan', requestBody, { timeoutMs: 12000 }),
-        findPublicRoadRoutes({ origin: resolvedOrigin, destination: resolvedDestination, mode }),
-      ]);
+      // Route planning and its external OSM lookups run on the configured API
+      // host. The browser never calls third-party road routers directly, so
+      // their CORS/preflight policies cannot break the route planner.
+      let payload = null;
+      let backendError = null;
+      try {
+        payload = await api.post('/routing/plan', requestBody, { timeoutMs: 40000 });
+      } catch (requestError) {
+        backendError = requestError;
+      }
       if (runId !== planRunRef.current) return;
       if (pointLabelsRef.current.origin !== resolvedOrigin.label || pointLabelsRef.current.destination !== resolvedDestination.label) return;
-      const payload = backendResult.status === 'fulfilled' ? backendResult.value : null;
-      const backendError = backendResult.status === 'rejected' ? backendResult.reason : null;
-      const publicRoutes = publicResult.status === 'fulfilled' ? publicResult.value : [];
-      const publicRoutingError = publicResult.status === 'rejected' ? publicResult.reason : null;
 
-      const backendRoadRoutes = (payload?.routes || []).filter((route) =>
+      const returnedRoutes = Array.isArray(payload?.routes) ? payload.routes : [];
+      const backendRoadRoutes = returnedRoutes.filter((route) =>
         route?.data_quality === 'road-network-route' && (route?.geometry?.coordinates || []).length >= 2
       );
-      const mergedRoutes = [];
-      const addDistinctRoute = (candidate) => {
-        const a = candidate?.geometry?.coordinates || [];
-        if (candidate?.data_quality !== 'road-network-route' || a.length < 2) return;
-        const isDuplicate = mergedRoutes.some((existing) => {
-          const b = existing.geometry?.coordinates || [];
-          if (b.length < 2) return false;
-          const sample = Array.from({ length: 24 }, (_, index) => a[Math.round(index * (a.length - 1) / 23)]);
-          const near = sample.filter(([lon, lat]) => b.some(([otherLon, otherLat]) => {
-            const dLat = (Number(lat) - Number(otherLat)) * Math.PI / 180;
-            const dLon = (Number(lon) - Number(otherLon)) * Math.PI / 180;
-            const h = Math.sin(dLat / 2) ** 2 + Math.cos(Number(lat) * Math.PI / 180) * Math.cos(Number(otherLat) * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-            return 6371000 * 2 * Math.asin(Math.sqrt(Math.min(1, h))) <= 30;
-          })).length;
-          return near / sample.length >= 0.965;
-        });
-        if (!isDuplicate) mergedRoutes.push(candidate);
-      };
-      // Prefer the backend's AQI-enriched road paths, then fill any gaps with
-      // browser-side OSM routes. Each card and the map uses this same array.
-      [...backendRoadRoutes, ...publicRoutes].forEach(addDistinctRoute);
-      if (runId !== planRunRef.current) return;
-
-      if (!mergedRoutes.length) {
-        const backendEstimate = (payload?.routes || []).find((route) => route?.data_quality === 'estimated' && Number(route?.distance_meters) > 0);
-        const estimateReason = publicRoutingError?.message || backendError?.message || 'Mapped road providers did not return a route path.';
-        const localEstimate = backendEstimate || estimateRouteOnly(resolvedOrigin, resolvedDestination, mode, estimateReason);
-        if (localEstimate) mergedRoutes.push({
-          ...localEstimate,
-          id: localEstimate.id || `estimate-${mode}-${resolvedOrigin.latitude}-${resolvedDestination.latitude}`,
-          warnings: [...(localEstimate.warnings || []), 'This is a distance/time estimate only. No road path is drawn. Use Google Maps for turn-by-turn directions.'],
-        });
-      }
-      if (!mergedRoutes.length) {
-        const reason = publicRoutingError?.message || backendError?.message || payload?.warnings?.[0];
-        throw new Error(reason ? `A route could not be loaded. ${reason}` : 'A route could not be loaded. Check the locations and try again.');
+      const backendEstimate = returnedRoutes.find((route) => route?.data_quality === 'estimated' && Number(route?.distance_meters) > 0);
+      const selectedRoutes = backendRoadRoutes.length ? backendRoadRoutes : backendEstimate ? [backendEstimate] : [];
+      const fallbackEstimate = !selectedRoutes.length && backendError
+        ? estimateRouteOnly(resolvedOrigin, resolvedDestination, mode, backendError.message || 'The UrbanSaarthi API is temporarily unavailable.')
+        : null;
+      if (fallbackEstimate) selectedRoutes.push(fallbackEstimate);
+      if (!selectedRoutes.length) {
+        const reason = backendError?.message || payload?.warnings?.[0];
+        throw new Error(reason ? `A route could not be loaded. ${reason}` : 'No mapped road route or estimate was returned. Check the locations and try again.');
       }
 
-      const estimateOnly = mergedRoutes.every((route) => route.data_quality === 'estimated');
-      // Assign stable IDs before sorting, so changing Fastest / Balanced /
-      // Cleanest never disconnects a selected card from its map polyline.
-      const identifiedRoutes = mergedRoutes.map((route, index) => ({
+      const estimateOnly = selectedRoutes.every((route) => route.data_quality === 'estimated');
+      const identifiedRoutes = selectedRoutes.map((route, index) => ({
         ...route,
         id: route.id || `route-${mode}-${index}-${Math.round(Number(route.distance_meters) || 0)}-${Math.round(Number(route.duration_seconds) || 0)}`,
       }));
@@ -245,11 +205,12 @@ export default function RoutePlannerPage({ embedded = false }) {
       const orderedPayload = {
         ...(payload || {}),
         routes: orderedRoutes,
-        warnings: [...(payload?.warnings || []), ...(estimateOnly
-          ? ['No mapped road path is available right now. The shown distance, time and CO₂ are estimates only.']
-          : orderedRoutes.length < 3 ? [`${orderedRoutes.length} distinct mapped route(s) were available for this journey.`] : []),
-        ...(!payload && !estimateOnly ? ['Road geometry was returned directly by OpenStreetMap routing; live AQI and traffic enrichment could not be retrieved for this route.'] : [])],
-        route_source: estimateOnly ? (payload ? 'UrbanSaarthi estimate' : 'Local distance/time estimate') : backendRoadRoutes.length ? 'UrbanSaarthi + OpenStreetMap routing' : 'OpenStreetMap routing',
+        warnings: [
+          ...(payload?.warnings || []),
+          ...(estimateOnly ? ['No mapped road path is available right now. The shown distance, time and CO₂ are estimates only.'] : orderedRoutes.length < 3 ? [`${orderedRoutes.length} distinct mapped route(s) were available for this journey.`] : []),
+          ...(backendError ? ['The API could not be reached. This local distance/time estimate has no road geometry or live enrichment.'] : []),
+        ],
+        route_source: estimateOnly ? (payload ? 'UrbanSaarthi estimate' : 'Local distance/time estimate') : 'UrbanSaarthi API · OpenStreetMap routing',
       };
       setResult(orderedPayload);
       setSelectedRouteId(routeIdentity(orderedRoutes[0]));
@@ -296,7 +257,7 @@ export default function RoutePlannerPage({ embedded = false }) {
         <div className="route-carbon-insight-copy"><span>CARBON TRADE-OFF</span><h4>{carbonSpread == null ? 'Compare the estimated footprint' : `${formatCO2(carbonSpread)} spread across these options`}</h4><p>{selectedEmissionDownside == null ? 'Choose a route to compare its estimated tailpipe impact with the lowest-footprint option.' : selectedEmissionDownside <= 0.5 ? 'Your selected route has the lowest estimated tailpipe footprint in this comparison.' : `Your selected route carries approximately ${formatCO2(selectedEmissionDownside)} more tailpipe CO₂ than the lowest-footprint option.`}</p></div>
         <div className="route-carbon-insight-metric"><strong>{selectedEmissionDownside == null ? '—' : selectedEmissionDownside <= 0.5 ? 'Lowest' : `+${formatCO2(selectedEmissionDownside)}`}</strong><small>Selected route downside</small></div>
       </div>}
-      {busy ? <div className="panel route-options-loading"><div className="loading-lines">Checking live road-routing providers and sorting alternatives…</div></div> : displayRoutes.length ? <div className="route-carbon-grid">{displayRoutes.map((route, index) => {
+      {busy ? <div className="panel route-options-loading"><div className="loading-lines">Checking road-routing providers and sorting alternatives…</div></div> : displayRoutes.length ? <div className="route-carbon-grid">{displayRoutes.map((route, index) => {
         const key = routeIdentity(route);
         const active = key === routeIdentity(selectedRoute);
         const mapped = (route.geometry?.coordinates || []).length > 1 && route.data_quality === 'road-network-route';

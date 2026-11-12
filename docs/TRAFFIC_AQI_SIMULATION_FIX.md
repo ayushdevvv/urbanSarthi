@@ -8,7 +8,7 @@ This document records the performance and integration fixes included in the curr
 - Nearby OpenStreetMap road geometry, TomTom flow/incident reads, and Tavily/RSS traffic news use short bounded requests and caches so one slow provider does not hold up the entire traffic page.
 - AQI forecast provider requests use a short cache and parallel current/forecast calls where supported; usable provider results are not delayed by an unnecessary second lookup.
 - Traffic Lab has its missing icon imports fixed and a route-level error boundary, so a rendering error produces a recoverable error view rather than a blank page.
-- The frontend production API default matches the `urbansaarthi-api` Render service. Set `VITE_API_URL` in Vercel when your actual Render host differs.
+- The frontend production API default matches the `urbansarthi` Render service. Set `VITE_API_URL` in Vercel when your actual Render host differs.
 
 ## Traffic simulation behavior
 

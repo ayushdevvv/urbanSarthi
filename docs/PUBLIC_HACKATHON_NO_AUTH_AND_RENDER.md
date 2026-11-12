@@ -1,89 +1,71 @@
-# Public hackathon mode and Render settings
+# Public hackathon mode and existing Render deployment
 
 ## No-login behavior
 
-- Citizen portal opens directly. There is no citizen account or sign-in screen.
-- Authority portal opens directly. There is no operator sign-in gate.
-- `/api/v1/auth/*` is not mounted; the old login/register endpoints return 404.
-- Browser requests carry an automatic `X-Visitor-ID`, isolating My Trips per browser. This is a convenience identity, not authentication or secure cross-device storage.
-- Authority write APIs use a shared demo operator actor. This deployment is intentionally public and suitable only for a hackathon demo.
+- Citizen and authority pages open without a login screen.
+- `/api/v1/auth/*` is not mounted in this release.
+- Browser requests carry an automatic `X-Visitor-ID`; it provides per-browser convenience separation for My Trips, not authentication or account-grade privacy.
+- Authority demo write APIs use a shared demo operator. This configuration is for a public hackathon demonstration only.
 - Camera/IoT edge ingestion remains protected by the server-side `INGESTION_API_KEY`.
 
-## Recommended Render service settings
+## Existing Render backend
 
-Use the existing `urbansaarthi-api` service and keep the existing PostgreSQL database. If the service is Blueprint-managed, sync the repository's root `render.yaml`.
+The backend is the existing service at `https://urbansarthi.onrender.com`. Do not create a new service. The root `render.yaml` uses `name: urbansarthi` to match the existing Render resource and points that service to the SUMO-enabled Dockerfile.
 
 | Render field | Value |
 |---|---|
-| Service type | Web Service |
+| Existing service | `urbansarthi` |
 | Runtime | Docker |
-| Service name | `urbansaarthi-api` |
-| Region | Same region as the Render PostgreSQL database |
-| Compute plan | `1c-2g` starting point for the SUMO hackathon demo |
 | Root directory | Leave blank (repository root) |
 | Dockerfile path | `backend/Dockerfile.sumo` |
 | Docker context | `backend` |
-| Health check path | `/healthz` |
-| Start command | Leave blank; use Dockerfile `CMD` |
+| Health check | `/healthz` |
+| Start command | Blank; Dockerfile `CMD` runs migrations and Uvicorn |
+| Database | Keep existing Render PostgreSQL attached |
 
-The Blueprint uses `runtime: docker`, `dockerfilePath: ./backend/Dockerfile.sumo`, and `dockerContext: ./backend`. Both paths are relative to the repository root. Render's Blueprint reference documents these Docker fields and the health-check path. See [Render Blueprint YAML reference](https://render.com/docs/blueprint-spec), [Docker on Render](https://render.com/docs/docker), and [health checks](https://render.com/docs/health-checks).
+The Blueprint intentionally omits `plan` so it does not change the existing service's billing tier. Check available memory/CPU if SUMO exits under load.
 
-If configuring manually in the Render Dashboard, choose Docker as the runtime, set the Dockerfile and context paths above, and save `/healthz` as the health check path. Keep the service name unchanged so the current frontend API hostname remains unchanged.
-
-## Render environment variables
-
-Required for the production backend:
+## Render environment
 
 ```env
 APP_ENV=production
-DATABASE_URL=<Render PostgreSQL internal database URL>
-CORS_ORIGINS=https://<your-exact-vercel-domain>
-INGESTION_API_KEY=<random secret with at least 32 characters>
+DATABASE_URL=<existing Render PostgreSQL internal URL>
+CORS_ORIGINS=https://urbansarthi.vercel.app
+INGESTION_API_KEY=<existing random secret with at least 32 characters>
 SUMO_BINARY=/usr/bin/sumo
 SUMO_HOME=/usr/share/sumo
 ```
 
-The root `render.yaml` declares `INGESTION_API_KEY` with `generateValue: true`. If preserving an existing edge-worker connection, retain the current key when syncing the Blueprint and update the worker's key only when intentionally rotating it.
-
-Optional provider credentials (leave unset until available):
-
-```env
-TOMTOM_API_KEY=
-TAVILY_API_KEY=
-GROQ_API_KEY=
-OPENAQ_API_KEY=
-WEATHER_API_KEY=
-GEMINI_API_KEY=
-OPENAI_API_KEY=
-OSRM_BASE_URL=
-```
-
-Do not set `DATABASE_URL`, provider keys, or `INGESTION_API_KEY` in Vercel. Do not add real secrets to `.env.example` or Git.
+Production CORS accepts exact HTTPS origins only. Add a second origin only when you actually deploy another frontend domain. Keep the existing database and ingestion key values; optional provider secrets remain server-side on Render.
 
 ## Vercel environment
 
-Set this in Vercel → Project → Settings → Environment Variables, for Production (and Preview if required):
-
 ```env
-VITE_API_URL=https://urbansaarthi-api.onrender.com/api/v1
+VITE_API_URL=https://urbansarthi.onrender.com/api/v1
 ```
 
-Use the actual Render hostname if it differs. `VITE_API_URL` must include `/api/v1`. Redeploy the frontend after changing it. Provider credentials and database credentials must never be exposed as `VITE_*` variables.
+Set it in the existing Vercel project and redeploy. Do not place backend secrets in Vercel.
 
-## No auth variables are needed
+## Browser connectivity fixes included
 
-This release intentionally does not use `AUTH_ENABLED`, `JWT_SECRET`, bootstrap-admin variables, or `VITE_REQUIRE_AUTH`. If old values remain in the Render/Vercel dashboards they are ignored by this code; they can be removed to avoid confusion. Do not delete unrelated credentials such as the database URL or ingestion key.
+- The production API default now targets `urbansarthi.onrender.com`.
+- FastAPI CORS wraps the full ASGI app, including framework-generated error responses and preflight requests.
+- The allowed production origin is exact; visitor and ingestion headers are explicitly allowed.
+- Geocoding uses Nominatim with a Photon backend fallback. The browser does not call either provider directly.
+- Route alternatives are requested from `/routing/plan` on the backend. Browser-side OSRM/Valhalla calls and their custom preflight headers are removed.
+- Google Fonts network dependencies are removed.
+- Map tiles use the canonical OSM hostname first, then CARTO as a fallback.
 
-## Verify after deploying
+## Verify after deployment
 
-1. `GET https://<render-host>/healthz` returns `{"status":"ok"}`.
-2. `GET https://<render-host>/readyz` reports `database: reachable`.
-3. Open `/authority/control`; it should load without a sign-in screen.
-4. Open `/citizen`; it should load without an account prompt.
-5. Browser DevTools Network → preflight should allow `X-Visitor-ID`.
-6. An edge ingestion heartbeat with a correct `X-Ingestion-Key` succeeds; a missing/wrong key returns 401.
-7. Run Traffic Simulation and confirm the response reports native SUMO execution rather than the XGBoost fallback.
+1. `GET https://urbansarthi.onrender.com/healthz` returns HTTP 200.
+2. `GET https://urbansarthi.onrender.com/readyz` reports `database: reachable`.
+3. The OPTIONS request for `/api/v1/trips` with `Origin: https://urbansarthi.vercel.app` and `Access-Control-Request-Headers: x-visitor-id` returns the matching `Access-Control-Allow-Origin` and allowed header.
+4. Open `/authority/control` and `/citizen` without a login prompt.
+5. In DevTools, API calls target `https://urbansarthi.onrender.com/api/v1`. No browser requests should target Nominatim, Photon, OSRM or Valhalla.
+6. A valid edge ingestion key succeeds; a missing/wrong key returns 401.
+7. Traffic Simulation reports native SUMO execution. If it returns 424, inspect the Docker build and installed SUMO paths.
 
 ## Public demo security boundary
 
-This mode deliberately gives every visitor access to the authority demo workspace and its demo write actions. `X-Visitor-ID` is spoofable and is not a security boundary. Do not connect this deployment to physical signal controllers, confidential municipal systems, private CCTV networks, or production device fleets. Before operational use, restore real authentication, authorization, rate limits, audit logging, and separate operator roles.
+This mode gives visitors access to authority demo operations. `X-Visitor-ID` is spoofable and is not a security boundary. Do not use it for real municipal control or private data. Restore authentication, authorization, role isolation and audit controls before operational use.

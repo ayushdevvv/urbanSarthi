@@ -1,6 +1,6 @@
 import { readApiSnapshot, storeApiSnapshot, publishDataStatus, createDataStatusContext } from '../apiSnapshot.js';
 
-const DEFAULT_API_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000/api/v1' : 'https://urbansaarthi-api.onrender.com/api/v1';
+const DEFAULT_API_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000/api/v1' : 'https://urbansarthi.onrender.com/api/v1';
 const FALLBACK_GRACE_MS = 5_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 70_000;
 const ATTEMPT_TIMEOUT_MS = 18_000;

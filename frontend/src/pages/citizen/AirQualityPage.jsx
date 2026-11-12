@@ -86,7 +86,7 @@ export default function AirQualityPage({ authorityMode = false, forecastFocus = 
       try {
         const response = await api.get(`/routing/geocode?q=${encodeURIComponent(text)}&limit=5`, { timeoutMs: 7000, fallbackGraceMs: 2500 });
         places = response?.results || [];
-      } catch { /* direct public geocoder below */ }
+      } catch { /* retry through the configured API client */ }
       if (!places.length) {
         try { places = await searchPublicPlaces(text, 5); } catch { places = []; }
       }

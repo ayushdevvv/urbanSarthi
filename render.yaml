@@ -1,10 +1,10 @@
-# UrbanSaarthi hackathon deployment: existing API service, now Docker-based
-# so SUMO is installed inside the Render container.
+# UrbanSaarthi production API. The name matches the existing
+# https://urbansarthi.onrender.com service so Blueprint sync updates that resource.
+# Do not create a second API service or use render-sumo.yaml.
 services:
   - type: web
-    name: urbansaarthi-api
+    name: urbansarthi
     runtime: docker
-    plan: 1c-2g
     dockerfilePath: ./backend/Dockerfile.sumo
     dockerContext: ./backend
     healthCheckPath: /healthz
@@ -14,9 +14,9 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: CORS_ORIGINS
-        sync: false
+        value: https://urbansarthi.vercel.app
       - key: INGESTION_API_KEY
-        generateValue: true
+        sync: false
       - key: TOMTOM_API_KEY
         sync: false
       - key: TAVILY_API_KEY

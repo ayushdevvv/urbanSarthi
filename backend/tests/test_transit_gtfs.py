@@ -154,3 +154,18 @@ def test_production_configuration_fails_closed():
         ingestion_api_key="test-ingestion-key-that-is-at-least-32-chars",
     )
     assert settings.app_env == "production"
+
+    with pytest.raises(ValidationError):
+        Settings(
+            app_env="production",
+            database_url="postgresql+psycopg://user:pass@localhost:5432/urbansaarthi",
+            cors_origins="http://localhost:5173",
+            ingestion_api_key="test-ingestion-key-that-is-at-least-32-chars",
+        )
+    with pytest.raises(ValidationError):
+        Settings(
+            app_env="production",
+            database_url="postgresql+psycopg://user:pass@localhost:5432/urbansaarthi",
+            cors_origins="https://frontend.example.org/path",
+            ingestion_api_key="test-ingestion-key-that-is-at-least-32-chars",
+        )

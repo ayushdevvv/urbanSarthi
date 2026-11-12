@@ -71,7 +71,7 @@ export default function TrafficConditionsPage() {
       try {
         const response = await api.get(`/routing/geocode?q=${encodeURIComponent(clean)}&limit=5`, { timeoutMs: 4500, fallbackGraceMs: 2500 });
         results = response?.results || [];
-      } catch { /* use the public geocoder when the backend is cold or unreachable */ }
+      } catch { /* the configured API client reports a backend outage */ }
       if (!results.length) results = await searchPublicPlaces(clean, 5).catch(() => []);
       const selected = results.find((item) => String(item.label || '').toLowerCase() === clean.toLowerCase()) || results[0];
       if (!selected || !Number.isFinite(Number(selected.latitude)) || !Number.isFinite(Number(selected.longitude))) {

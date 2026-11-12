@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI):
     engine.dispose()
 
 
-app = FastAPI(
+api = FastAPI(
     title=settings.app_name,
     version="0.1.0",
     description="UrbanSaarthi smart mobility, air-quality, transit and city operations API.",
@@ -27,16 +27,8 @@ app = FastAPI(
     redoc_url="/redoc" if settings.app_env != "production" else None,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Ingestion-Key", "X-Visitor-ID"],
-)
 
-
-@app.middleware("http")
+@api.middleware("http")
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -46,17 +38,17 @@ async def security_headers(request: Request, call_next):
     return response
 
 
-@app.get("/", tags=["Health"])
+@api.get("/", tags=["Health"])
 def root():
-    return {"service": settings.app_name, "status": "running", "version": app.version, "api_prefix": settings.api_v1_prefix}
+    return {"service": settings.app_name, "status": "running", "version": api.version, "api_prefix": settings.api_v1_prefix}
 
 
-@app.get("/healthz", tags=["Health"])
+@api.get("/healthz", tags=["Health"])
 def healthz():
     return {"status": "ok"}
 
 
-@app.get("/readyz", tags=["Health"])
+@api.get("/readyz", tags=["Health"])
 def readyz():
     try:
         with engine.connect() as connection:
@@ -68,4 +60,20 @@ def readyz():
 
 prefix = settings.api_v1_prefix.rstrip("/")
 for route_module in (agent, mobility, traffic, traffic_detection, air_intelligence, aqi, aqi_vision, transit, signals, command_center, alerts, ticketing, analytics, admin, integrations, ingestion, predictions):
-    app.include_router(route_module.router, prefix=prefix)
+    api.include_router(route_module.router, prefix=prefix)
+
+# Keep CORS outside FastAPI's exception middleware. This ensures even framework
+# errors and preflight responses receive the correct Access-Control headers.
+# The production allow-list is intentionally exact and comes from CORS_ORIGINS.
+app = CORSMiddleware(
+    app=api,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    allow_headers=["Accept", "Authorization", "Content-Type", "X-Ingestion-Key", "X-Visitor-ID"],
+    expose_headers=["Retry-After"],
+    max_age=600,
+)
+
+# Keep FastAPI dependency overrides accessible to the existing test harness and diagnostics.
+app.dependency_overrides = api.dependency_overrides
