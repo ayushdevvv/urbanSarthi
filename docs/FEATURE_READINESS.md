@@ -10,9 +10,9 @@ Last reviewed: 12 November 2026. This document distinguishes code shipped in thi
 | Citizen AQI Forecast | Any-place search, current conditions, pollutant cards and 24-hour forecast | Open-Meteo/CAMS forecast; provider-specific observations when configured and available | Official CPCB station values require an authorized CPCB/CAAQMS adapter and station mapping. |
 | Citizen Traffic Conditions | Explicit “Use my location” or manual area search, nearby OSM road map, road list, incident and traffic-news panels | TomTom live flow/incidents only for covered roads and configured key; nearby road geometry from OSM; Tavily news when configured or RSS search fallback | GPS permission is needed only for the location button. No TomTom key means roads remain neutral rather than receiving guessed traffic colours. |
 | Citizen Bus & Train | City/mode search, current service-news panel, GTFS routes/stops/timetables and stop map | Dated news reports from Tavily or RSS; operator schedule data after GTFS import; live arrivals only from a connected realtime provider | Agency GTFS Static ZIP and GTFS-Realtime/partner adapter. News is not labelled as live vehicle arrival telemetry. |
-| Citizen My Trips | Private saved journey lifecycle and personal history | Database-backed when PostgreSQL and authentication are configured | Email verification and password-reset delivery need an identity/mail integration. |
+| Citizen My Trips | Private saved journey lifecycle and personal history | Database-backed per anonymous browser visitor when PostgreSQL is configured; no cross-device account sync | Email verification and password-reset delivery need an identity/mail integration. |
 | Authority City Overview | Registered junction map, AQI stations, alerts, source freshness and aggregate reports | Only records ingested from real registered providers/devices; stale sources age out | Register real junctions, locations and data sources. Empty states are expected before ingestion. |
-| Traffic Lab | OpenCV/YOLO image/video analysis, class counts and annotated output; RTSP edge worker and authenticated observations | Camera samples only while an authorized edge worker is connected and reporting; uploads only when vision dependencies/model are present | Authorized RTSP URL, camera-network host, YOLO model/dependencies, source registration and local calibration. Unknown speed/queue values remain unavailable. |
+| Traffic Lab | OpenCV/YOLO image/video analysis, class counts and annotated output; RTSP edge worker and ingestion-key-protected observations | Camera samples only while an authorized edge worker is connected and reporting; uploads only when vision dependencies/model are present | Authorized RTSP URL, camera-network host, YOLO model/dependencies, source registration and local calibration. Unknown speed/queue values remain unavailable. |
 | Traffic Simulation | Native SUMO baseline/intervention runner; FCD vehicle positions/headings every 30 simulated seconds; edge metrics every 5 minutes; signal timings alter the candidate network | Actual vehicle trajectories and road intervals after a native SUMO run completes | SUMO binary is not installed in this validation environment. Bundled network is an 80-edge synthetic reference grid, not a calibrated city. Replace it with a mapped/correctly calibrated `.net.xml` and real turning counts before city claims. |
 | Traffic Agent | Evidence-backed operations workflow, forecast/emissions tools and signal-plan review | Deterministic tools run from available records; Groq/LangGraph reasoning when credentials and optional dependencies are configured | Groq key/dependencies for LLM reasoning. It drafts/recommends; physical controller writes remain disabled. |
 | Authority AQI | Station observations, forecast and hotspots | Data only from configured/ingesting sources | Authorized CPCB/CAAQMS adapter for official city-station claims; OpenAQ/CAMS are distinct sources. |
@@ -32,7 +32,6 @@ The citizen navigation contains exactly five destinations. Legacy URLs are redir
 | Citizen Traffic Conditions | `/citizen/traffic` | Explicit GPS or manual area search, nearby road map, traffic flow/incidents and nearby traffic news |
 | Citizen Bus & Train | `/citizen/transit` | Latest service news, GTFS routes/stops/schedules and realtime arrival slots when a feed is connected |
 | Citizen My Trips | `/citizen/trips` | Saved journeys and personal trip history |
-| Citizen account | `/citizen/account` | Citizen registration/login; accessed from the account icon, not a sixth main nav item |
 | Authority City Overview | `/authority/control` | City reports, registered junctions, map, AQI stations, alerts and source health |
 | Authority Traffic Lab | `/authority/traffic-lab` | OpenCV/YOLO upload analysis and RTSP camera observations |
 | Authority Traffic Simulation | `/authority/traffic-simulation` | Native SUMO baseline vs signal intervention, vehicle playback and road metrics |
@@ -55,11 +54,11 @@ The citizen navigation contains exactly five destinations. Legacy URLs are redir
 
 ## Security posture
 
-- Local development can use the demo identity while `APP_ENV=development` and `AUTH_ENABLED=false`.
-- Production configuration fails closed unless PostgreSQL, explicit CORS origins, `AUTH_ENABLED=true`, a 32+ character `JWT_SECRET`, and a separate 32+ character `INGESTION_API_KEY` are configured.
-- Human API access uses bearer tokens and database-backed roles. Edge devices use the separate ingestion key.
-- Public registration can only create the `citizen` role. It currently has no email verification or signup rate limit; add an identity/verification provider or keep sign-up closed until this is implemented.
-- Camera image/video inference endpoints are operator/admin-only.
+- The hackathon deployment intentionally has no human login. The public authority workspace uses a demo operator actor; citizens receive an anonymous browser identity for trip-history separation.
+- Production demo configuration requires PostgreSQL, explicit CORS origins, and a separate 32+ character `INGESTION_API_KEY`.
+- This is not an acceptable permanent security model for a real municipal control system. Re-enable identity and role-based authorization before production operations. Edge devices use the separate ingestion key.
+- Human account registration and login are not included in this public hackathon release.
+- Camera image/video inference endpoints are publicly accessible in hackathon mode; apply upload limits and do not connect sensitive or private camera sources.
 
 ## Verification status
 

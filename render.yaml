@@ -11,19 +11,31 @@ services:
     envVars:
       - key: APP_ENV
         value: production
-      - key: AUTH_ENABLED
-        value: "true"
       - key: DATABASE_URL
         sync: false
       - key: CORS_ORIGINS
         sync: false
-      - key: JWT_SECRET
-        generateValue: true
       - key: INGESTION_API_KEY
         generateValue: true
-      - key: BOOTSTRAP_ADMIN_EMAIL
+      - key: TOMTOM_API_KEY
         sync: false
-      - key: BOOTSTRAP_ADMIN_PASSWORD
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAQ_API_KEY
+        sync: false
+      - key: WEATHER_API_KEY
+        sync: false
+      - key: OSRM_BASE_URL
+        sync: false
+      - key: MODEL_PATH
+        sync: false
+      - key: TRAFFIC_MODEL_PATH
         sync: false
       - key: SUMO_BINARY
         value: /usr/bin/sumo

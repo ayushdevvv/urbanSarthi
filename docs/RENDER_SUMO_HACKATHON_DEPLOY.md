@@ -1,51 +1,65 @@
-# UrbanSaarthi: deploy native SUMO on Render
+# UrbanSaarthi hackathon deployment: public portal + native SUMO on Render
 
-This deployment runs SUMO inside the existing Render API service's Docker container. Installing SUMO on a developer laptop is not required, and judges can trigger the simulation from the deployed site.
+This deployment runs SUMO inside the Render backend Docker container. Judges can open the citizen portal and authority workspace without signing in. IoT / edge-device ingestion remains separately protected by `INGESTION_API_KEY`.
 
-## What changes
+## Render service settings
 
-- `render.yaml` changes the existing `urbansaarthi-api` service from the Python runtime to Docker.
-- `backend/Dockerfile.sumo` installs `sumo` and `sumo-tools` into the Render image.
-- `SUMO_BINARY=/usr/bin/sumo` and `SUMO_HOME=/usr/share/sumo` are set in the service environment.
-- The API service name and URL remain `urbansaarthi-api`, so the Vercel `VITE_API_URL` should not need changing.
-- The Blueprint uses the `1c-2g` plan (1 CPU, 2 GB RAM) as a minimum starting point. For YOLO camera inference and simulation at the same time, use `2c-4g` if available and within budget.
+Use the existing `urbansaarthi-api` Web Service. If it is Blueprint-managed, sync the repository's root `render.yaml`. If configuring manually, use:
 
-## Deploy
+| Setting | Value |
+|---|---|
+| Service type | Web Service |
+| Runtime | Docker |
+| Name | `urbansaarthi-api` |
+| Plan | `1c-2g` minimum starting point |
+| Dockerfile path | `backend/Dockerfile.sumo` |
+| Docker build context | `backend` |
+| Health check path | `/healthz` |
+| Region | Same region as the existing PostgreSQL database |
 
-1. Start from the full UrbanSaarthi source ZIP. Copy the supplied `render.yaml` to the repository root, replacing the existing root `render.yaml`.
-2. Copy `backend/Dockerfile.sumo` into the repository's `backend/` folder, replacing the existing file.
-3. Commit and push both files to the branch connected to Render. Also confirm `backend/requirements.txt`, `backend/scripts/start.sh`, the SUMO grid network and model files are committed.
-4. In Render, open the existing `urbansaarthi-api` service. If it is managed by the root Blueprint, sync/apply the updated Blueprint. If it is not Blueprint-managed, configure the service to build with Docker using `backend/Dockerfile.sumo` and Docker build context `backend`, or create a new Docker Web Service from the same repo with those paths.
-5. Select at least `1c-2g`. Avoid the Free plan for the live demo; it has 512 MB RAM, spins down after 15 minutes idle, and may take about a minute to wake.
-6. Preserve the existing production values for `DATABASE_URL`, `CORS_ORIGINS`, `JWT_SECRET`, `INGESTION_API_KEY`, `BOOTSTRAP_ADMIN_EMAIL`, and `BOOTSTRAP_ADMIN_PASSWORD`. Do not rotate JWT or ingestion secrets during the migration. Set `CORS_ORIGINS` to include the exact production Vercel origin, e.g. `https://urbansaarthi.vercel.app`.
-7. Keep any already-configured provider credentials on the service: `TOMTOM_API_KEY`, `TAVILY_API_KEY`, `GROQ_API_KEY`, `OPENAQ_API_KEY`, and `WEATHER_API_KEY` as applicable.
-8. Deploy and wait for the Docker build to finish. Check logs for the startup migration/seed messages and successful Uvicorn startup.
-9. Open `https://<your-api-host>/healthz`. It must return a healthy response.
-10. Open the deployed Vercel app, go to Admin > Traffic Simulation, change signal timings, and click Run simulation.
-11. Confirm the result badge says **Native SUMO result** / **EXECUTED IN SUMO**. If it says **XGBoost forecast**, native SUMO was not detected; inspect the Render logs and confirm `/usr/bin/sumo` exists and the `SUMO_BINARY` environment variable is correct.
+No separate SUMO service is needed. The Dockerfile installs `sumo` and `sumo-tools` in this API container and sets `SUMO_BINARY=/usr/bin/sumo` and `SUMO_HOME=/usr/share/sumo`.
 
-## Frontend API URL
+## Required Render environment variables
 
-The current frontend API client already defaults to:
+| Variable | Value |
+|---|---|
+| `APP_ENV` | `production` |
+| `DATABASE_URL` | Your managed PostgreSQL internal URL |
+| `CORS_ORIGINS` | Exact Vercel origin, e.g. `https://urbansaarthi.vercel.app` |
+| `INGESTION_API_KEY` | Random secret, minimum 32 characters; Render may generate it |
+| `SUMO_BINARY` | `/usr/bin/sumo` |
+| `SUMO_HOME` | `/usr/share/sumo` |
 
-`https://urbansaarthi-api.onrender.com/api/v1`
+Do not create JWT or bootstrap-admin variables for this public demo build. Human login routes and UI have been removed from this release.
 
-Because this deployment keeps the service name `urbansaarthi-api`, no Vercel variable change is needed if the Render URL remains the same. If you deploy under a different service name, set the Vercel environment variable `VITE_API_URL` to:
+Optional provider variables (add only when you have credentials): `TOMTOM_API_KEY`, `TAVILY_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OPENAQ_API_KEY`, `WEATHER_API_KEY`, and `OSRM_BASE_URL`. They are listed as optional variables in `render.yaml`; blank values simply leave those integrations unconfigured.
 
-`https://<new-api-host>/api/v1`
+## Vercel frontend settings
 
-Then redeploy the Vercel frontend.
+In Vercel → Project → Settings → Environment Variables, set:
 
-## Simulation behavior
+```env
+VITE_API_URL=https://urbansaarthi-api.onrender.com/api/v1
+```
 
-The page submits its native SUMO request with a 10-minute browser timeout. The backend runs a 3,600-second (60 simulated minute) baseline and intervention experiment, with up to 240 seconds allowed for each SUMO subprocess. SUMO FCD snapshots are sampled every 30 simulated seconds; edge metrics are sampled every 5 minutes. Render currently documents HTTP responses up to 100 minutes, so the platform request limit is not the expected bottleneck for this job.
+Redeploy the frontend after changing the value.
 
-The 60 minutes are simulated time, not one hour of wall-clock time. Runtime depends on CPU, demand and network size.
+## Deploy steps
 
-## Important limits for the hackathon demo
+1. Commit `render.yaml` and `backend/Dockerfile.sumo` to the connected Git branch.
+2. Sync the Render Blueprint, or set the Dockerfile path and context exactly as shown above.
+3. Attach your existing PostgreSQL database and set `CORS_ORIGINS` to the exact public Vercel URL.
+4. Add optional provider keys in Render only. Do not put provider keys in Vercel.
+5. Deploy and inspect Render logs for successful SUMO package installation, Alembic migrations and Uvicorn startup.
+6. Verify `https://<your-api-host>/healthz` and `https://<your-api-host>/readyz`.
+7. Open the public authority workspace → Traffic Simulation → change signal settings → Run native simulation. The result must identify `native_sumo_simulation` / `EXECUTED IN SUMO`, not the XGBoost fallback.
 
-- This runs on the bundled synthetic 80-edge reference network. It is a valid SUMO execution demo, but not a geographically calibrated model of a real city.
-- Native SUMO produces individual simulated vehicle trajectories and edge telemetry. It does not connect to physical traffic lights.
-- The XGBoost fallback remains available if SUMO cannot start. It produces model forecasts, not microscopic vehicle trajectories.
-- Render's Free web service has only 512 MB RAM, sleeps after 15 minutes without inbound traffic and can take about one minute to wake. Do not rely on Free for a judge-facing live simulation.
-- The `1c-2g` plan is the minimum suggested starting point. Upgrade to `2c-4g` if the service runs out of memory or if camera YOLO inference and SUMO simulation need to run concurrently.
+## Public demo and data isolation
+
+No citizen or operator account is required. The browser sends an automatically generated `X-Visitor-ID`, so saved trips are associated with that browser's anonymous guest identity rather than one shared public trip list. Clearing browser storage resets that identity. This is convenience-level separation, not account-grade privacy.
+
+All authority pages and operator actions are public in this hackathon configuration. Do not connect physical traffic-control write credentials or sensitive municipal networks to this deployment. Edge / IoT ingestion still requires the server-side `X-Ingestion-Key`. For a real authority production rollout, implement and verify a proper identity provider and role-based authorization layer before exposing administrative operations.
+
+## Simulation expectations
+
+The 60-minute run is 3,600 seconds of simulated time, not an hour of wall-clock time. The bundled 80-edge network is synthetic; the simulation is not a calibrated model of Lucknow or another real city until a surveyed network and calibrated demand are supplied. SUMO FCD snapshots are sampled every 30 simulated seconds and edge telemetry every five minutes.

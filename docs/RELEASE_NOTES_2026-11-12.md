@@ -1,3 +1,5 @@
+> Chronological release history: the later “Public hackathon access update” section supersedes the earlier auth-enabled deployment notes. The current release has no human login.
+
 # UrbanSaarthi release notes — 12 November 2026
 
 ## What changed in this release
@@ -41,7 +43,7 @@ A production Vite bundle is **not verified**: npm dependencies could not be rest
 ## Required operator setup before live pilot
 
 1. Provision managed PostgreSQL, set exact CORS origins, production auth, JWT secret, ingestion key, and bootstrap administrator credentials.
-2. Set frontend `VITE_API_URL` and `VITE_REQUIRE_AUTH=true` and rebuild it.
+2. Set frontend `VITE_API_URL` and rebuild the public hackathon frontend; no login flag is required.
 3. Add provider credentials as needed: `TOMTOM_API_KEY`, `OPENAQ_API_KEY`, and optionally `WEATHER_API_KEY` and `GROQ_API_KEY`.
 4. Register surveyed junctions and real data sources; deploy the RTSP worker on a machine with authorized camera-network access.
 5. Supply an authorized CPCB/CAAQMS adapter if official AQI is required; OpenAQ and CAMS are not CPCB station observations.
@@ -51,3 +53,13 @@ A production Vite bundle is **not verified**: npm dependencies could not be rest
 9. Keep physical ATCS writes disabled until vendor integration, safety certification and field acceptance are complete.
 
 See [Live-system setup](./LIVE_SYSTEM_SETUP.md), [Feature readiness](./FEATURE_READINESS.md), and [Traffic, AQI and simulation fixes](./TRAFFIC_AQI_SIMULATION_FIX.md) for the complete requirements and per-feature limits.
+
+
+## Public hackathon access update
+
+- Removed citizen account/login UI and the authority operator sign-in gate.
+- Citizen and authority workspaces now open directly with no human login.
+- Browser-generated `X-Visitor-ID` isolates saved trip history per browser; this is not account-grade privacy or cross-device sync.
+- Authority API actions use a shared public demo operator identity. Do not use this configuration to operate real municipal control systems.
+- Device and IoT ingestion remains protected by `INGESTION_API_KEY`; the browser never receives this secret.
+- Production startup no longer requires a JWT secret when no human login.

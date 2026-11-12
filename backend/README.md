@@ -31,11 +31,11 @@ Never use those flags in a production database.
 
 ## Security model
 
-- Local development can use the demo identity when `APP_ENV=development` and `AUTH_ENABLED=false`.
-- Production startup requires PostgreSQL, explicit CORS origins, `AUTH_ENABLED=true`, `JWT_SECRET` (32+ characters) and `INGESTION_API_KEY` (a different 32+ character secret).
-- People authenticate with bearer tokens. The backend loads current role and active status from the database on each request.
-- Device/provider ingestion uses `X-Ingestion-Key`; camera upload and operations endpoints require operator/admin role.
-- Public registration only creates `citizen` users. Email verification, signup rate limiting, MFA and password-reset delivery are not implemented yet.
+- The citizen portal and authority workspace are public in this hackathon build; no human login or JWT secret is required.
+- Citizen trips use a browser-generated anonymous visitor identity. It keeps different browsers' trip lists separate but is not account-grade privacy or cross-device sync.
+- Authority operations use a shared demo operator actor. This is for judging only; do not connect real signal-controller write credentials or sensitive municipal networks.
+- Device/provider ingestion uses `X-Ingestion-Key`; the key is stored only on Render and provisioned to trusted edge devices.
+- Production requires PostgreSQL, explicit CORS origins and a separate 32+ character `INGESTION_API_KEY`. See `docs/RENDER_SUMO_HACKATHON_DEPLOY.md` for the deployment configuration.
 
 ## Important API groups
 
@@ -43,7 +43,7 @@ All routes are under `/api/v1`; `/docs` exposes the precise schema and parameter
 
 | Domain | Main endpoints |
 |---|---|
-| Authentication | `/auth/register`, `/auth/login`, `/auth/me` |
+| Human authentication | Disabled and unmounted in the public hackathon build |
 | Routing and trips | `/routing/plan`, `/trips`, `/analytics/my-mobility` |
 | Traffic and predictions | `/traffic/current`, `/traffic/overview`, `/traffic/junctions`, `/traffic/simulation`, `/predictions/*` |
 | Camera / agent | `/traffic-detection/analyze`, `/traffic-detection/analyze-video`, `/traffic-detection/ops-workflow`, `/ingestion/vision-events`, `/ingestion/source-heartbeat` |

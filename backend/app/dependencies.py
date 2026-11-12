@@ -1,26 +1,24 @@
-"""Authentication and role/edge-ingestion dependencies.
-
-Unauthenticated demo identity is supported only outside production. Production
-requires signed bearer tokens for people and a separate edge key for devices.
-"""
+"""Public hackathon demo identities and protected edge-device ingestion."""
 from collections.abc import Callable
 import hmac
-from fastapi import Depends, Header, HTTPException, Request, status
+import re
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.core.config import settings
-from app.core.tokens import decode_access_token
 from app.db import get_db
 from app.models import User
 
 DEMO_EMAIL = "demo-admin@urbansaarthi.local"
+VISITOR_ID_PATTERN = re.compile(r"^[a-fA-F0-9-]{16,64}$")
 
 
-def _demo_user(db: Session) -> User:
+def _demo_operator(db: Session) -> User:
+    """Shared operator actor for the intentionally public hackathon console."""
     user = db.scalar(select(User).where(User.email == DEMO_EMAIL))
     if user is None:
-        user = User(email=DEMO_EMAIL, full_name="UrbanSaarthi Local Demo Operator",
-                    password_hash="local-demo-only-no-password-login", role="admin", is_active=True,
+        user = User(email=DEMO_EMAIL, full_name="UrbanSaarthi Demo Operator",
+                    password_hash="public-demo-no-login", role="admin", is_active=True,
                     preferences={"demo_mode": True})
         db.add(user)
         db.commit()
@@ -28,57 +26,48 @@ def _demo_user(db: Session) -> User:
     return user
 
 
-def _user_from_token(token: str | None, db: Session) -> User | None:
-    if not token or not token.lower().startswith("bearer "):
-        return None
-    payload = decode_access_token(token.split(" ", 1)[1].strip())
-    if not payload:
-        return None
-    user = db.get(User, int(payload["sub"]))
-    if not user or not user.is_active:
-        return None
-    # Roles are read from the current database record, not trusted from the token.
+def _anonymous_user(request: Request, db: Session) -> User:
+    """Give each browser a separate guest identity without an account or login."""
+    visitor_id = (request.headers.get("x-visitor-id") or "").strip()
+    if not VISITOR_ID_PATTERN.fullmatch(visitor_id):
+        visitor_id = "public-demo-visitor"
+    safe_id = re.sub(r"[^a-fA-F0-9]", "", visitor_id).lower() or "publicdemo"
+    email = f"visitor-{safe_id[:48]}@visitor.urbansaarthi.local"
+    user = db.scalar(select(User).where(User.email == email))
+    if user is None:
+        user = User(email=email, full_name="Guest traveller",
+                    password_hash="anonymous-session-no-login", role="citizen", is_active=True,
+                    preferences={"anonymous_demo": True})
+        db.add(user)
+        db.commit()
+        db.refresh(user)
     return user
 
 
-def get_optional_user(request: Request, db: Session = Depends(get_db)) -> User | None:
-    """Allow public route planning; attach a user only for a valid session."""
-    if settings.auth_enabled:
-        return _user_from_token(request.headers.get("authorization"), db)
-    if settings.app_env.lower() == "production":
-        return None
-    return _demo_user(db)
+def get_optional_user(request: Request, db: Session = Depends(get_db)) -> User:
+    return _anonymous_user(request, db)
 
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
-    if settings.auth_enabled:
-        user = _user_from_token(request.headers.get("authorization"), db)
-        if user is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in with an authorized UrbanSaarthi account.", headers={"WWW-Authenticate": "Bearer"})
-        return user
-    if settings.app_env.lower() == "production":
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Authentication is not configured. The authority workspace is locked.")
-    return _demo_user(db)
+    return _anonymous_user(request, db)
 
 
 def require_roles(*allowed_roles: str) -> Callable:
-    def _require_role(user: User = Depends(get_current_user)) -> User:
+    def _require_role(db: Session = Depends(get_db)) -> User:
+        # Human login is removed in this public hackathon release. Admin operations
+        # use a shared demo actor; do not connect this mode to physical city controls.
+        user = _demo_operator(db)
         if user.role not in allowed_roles:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This action is not available for the current workspace access level.")
+            raise HTTPException(status_code=403, detail="This action is not available for the current workspace access level.")
         return user
     return _require_role
 
 
 def require_ingestion_access(request: Request, db: Session = Depends(get_db)) -> User | None:
-    """Device ingestion accepts a dedicated high-entropy key or an operator token."""
-    if not settings.auth_enabled:
-        if settings.app_env.lower() == "production":
-            raise HTTPException(status_code=503, detail="Secure ingestion is not configured.")
-        return _demo_user(db)
+    """Sensor and edge ingestion remains protected by a separate high-entropy key."""
     supplied = request.headers.get("x-ingestion-key", "")
     if settings.ingestion_api_key and supplied and hmac.compare_digest(supplied, settings.ingestion_api_key):
-        return None  # service actor; audit actor_user_id remains nullable
-    user = _user_from_token(request.headers.get("authorization"), db)
-    if user and user.role in {"operator", "admin"}:
-        return user
-    raise HTTPException(status_code=401, detail="Provide a valid edge ingestion key or an operator bearer token.", headers={"WWW-Authenticate": "Bearer"})
+        return None
+    if settings.app_env.lower() != "production":
+        return _demo_operator(db)
+    raise HTTPException(status_code=401, detail="Provide the configured X-Ingestion-Key for device ingestion.")

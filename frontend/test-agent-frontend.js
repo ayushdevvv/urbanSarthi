@@ -24,7 +24,7 @@ assert(app.includes('Navigate to="control"'), 'Authority workspace must open on 
 console.log('✓ Air-first route structure verified');
 
 const layout = read('src/components/layout/AuthorityLayout.jsx');
-assert(layout.includes("['operator', 'admin'].includes(user?.role)") && layout.includes('This account does not have authority access'), 'Authority UI must reject valid citizen tokens rather than entering an operator workspace');
+assert(!layout.includes('requireAuth') && !layout.includes('/auth/login') && !layout.includes('Securing your workspace'), 'Authority workspace must open directly without a login gate');
 for (const target of ['/authority/control', '/authority/air-intelligence', '/authority/carbon', '/authority/iot', '/authority/sources', '/authority/traffic-lab', '/authority/traffic-agent', '/authority/traffic-simulation', '/authority/analytics', '/authority/settings']) {
   assert(layout.includes(target), `Navigation must include ${target}`);
 }

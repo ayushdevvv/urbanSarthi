@@ -4,7 +4,26 @@ const DEFAULT_API_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000/api/v1' : '
 const FALLBACK_GRACE_MS = 5_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 70_000;
 const ATTEMPT_TIMEOUT_MS = 18_000;
-export const AUTH_TOKEN_KEY = 'urbansaarthi_access_token';
+const VISITOR_ID_KEY = 'urbansaarthi_visitor_id';
+let memoryVisitorId = '';
+
+function createVisitorId() {
+  return globalThis.crypto?.randomUUID?.() || `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}${Math.random().toString(16).slice(2)}`;
+}
+
+function getVisitorId() {
+  try {
+    let id = globalThis.localStorage?.getItem(VISITOR_ID_KEY);
+    if (!id) {
+      id = createVisitorId();
+      globalThis.localStorage?.setItem(VISITOR_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    if (!memoryVisitorId) memoryVisitorId = createVisitorId();
+    return memoryVisitorId;
+  }
+}
 
 export const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || DEFAULT_API_URL).replace(/\/$/, '');
 
@@ -35,12 +54,9 @@ export async function request(path, options = {}) {
   const statusContext = createDataStatusContext(routePathAtRequestStart);
   const publishStatus = (detail) => publishDataStatus(detail, statusContext);
   const headers = new Headers(options.headers || {});
-  if (!headers.has('Authorization') && !/^\/auth\/login(?:\?|$)/i.test(path)) {
-    try { const token = globalThis.localStorage?.getItem(AUTH_TOKEN_KEY); if (token) headers.set('Authorization', `Bearer ${token}`); } catch { /* storage may be unavailable in hardened browsers */ }
-  }
+  if (!headers.has('X-Visitor-ID')) headers.set('X-Visitor-ID', getVisitorId());
   const method = String(options.method || 'GET').toUpperCase();
-  const privatePath = /^\/(?:auth(?:\/|\?|$)|trips(?:\/|\?|$)|users(?:\/|\?|$)|profile(?:\/|\?|$)|analytics\/my-mobility(?:\/|\?|$)|agent(?:\/|\?|$)|routing\/(?:geocode|reverse-geocode)(?:\/|\?|$))/i.test(path);
-  const cacheEligible = (method === 'GET' && !privatePath) || (options.cacheResponse === true && typeof options.body === 'string');
+  const cacheEligible = method === 'GET' || (options.cacheResponse === true && typeof options.body === 'string');
   const cacheKey = method === 'GET' ? path : requestCacheKey(path, options.body);
   // A new live request clears any stale page-level warning while it is in flight.
   publishStatus({ type: 'pending', path: cacheKey });

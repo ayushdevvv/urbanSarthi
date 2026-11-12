@@ -29,9 +29,6 @@ class Settings(BaseSettings):
     # Optional override for the bundled YOLO traffic checkpoint.
     traffic_model_path: str = ""
     sumo_binary: str = ""
-    auth_enabled: bool = False
-    jwt_secret: str = ""
-    jwt_ttl_minutes: int = 720
     ingestion_api_key: str = ""
     gtfs_max_upload_mb: int = 30
     auto_refresh_forecasts: bool = True
@@ -66,10 +63,8 @@ class Settings(BaseSettings):
             raise ValueError("Production CORS_ORIGINS must list explicit frontend origins; wildcard is not allowed")
         if self.database_url.lower().startswith("sqlite"):
             raise ValueError("Production deployments must use PostgreSQL; SQLite is for local development and tests")
-        if not self.auth_enabled:
-            raise ValueError("Production deployments must set AUTH_ENABLED=true. Public demo identity is development-only.")
-        if len(self.jwt_secret) < 32:
-            raise ValueError("Production deployments must set JWT_SECRET to at least 32 characters.")
+        # Human login has been removed from this public hackathon release.
+        # Device ingestion remains protected by its own high-entropy key.
         if len(self.ingestion_api_key) < 32:
             raise ValueError("Production deployments must set INGESTION_API_KEY to at least 32 characters for edge devices.")
         return self

@@ -21,7 +21,6 @@ import AirQualityPage from './pages/citizen/AirQualityPage.jsx';
 import AqiVisionPage from './pages/citizen/AqiVisionPage.jsx';
 import TransitPage from './pages/citizen/TransitPage.jsx';
 import TripsPage from './pages/citizen/TripsPage.jsx';
-import AccountPage from './pages/citizen/AccountPage.jsx';
 import TrafficConditionsPage from './pages/citizen/TrafficConditionsPage.jsx';
 import Toast from './components/shared/Toast.jsx';
 import RouteErrorBoundary from './components/shared/RouteErrorBoundary.jsx';
@@ -76,7 +75,7 @@ export default function App() {
         <Route path="traffic" element={<TrafficConditionsPage />} />
         <Route path="traffic-vision" element={<Navigate to="/citizen/traffic" replace />} />
         <Route path="trips" element={<TripsPage />} />
-        <Route path="account" element={<AccountPage />} />
+        <Route path="account" element={<Navigate to="/citizen/trips" replace />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

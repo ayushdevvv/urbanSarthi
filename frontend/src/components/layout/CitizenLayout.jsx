@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Activity, Bus, House, MapPin, Moon, Route, Sun, UserRound } from 'lucide-react';
+import { Activity, Bus, House, MapPin, Moon, Route, Sun } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 import FloatingAgentWidget from '../shared/FloatingAgentWidget.jsx';
@@ -23,7 +23,6 @@ export default function CitizenLayout() {
         <button className="utility" aria-label={dark ? 'Switch to light appearance' : 'Switch to dark appearance'} title={dark ? 'Switch to light appearance' : 'Switch to dark appearance'} onClick={() => setDark(!dark)}>{dark ? <Sun size={15}/> : <Moon size={15}/>} {dark ? 'Light' : 'Dark'}</button>
         <button className="utility" aria-label={language === 'EN' ? 'Switch language to Hindi' : 'Switch language to English'} onClick={toggleLanguage}><span className="hindi">हि</span>{language === 'EN' ? 'हिंदी' : 'English'}</button>
         <button className="utility" aria-label="Switch to main portal" onClick={() => navigate('/')}><House size={15}/> Main portal</button>
-        <button className="citizen-avatar" aria-label="Open citizen account" title="Citizen account" onClick={() => navigate('/citizen/account')}><UserRound size={17}/></button>
       </div>
     </header>
     <main className="citizen-content"><DataStatusBanner/><Outlet /></main>

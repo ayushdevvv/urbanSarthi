@@ -25,7 +25,7 @@ The citizen navigation intentionally contains five destinations:
 - **Traffic Agent:** evidence review, forecasting, emissions estimates and signal-plan recommendations with operator approval.
 - **AQI:** air-quality observations, forecasts and hotspots.
 - **Carbon Emissions:** vehicle-class and distance-based pollutant estimates.
-- **IoT Sensors:** authenticated device observations and ESP32/PMS5003 integration starter.
+- **IoT Sensors:** device observations protected by a separate ingestion key and ESP32/PMS5003 integration starter.
 
 The platform separates observations, forecasts, news, model scenarios and unavailable integrations. Missing live data is shown as unavailable rather than replaced with invented metrics. Physical traffic-signal writes are intentionally disabled.
 
@@ -57,7 +57,7 @@ python scripts/seed_demo.py
 uvicorn app.main:app --reload
 ```
 
-Local development uses SQLite and may use the local demo identity (`APP_ENV=development`, `AUTH_ENABLED=false`). The default seed registers provider sources only. To explicitly generate a synthetic lab network or synthetic telemetry, use `--demo-network` or `--demo-telemetry`; never enable those in production.
+The hackathon build is intentionally public: citizen and authority pages require no human login. Each browser receives an anonymous visitor identity for its own trip history; device ingestion still requires a server-side key. See the root `.env.example`, `backend/.env.example` and `frontend/.env.example` for configuration templates. The default seed registers provider sources only. To explicitly generate a synthetic lab network or synthetic telemetry, use `--demo-network` or `--demo-telemetry`; never enable those in production.
 
 API docs: `http://127.0.0.1:8000/docs`  
 Health: `http://127.0.0.1:8000/healthz` and `/readyz`.
@@ -73,13 +73,13 @@ npm ci
 npm run dev
 ```
 
-`VITE_API_URL` must include `/api/v1`. Provider credentials, database passwords, JWT secrets and device-ingestion keys must never be placed in frontend variables.
+`VITE_API_URL` must include `/api/v1`. Provider credentials, database passwords and device-ingestion keys must never be placed in frontend variables.
 
 ## Live deployment
 
-For production the backend deliberately refuses to start unless all of these are configured: PostgreSQL, explicit non-wildcard `CORS_ORIGINS`, `AUTH_ENABLED=true`, a 32+ character `JWT_SECRET`, and a separate 32+ character `INGESTION_API_KEY`. Set `VITE_REQUIRE_AUTH=true` and the production API URL in the frontend build.
+For the hackathon deployment, use PostgreSQL, an explicit non-wildcard `CORS_ORIGINS`, and a separate 32+ character `INGESTION_API_KEY`. There is no human login in this public demo. For a real city-authority production rollout, re-enable proper identity and role-based access controls before exposing administrative actions.
 
-See **[Live-system setup](./docs/LIVE_SYSTEM_SETUP.md)** for exact provider setup and acceptance checks. See **[Feature readiness](./docs/FEATURE_READINESS.md)** for what runs now versus what requires external access, feeds, devices or calibration. For the latest latency fixes, production API URL and native SUMO deployment option, see **[Traffic, AQI and simulation fixes](./docs/TRAFFIC_AQI_SIMULATION_FIX.md)**. The optional `render-sumo.yaml` Blueprint deploys an API worker with SUMO installed.
+See **[Public hackathon mode and Render settings](./docs/PUBLIC_HACKATHON_NO_AUTH_AND_RENDER.md)** for no-login behavior, exact Docker/Render configuration, environment variables and deployment checks. See **[Feature readiness](./docs/FEATURE_READINESS.md)** for what runs now versus what requires external access, feeds, devices or calibration. For the latest latency fixes, production API URL and native SUMO deployment option, see **[Traffic, AQI and simulation fixes](./docs/TRAFFIC_AQI_SIMULATION_FIX.md)**. The optional `render-sumo.yaml` Blueprint deploys an API worker with SUMO installed.
 
 ## Data-source truth and limitations
 
@@ -92,7 +92,6 @@ See **[Live-system setup](./docs/LIVE_SYSTEM_SETUP.md)** for exact provider setu
 - The bundled SUMO network is synthetic. Real-city simulation requires network conversion, junction/edge mapping, demand calibration and validation against observations.
 - Signal dispatch is a preview only. No command is sent to physical controllers.
 - Carbon values are estimates based on vehicle counts and assumptions, not direct exhaust measurements.
-- Citizen sign-up does not yet include email verification, password reset delivery or rate limiting; do not open it publicly until an identity/verification layer and abuse controls are added.
 
 ## Quality checks
 

@@ -1,17 +1,15 @@
 """Register source adapters and optionally seed explicitly synthetic demo infrastructure.
 
 Usage: python scripts/seed_demo.py [--demo-network] [--demo-telemetry]
-Set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD to create the first admin.
+The public hackathon build provisions an internal demo operator actor on first use.
 """
 import argparse
-import os
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import select
-from app.core.security import hash_password
 from app.db import SessionLocal
-from app.models import AqiObservation, CityCluster, DataSource, Junction, TrafficObservation, User
+from app.models import AqiObservation, CityCluster, DataSource, Junction, TrafficObservation
 from app.services.common import utc_now
 
 
@@ -56,14 +54,6 @@ def main():
                 row = DataSource(external_id=external_id, name=name, source_type=source_type, provider=provider,
                                  status="not_configured", safe_config={"is_synthetic": False})
                 db.add(row)
-        admin_email = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "").strip().lower()
-        admin_password = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")
-        if admin_email and admin_password:
-            admin = db.scalar(select(User).where(User.email == admin_email))
-            if not admin:
-                admin = User(email=admin_email, full_name=os.getenv("BOOTSTRAP_ADMIN_NAME", "UrbanSaarthi Admin"),
-                             password_hash=hash_password(admin_password), role="admin", is_active=True)
-                db.add(admin)
         if args.demo_telemetry:
             junctions = list(db.scalars(select(Junction).where(Junction.external_id.like("DEMO-JUNCTION-%"))))
             now = utc_now()
@@ -87,7 +77,6 @@ def main():
         print("Seed complete: connector registry created.")
         print("Synthetic demo network created:", demo_network)
         print("Demo telemetry added:", args.demo_telemetry)
-        print("Admin account created:", bool(admin_email and admin_password))
     except Exception:
         db.rollback()
         raise

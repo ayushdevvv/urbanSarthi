@@ -41,7 +41,7 @@ This matrix is the backend implementation checklist derived from the 14-page Nav
 | Continuous improvement | Retains telemetry, route choices, selected options, trip lifecycle and actual-metric JSON; training script produces MAE/RMSE | Implemented data pipeline surface; automated retraining/model registry/drift alerts still need deployment jobs |
 | City/mobility analytics | Personal usage metrics and operator city summary | Implemented; only registered-user trips are stored, not anonymous route queries |
 | Source health | Data-source registry, heartbeat endpoint, status/freshness and error fields | Implemented |
-| Security and accountability | Development-only demo identity; production bearer auth/RBAC, citizen-only public registration, Argon2 password hashes, separate edge-ingestion key, freshness-based device state, audit logs, non-actuating traffic design | Production requires PostgreSQL, explicit CORS, `AUTH_ENABLED=true`, 32+ char JWT/ingestion secrets; signup email verification and rate limiting remain required hardening |
+| Security and accountability | Public hackathon demo operator actor, per-browser anonymous citizen identity, separate edge-ingestion key, freshness-based device state, audit logs and non-actuating traffic design | Public authority endpoints are intentionally open for judging; protect the workspace with proper identity/RBAC before a real municipal deployment. Edge ingestion still requires a 32+ character key |
 | Schema versioning without drift | SQLAlchemy 2.x metadata, Alembic migration history (base + GTFS frequency) and no startup `create_all` | Implemented; new changes must use new reviewed Alembic revisions |
 
 ## Database domains

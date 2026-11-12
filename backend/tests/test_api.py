@@ -28,7 +28,7 @@ def test_health_and_open_route_planning(client, monkeypatch):
     from app.services import routing as routing_service
     monkeypatch.setattr(routing_service, '_network_routes', lambda *args, **kwargs: [])
     assert client.get("/healthz").status_code == 200
-    assert client.get("/api/v1/auth/me").status_code == 200  # local-only demo identity; production requires a token
+    assert client.get("/api/v1/auth/me").status_code == 404  # human auth endpoints are not mounted in the hackathon build
     response = client.post("/api/v1/routing/plan", json={
         "origin_latitude": 28.6139, "origin_longitude": 77.2090,
         "destination_latitude": 28.6200, "destination_longitude": 77.2150,
@@ -130,54 +130,10 @@ def test_command_center_overview_groups_data_source_statuses(client):
     assert providers["atcs_write_control"]["enabled"] is False
 
 
-def test_production_auth_login_and_edge_ingestion_key(client, monkeypatch):
-    from app.core.config import settings
-    from app.core.security import hash_password
-    from app.models import User
-    monkeypatch.setattr(settings, "auth_enabled", True)
-    monkeypatch.setattr(settings, "jwt_secret", "test-jwt-secret-that-is-at-least-32-characters-long")
-    monkeypatch.setattr(settings, "ingestion_api_key", "test-ingestion-key-that-is-at-least-32-chars")
-
-    override = client.app.dependency_overrides[get_db]
-    db = next(override())
-    try:
-        db.add(User(email="operator@example.org", full_name="Test Operator", password_hash=hash_password("strong-test-password-123"), role="operator", is_active=True, preferences={}))
-        db.add(DataSource(external_id="camera-test-source", name="Test RTSP camera", source_type="camera", provider="edge-worker", status="not_configured", safe_config={}, freshness_seconds=120))
-        cluster = CityCluster(external_id="AUTH-C", name="Auth cluster", city="Test city", status="unknown", config={})
-        db.add(cluster)
-        db.flush()
-        junction = Junction(external_id="AUTH-J", name="Auth junction", cluster_id=cluster.id, latitude=26.85, longitude=80.95, status="unknown", lane_count=4, baseline_cycle_seconds=90, configuration={})
-        db.add(junction)
-        db.commit()
-    finally:
-        db.close()
-
-    assert client.get("/api/v1/auth/me").status_code == 401
-    registration = client.post("/api/v1/auth/register", json={"email": "citizen@example.org", "full_name": "Test Citizen", "password": "citizen-password-123", "role": "admin"})
-    assert registration.status_code == 201, registration.text
-    assert registration.json()["user"]["role"] == "citizen"
-    assert client.post("/api/v1/auth/register", json={"email": "citizen@example.org", "full_name": "Duplicate Citizen", "password": "citizen-password-123"}).status_code == 409
-    login = client.post("/api/v1/auth/login", json={"email": "operator@example.org", "password": "strong-test-password-123"})
-    assert login.status_code == 200, login.text
-    token = login.json()["access_token"]
-    me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
-    assert me.status_code == 200 and me.json()["role"] == "operator"
-    assert client.get("/api/v1/command-center/overview").status_code == 401
-    assert client.get("/api/v1/command-center/overview", headers={"Authorization": f"Bearer {token}"}).status_code == 200
-    # Heavy inference uploads are private operator actions, not public endpoints.
-    assert client.post("/api/v1/traffic-detection/analyze", files={"file": ("frame.jpg", b"x", "image/jpeg")}).status_code == 401
-    assert client.post("/api/v1/traffic-detection/analyze-video", files={"file": ("clip.mp4", b"x", "video/mp4")}).status_code == 401
-
-    payload = {"external_junction_id": "AUTH-J", "source": "camera-edge", "vehicle_count": 7, "detection_summary": {"camera_id": "test-camera"}}
-    denied = client.post("/api/v1/ingestion/vision-events", json=payload)
-    accepted = client.post("/api/v1/ingestion/vision-events", json=payload, headers={"X-Ingestion-Key": "test-ingestion-key-that-is-at-least-32-chars"})
-    assert denied.status_code == 401
-    assert accepted.status_code == 201, accepted.text
-    assert client.get(f"/api/v1/traffic/junctions/{junction.id}/observations?since_minutes=15").status_code == 401
-    live_rows = client.get(f"/api/v1/traffic/junctions/{junction.id}/observations?since_minutes=15", headers={"Authorization": f"Bearer {token}"})
-    assert live_rows.status_code == 200 and len(live_rows.json()) == 1
-    heartbeat = client.post("/api/v1/ingestion/source-heartbeat", json={"external_id": "camera-test-source", "device": "test-camera"}, headers={"X-Ingestion-Key": "test-ingestion-key-that-is-at-least-32-chars"})
-    assert heartbeat.status_code == 200 and heartbeat.json()["status"] == "online"
+def test_hackathon_build_does_not_mount_human_auth_endpoints(client):
+    assert client.get("/api/v1/auth/me").status_code == 404
+    assert client.post("/api/v1/auth/login", json={"email": "demo@example.org", "password": "not-used"}).status_code == 404
+    assert client.post("/api/v1/auth/register", json={"email": "demo@example.org", "full_name": "Demo User", "password": "not-used-password"}).status_code == 404
 
 
 def test_native_sumo_endpoint_returns_clear_setup_error_when_engine_missing(client, monkeypatch):
@@ -341,3 +297,46 @@ def test_sumo_unavailable_route_can_run_real_xgboost_fallback(client, monkeypatc
     assert len(body["timeline"]) == 13
     assert len(body["timeline"][0]["roads"]) == 80
     assert "sensitivity" in body["engine"].lower()
+
+
+def test_public_hackathon_mode_allows_authority_without_login_and_keeps_device_ingestion_key(client, monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "app_env", "production")
+    monkeypatch.setattr(settings, "ingestion_api_key", "public-demo-ingestion-key-with-more-than-32-chars")
+
+    overview = client.get("/api/v1/command-center/overview")
+    assert overview.status_code == 200, overview.text
+
+    preflight = client.options("/api/v1/trips", headers={
+        "Origin": "http://localhost:5173",
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "x-visitor-id",
+    })
+    assert preflight.status_code == 200
+    assert "x-visitor-id" in preflight.headers.get("access-control-allow-headers", "").lower()
+
+    denied = client.post("/api/v1/ingestion/source-heartbeat", json={"external_id": "camera-public", "device": "demo-camera"})
+    assert denied.status_code == 401
+    accepted = client.post("/api/v1/ingestion/source-heartbeat", json={"external_id": "camera-public", "device": "demo-camera"}, headers={"X-Ingestion-Key": "public-demo-ingestion-key-with-more-than-32-chars"})
+    assert accepted.status_code in {200, 404}  # 404 only when this deployment has not registered the source yet
+
+
+def test_public_demo_trip_history_isolated_by_browser_visitor_id(client, monkeypatch):
+    from app.core.config import settings
+    from app.services import routing as routing_service
+    monkeypatch.setattr(settings, "app_env", "production")
+    monkeypatch.setattr(routing_service, "_network_routes", lambda *args, **kwargs: [])
+    visitor_a = {"X-Visitor-ID": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}
+    visitor_b = {"X-Visitor-ID": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}
+    payload = {
+        "origin_latitude": 28.6139, "origin_longitude": 77.2090,
+        "destination_latitude": 28.6200, "destination_longitude": 77.2150,
+        "origin_label": "Origin", "destination_label": "Destination",
+        "preference": "balanced", "modes": ["driving"],
+    }
+    planned = client.post("/api/v1/routing/plan", json=payload, headers=visitor_a)
+    assert planned.status_code == 200, planned.text
+    trips_a = client.get("/api/v1/trips", headers=visitor_a)
+    trips_b = client.get("/api/v1/trips", headers=visitor_b)
+    assert len(trips_a.json()) == 1
+    assert trips_b.status_code == 200 and trips_b.json() == []
