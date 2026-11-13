@@ -50,12 +50,12 @@ export default function CommandCenterPage() {
     });
     const aqiMarkers = (overview?.air_quality?.stations || []).filter((station) => Number.isFinite(Number(station.latitude)) && Number.isFinite(Number(station.longitude))).map((station) => ({
       id: `aqi-${station.id}`, lat: station.latitude, lng: station.longitude, title: station.station_name,
-      description: `${station.is_historical ? 'Historical reference · ' : ''}AQI ${station.aqi ?? 'not reported'} · ${station.category || station.source} · ${new Date(station.observed_at).toLocaleString()}`,
+      description: `AQI ${station.aqi ?? 'not reported'} · ${station.category || station.source} · ${new Date(station.observed_at).toLocaleString()}`,
       kind: 'aqi',
     }));
     const alertMarkers = (overview?.alerts?.items || []).filter((alert) => Number.isFinite(Number(alert.latitude)) && Number.isFinite(Number(alert.longitude))).map((alert) => ({
       id: `alert-${alert.id}`, lat: alert.latitude, lng: alert.longitude, title: alert.title,
-      description: `${alert.state === 'scheduled' ? 'Scheduled' : 'Active'} · ${alert.severity} ${alert.category}${alert.starts_at ? ` · starts ${new Date(alert.starts_at).toLocaleString()}` : ''}`, kind: 'critical',
+      description: `${alert.severity} ${alert.category} alert`, kind: 'critical',
     }));
     return [...junctionMarkers, ...aqiMarkers, ...alertMarkers];
   }, [junctions, overview]);
@@ -67,13 +67,13 @@ export default function CommandCenterPage() {
     <div className="notice scenario-notice"><Activity size={14}/>Verified observations only · {data?.generated_at ? `report generated ${new Date(data.generated_at).toLocaleTimeString()}` : 'waiting for connected sources'}</div>
     <div className="kpi-grid">
       <Kpi icon={Activity} label="Congestion index" value={display(overview?.traffic?.mean_congestion_score)} caption={overview?.traffic?.junctions_with_recent_traffic_data ? 'Mean from recent observations' : 'Awaiting traffic telemetry'} />
-      <Kpi icon={Navigation} label="Online controllers" value={display(overview?.network?.junctions_online)} caption={`${overview?.network?.reference_corridors ?? 0} public reference corridors · not connected controllers`} />
-      <Kpi icon={AirVent} label="Average AQI" value={display(overview?.air_quality?.mean_aqi)} caption={overview?.air_quality?.stations_with_recent_data ? 'Recent station readings' : `${overview?.air_quality?.historical_station_count ?? 0} historical station records · no live feed`} />
+      <Kpi icon={Navigation} label="Online junctions" value={display(overview?.network?.junctions_online, ` / ${overview?.network?.junctions_total ?? '—'}`)} caption="Registered field infrastructure" />
+      <Kpi icon={AirVent} label="Average AQI" value={display(overview?.air_quality?.mean_aqi)} caption={overview?.air_quality?.stations_with_recent_data ? 'Recent station readings' : 'Awaiting station data'} />
       <Kpi icon={Cloud} label="Active alerts" value={display(overview?.alerts?.active_count)} caption="Operational notices" />
     </div>
     <div className="control-grid">
       <section className="panel map-panel"><div className="panel-head"><div><div className="eyebrow">CITY MAP</div><h3>Live infrastructure map</h3></div><div className="legend"><span><i className="green-dot"/>Junction</span><span><i className="red-dot"/>Alert / hotspot</span><span><i className="aqi-dot"/>AQI station</span></div></div>
-        <CityMap city={data?.city?.name || data?.city_name || "Delhi"} markers={markers} zoom={11} className="authority-map" />
+        <CityMap markers={markers} zoom={11} className="authority-map" />
         <div className="map-foot"><span><Navigation size={13}/> Junctions · <AirVent size={13}/> AQI · <AlertTriangle size={13}/> Alerts</span><small>{markers.length ? `${markers.length} verified locations` : 'No junction, station or alert coordinates registered yet.'}</small></div>
       </section>
       <aside className="panel hotspot"><div className="hotspot-head"><span className={picked ? 'critical' : 'status-pill'}>{picked ? 'REPORTED HOTSPOT' : 'NO RECENT HOTSPOTS'}</span><button className="icon-btn" aria-label="Toggle selected hotspot" onClick={() => setDetailOpen(!detailOpen)}>{detailOpen ? '×' : <MapPin size={16}/>}</button></div>
@@ -82,7 +82,7 @@ export default function CommandCenterPage() {
       </aside>
     </div>
     <div className="below-grid"><section className="panel compact-list"><div className="panel-head"><div><div className="eyebrow">NETWORK STATUS</div><h3>Infrastructure report</h3></div><span>{display(overview?.network?.clusters_online, ` / ${display(overview?.network?.clusters_total ?? '—')} clusters`)}</span></div><div className="compact-stat-row"><span>Junctions with recent traffic data</span><b>{display(overview?.network?.junctions_with_recent_traffic_data)}</b></div><div className="compact-stat-row"><span>Junctions with forecasts</span><b>{display(overview?.traffic?.forecasted_junction_count)}</b></div><div className="compact-stat-row"><span>Stations with recent AQI data</span><b>{display(overview?.air_quality?.stations_with_recent_data)}</b></div><div className="compact-stat-row"><span>Configured data sources</span><b>{display(overview?.data_sources?.configured_sources)}</b></div></section>
-      <section className="panel compact-list"><div className="panel-head"><div><div className="eyebrow">ACTIVE ALERTS</div><h3>Operational notices</h3></div><span>{display(overview?.alerts?.active_count)} active</span></div>{(overview?.alerts?.items || []).length ? overview.alerts.items.slice(0, 4).map((alert) => <div className="alert-row" key={alert.id}><span className={`severity-dot severity-${String(alert.severity || '').toLowerCase()}`}/><div><b>{alert.title}</b><small>{alert.category} · {alert.state === 'scheduled' && alert.starts_at ? `Starts ${new Date(alert.starts_at).toLocaleString()}` : alert.created_at ? new Date(alert.created_at).toLocaleString() : 'Time unavailable'}</small></div></div>) : <EmptyState title="No active alerts" description="There are no current authority alerts."/>}</section></div>
+      <section className="panel compact-list"><div className="panel-head"><div><div className="eyebrow">ACTIVE ALERTS</div><h3>Operational notices</h3></div><span>{display(overview?.alerts?.active_count)} active</span></div>{(overview?.alerts?.items || []).length ? overview.alerts.items.slice(0, 4).map((alert) => <div className="alert-row" key={alert.id}><span className={`severity-dot severity-${String(alert.severity || '').toLowerCase()}`}/><div><b>{alert.title}</b><small>{alert.category} · {alert.created_at ? new Date(alert.created_at).toLocaleString() : 'Time unavailable'}</small></div></div>) : <EmptyState title="No active alerts" description="There are no current authority alerts."/>}</section></div>
     <section className="panel sumo-quick-links"><div className="sumo-panel-head"><div><span>OPERATIONS</span><h2>Open a workbench</h2></div></div><div className="sumo-quick-grid">
       <button onClick={() => navigate('/authority/traffic-lab')}><Camera size={18}/><span><b>Traffic Lab</b><small>Vehicle detection and camera evidence</small></span><Navigation size={14}/></button>
       <button onClick={() => navigate('/authority/traffic-simulation')}><Route size={18}/><span><b>Traffic simulation</b><small>Road-network signal experiments</small></span><Navigation size={14}/></button>

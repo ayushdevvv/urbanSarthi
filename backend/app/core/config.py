@@ -18,14 +18,12 @@ class Settings(BaseSettings):
     # Server-side OpenWeather credential. Never expose this value in frontend env or responses.
     weather_api_key: str = ""
     tomtom_api_key: str = ""
-    # Optional server-side Tavily search for location-aware traffic and transit news.
-    tavily_api_key: str = ""
     model_path: str = ""
     # Google AI is optional: deterministic workflows remain available without credentials.
     gemini_api_key: str = ""
     google_ai_primary_model: str = "gemini-3.8-flash"
     google_ai_fallback_model: str = "gemma-4-26b-a4b-it"
-    google_ai_timeout_seconds: int = 16
+    google_ai_timeout_seconds: int = 12
     # Optional override for the bundled YOLO traffic checkpoint.
     traffic_model_path: str = ""
     sumo_binary: str = ""

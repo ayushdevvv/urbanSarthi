@@ -1,3 +1,2 @@
-# Google Agent Development Kit 2.14.0 for Traffic Lab tool orchestration.
-# Imports are lazy; deterministic app features remain available if Google AI calls fail.
+# Google Agent Development Kit, pinned to the stable release.
 google-adk==2.14.0

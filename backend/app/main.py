@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from app.api import admin, agent, alerts, analytics, aqi, aqi_vision, air_intelligence, command_center, ingestion, integrations, mobility, predictions, signals, ticketing, traffic, traffic_detection, transit
@@ -40,6 +41,9 @@ async def security_headers(request: Request, call_next):
 
 @api.get("/", tags=["Health"])
 def root():
+    static_index = Path(__file__).resolve().parent / "static" / "index.html"
+    if static_index.is_file():
+        return FileResponse(static_index)
     return {"service": settings.app_name, "status": "running", "version": api.version, "api_prefix": settings.api_v1_prefix}
 
 
@@ -61,6 +65,31 @@ def readyz():
 prefix = settings.api_v1_prefix.rstrip("/")
 for route_module in (agent, mobility, traffic, traffic_detection, air_intelligence, aqi, aqi_vision, transit, signals, command_center, alerts, ticketing, analytics, admin, integrations, ingestion, predictions):
     api.include_router(route_module.router, prefix=prefix)
+
+# When deployed as a single Cloud Run service, FastAPI serves the Vite build too.
+# Serve real asset files directly and send client-side routes to index.html. Keep
+# unknown API paths as JSON 404s instead of accidentally returning the SPA shell.
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+@api.api_route("/{asset_path:path}", methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], include_in_schema=False)
+def spa_fallback(asset_path: str, request: Request):
+    api_prefix = settings.api_v1_prefix.rstrip("/")
+    if asset_path == api_prefix.lstrip("/") or asset_path.startswith(api_prefix.lstrip("/") + "/"):
+        raise HTTPException(status_code=404, detail="API route not found.")
+    if request.method not in {"GET", "HEAD"}:
+        raise HTTPException(status_code=404, detail="Route not found.")
+    index_file = STATIC_DIR / "index.html"
+    if not index_file.is_file():
+        raise HTTPException(status_code=404, detail="Page not found.")
+    candidate = (STATIC_DIR / asset_path).resolve()
+    try:
+        candidate.relative_to(STATIC_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Asset not found.")
+    if candidate.is_file():
+        return FileResponse(candidate)
+    return FileResponse(index_file)
 
 # Keep CORS outside FastAPI's exception middleware. This ensures even framework
 # errors and preflight responses receive the correct Access-Control headers.

@@ -1,69 +1,41 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, CarFront, Clock3, Gauge, Play, RefreshCw, ShieldCheck } from 'lucide-react';
-import PageIntro from '../../components/shared/PageIntro.jsx';
-import TrafficSimulationScene from './TrafficSimulationScene.jsx';
+import { useEffect, useState } from 'react';
+import { AlertTriangle, CarFront, Clock3, Play, RefreshCw, Route, Signal, Gauge } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { api } from '../../services/api/client.js';
-import './traffic-simulation-page.css';
-import './traffic-studio.css';
+import TrafficSimulationScene from './TrafficSimulationScene.jsx';
+import './premium-operations.css';
 
-const DEFAULTS = { name: 'Delhi reference corridor run', north_south_green_seconds: 42, east_west_green_seconds: 42, yellow_seconds: 3, all_red_seconds: 1, demand_multiplier: 1 };
-const fmt = (value, suffix = '') => value == null || !Number.isFinite(Number(value)) ? '—' : `${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 1 })}${suffix}`;
+const fmt = (v, suffix = '') => v === null || v === undefined ? '—' : `${Number(v).toLocaleString('en-IN', { maximumFractionDigits: 1 })}${suffix}`;
+const initial = { name: 'Delhi reference intersection · microscopic run', north_south_green_seconds: 42, east_west_green_seconds: 42, yellow_seconds: 3, all_red_seconds: 1, demand_multiplier: 1 };
 
 export default function DigitalTwinPage() {
   const [capabilities, setCapabilities] = useState(null);
   const [result, setResult] = useState(null);
-  const [frameIndex, setFrameIndex] = useState(0);
-  const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState(DEFAULTS);
-  const timeline = result?.timeline || [];
-  const frame = timeline[Math.min(frameIndex, Math.max(0, timeline.length - 1))] || null;
-  const summary = result?.summary || {};
-
-  async function refreshCapabilities() {
-    try { setCapabilities(await api.get('/traffic/simulation/capabilities', { timeoutMs: 10000, fallbackGraceMs: 0 })); }
-    catch { setCapabilities({ native_simulation_available: false, forecast_available: false }); }
-  }
-  useEffect(() => { refreshCapabilities(); }, []);
-  useEffect(() => {
-    if (!playing || timeline.length < 2) return undefined;
-    const timer = window.setInterval(() => setFrameIndex((n) => { if (n >= timeline.length - 1) { setPlaying(false); return n; } return n + 1; }), 650);
-    return () => window.clearInterval(timer);
-  }, [playing, timeline.length]);
-
-  async function run(event) {
-    event.preventDefault(); setBusy(true); setError(''); setPlaying(false); setResult(null);
-    try {
-      const data = await api.post('/traffic/sumo/run', form, { timeoutMs: 600000, fallbackGraceMs: 0 });
-      if (data?.mode !== 'native_sumo_simulation' || !Array.isArray(data.timeline)) throw new Error('The detailed vehicle run did not return a complete result.');
-      setResult(data); setFrameIndex(0); setPlaying(true); await refreshCapabilities();
-    } catch (err) { setError(err?.payload?.detail || err.message || 'The detailed vehicle run could not complete.'); }
-    finally { setBusy(false); }
-  }
-
-  const vehicleRows = useMemo(() => frame?.vehicle_positions || [], [frame]);
-  return <div className="city-studio">
-    <PageIntro eyebrow="DETAILED ROAD MODEL" title="Digital twin" description="Run a detailed vehicle-level experiment on the bundled reference road network." action={<button className="utility" onClick={refreshCapabilities}><RefreshCw size={15}/> Check availability</button>}/>
-    <section className="city-studio-toolbar"><div><span className="studio-kicker">DETAILED RUN</span><h2>Reference corridor digital twin</h2><p>Individual vehicle movement and signal timing, independent of the 60-minute forecast.</p></div><span className={`studio-mode-pill ${capabilities?.native_simulation_available ? 'ready' : 'muted'}`}>{capabilities?.native_simulation_available ? 'READY' : 'NOT AVAILABLE'}</span></section>
-    {!capabilities?.native_simulation_available && <div className="studio-info-banner"><AlertTriangle size={17}/><div><b>Detailed vehicle simulation is not enabled on this service.</b><p>The 60-minute network outlook and signal plan studio remain available. This page will only start a detailed run after the simulator is installed and detected; it will not send a failing request or substitute forecast data as vehicle trajectories.</p></div><a href="/authority/traffic-simulation">Open 60-minute outlook</a></div>}
-    <div className="studio-planner-grid twin-grid">
-      <form className="studio-card studio-form" onSubmit={run}>
-        <div className="studio-card-head"><div><span className="studio-kicker">RUN SETUP</span><h2>Simulation parameters</h2></div><CarFront size={18}/></div>
-        <label>Experiment name<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}/></label>
-        <div className="studio-form-grid"><label>North / South green<div className="studio-input-unit"><input type="number" min="8" max="100" value={form.north_south_green_seconds} onChange={(e) => setForm({ ...form, north_south_green_seconds: Number(e.target.value) })}/><span>sec</span></div></label><label>East / West green<div className="studio-input-unit"><input type="number" min="8" max="100" value={form.east_west_green_seconds} onChange={(e) => setForm({ ...form, east_west_green_seconds: Number(e.target.value) })}/><span>sec</span></div></label><label>Yellow clearance<div className="studio-input-unit"><input type="number" min="3" max="8" value={form.yellow_seconds} onChange={(e) => setForm({ ...form, yellow_seconds: Number(e.target.value) })}/><span>sec</span></div></label><label>All-red clearance<div className="studio-input-unit"><input type="number" min="1" max="5" value={form.all_red_seconds} onChange={(e) => setForm({ ...form, all_red_seconds: Number(e.target.value) })}/><span>sec</span></div></label></div>
-        <label className="studio-range-label">Traffic demand <b>{form.demand_multiplier.toFixed(1)}×</b><input type="range" min="0.5" max="2" step="0.1" value={form.demand_multiplier} onChange={(e) => setForm({ ...form, demand_multiplier: Number(e.target.value) })}/><small>0.5× lighter · 2× heavier</small></label>
-        {error && <div className="studio-error"><AlertTriangle size={15}/>{error}</div>}
-        <button className="studio-primary full" type="submit" disabled={busy || !capabilities?.native_simulation_available}>{busy ? <><span className="studio-mini-spinner"/> Running detailed simulation…</> : <><Play size={15}/> Run digital twin</>}</button>
-        <p className="studio-footnote"><ShieldCheck size={14}/> Runs on a reference network. It does not actuate physical traffic lights or represent a calibrated Delhi junction.</p>
+  const [form, setForm] = useState(initial);
+  const [index, setIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const timeline = result?.timeline || result?.frames || [];
+  const frame = timeline[index] || timeline[0] || null;
+  const summary = result?.summary || result?.metrics || {};
+  useEffect(() => { api.get('/traffic/simulation/capabilities', { timeoutMs: 10000, fallbackGraceMs: 0 }).then(setCapabilities).catch(() => setCapabilities({ native_simulation_available: false, message: 'Simulation availability could not be checked.' })); }, []);
+  useEffect(() => { if (!playing || timeline.length < 2) return undefined; const timer = setInterval(() => setIndex((v) => { if (v >= timeline.length - 1) { setPlaying(false); return v; } return v + 1; }), 250); return () => clearInterval(timer); }, [playing, timeline.length]);
+  async function run(event) { event?.preventDefault(); setBusy(true); setError(''); setResult(null); setPlaying(false); try { const data = await api.post('/traffic/sumo/run', form, { timeoutMs: 600000, fallbackGraceMs: 0 }); if (!data || !['native_sumo_simulation', 'sumo_simulation'].includes(data.mode)) throw new Error('The detailed vehicle run did not return a native simulation result.'); setResult(data); setIndex(0); } catch (err) { setError(err?.message || 'Detailed digital twin could not run.'); } finally { setBusy(false); } }
+  const vehicles = frame?.vehicle_positions || frame?.vehicles || [];
+  return <main className="ops-screen ops-digital-screen">
+    <header className="ops-page-head"><div><span className="ops-eyebrow">MICROSCOPIC ROAD MODEL / VEHICLE-LEVEL VIEW</span><h2>Traffic digital twin</h2><p>Run a detailed vehicle-level intersection experiment, separate from the 60-minute network forecast.</p></div><div className="ops-head-actions"><span className={`ops-state ${capabilities?.native_simulation_available ? '' : 'warning'}`}><i/>{capabilities?.native_simulation_available ? 'Detailed engine available' : 'Engine unavailable'}</span><button className="ops-button secondary" onClick={() => api.get('/traffic/simulation/capabilities', { timeoutMs: 10000, fallbackGraceMs: 0 }).then(setCapabilities).catch(() => setCapabilities({ native_simulation_available: false }))}><RefreshCw size={14}/> Check</button></div></header>
+    {!capabilities?.native_simulation_available && <div className="ops-alert"><AlertTriangle size={16}/><span>Vehicle-level simulation is not available on this deployment. The 60-minute forecast remains available separately.</span><Link to="/authority/traffic-simulation">Open 60-minute simulation</Link></div>}
+    <div className="ops-twin-layout">
+      <form className="ops-data-card ops-twin-controls" onSubmit={run}><div className="ops-card-head"><div><span>EXPERIMENT SETUP</span><h3>Intersection controls</h3></div><Signal size={18}/></div>
+        <label className="ops-field"><span>Study name</span><input value={form.name} onChange={(e) => setForm((v) => ({ ...v, name: e.target.value }))}/></label>
+        {['north_south_green_seconds','east_west_green_seconds','yellow_seconds','all_red_seconds'].map((key) => <label className="ops-field" key={key}><span>{key.replaceAll('_',' ')}</span><input type="number" min={key.includes('green') ? 8 : key.includes('yellow') ? 3 : 1} max={key.includes('green') ? 100 : key.includes('yellow') ? 8 : 5} value={form[key]} onChange={(e) => setForm((v) => ({ ...v, [key]: Number(e.target.value) }))}/></label>)}
+        <label className="ops-field"><span>Demand level · {Number(form.demand_multiplier).toFixed(1)}×</span><input type="range" min="0.5" max="2" step="0.1" value={form.demand_multiplier} onChange={(e) => setForm((v) => ({ ...v, demand_multiplier: Number(e.target.value) }))}/></label>
+        {error && <div className="ops-alert"><AlertTriangle size={15}/>{error}</div>}
+        <button className="ops-button primary full" type="submit" disabled={busy || !capabilities?.native_simulation_available}>{busy ? <span className="ops-loader"/> : <Play size={15}/>} {busy ? 'Building vehicle run' : 'Run digital twin'}</button><small className="ops-small-note">No physical signals are connected or controlled by this experiment.</small>
       </form>
-      <div className="studio-result-column">
-        {result ? <>
-          <div className="city-stats-grid compact"><article className="city-stat"><small>Vehicles completed</small><strong>{fmt(summary.vehicles_completed)}</strong><span>In this run</span></article><article className="city-stat"><small>Average trip wait</small><strong>{fmt(summary.avg_trip_waiting_seconds, 's')}</strong><span>Across completed trips</span></article><article className="city-stat"><small>Queue at end</small><strong>{fmt(summary.queue_end)}</strong><span>Halted vehicles</span></article></div>
-          <div className="studio-scene-card"><div className="studio-card-head"><div><span className="studio-kicker">VEHICLE MOVEMENT</span><h2>Live run playback</h2></div><span className="studio-mode-pill">{playing ? 'PLAYING' : 'PAUSED'} · {fmt(frame?.minute, ' MIN')}</span></div><TrafficSimulationScene roads={frame?.roads || []} frame={frame} playing={playing} areaName="Reference road network" nativeSumo networkGeometry={result.network_geometry} signalTimings={result.experiment?.signal_timings}/><div className="studio-slider-row"><label>Run timeline <b>{fmt(frame?.minute, ' min')}</b><input type="range" min="0" max={Math.max(0, timeline.length - 1)} value={frameIndex} onChange={(e) => { setFrameIndex(Number(e.target.value)); setPlaying(false); }}/></label></div></div>
-          <section className="studio-card"><div className="studio-card-head"><div><span className="studio-kicker">CURRENT FRAME</span><h2>Vehicle sample</h2></div><Gauge size={18}/></div><div className="studio-twin-statline"><span><b>{fmt(frame?.vehicle_count_actual ?? vehicleRows.length)}</b> vehicles active</span><span><b>{fmt(frame?.mean_speed_kmph, ' km/h')}</b> mean speed</span><span><b>{fmt(frame?.queue_total)}</b> halted</span><span><b>{fmt(vehicleRows.length)}</b> visible positions</span></div></section>
-        </> : <div className="studio-empty"><div className="studio-empty-icon"><Activity size={26}/></div><h2>Detailed vehicle view</h2><p>When the detailed simulation is available, each frame will contain actual sampled vehicle positions, speeds and signal phases.</p></div>}
-      </div>
+      <div className="ops-twin-stage">{result ? <><section className="ops-map-card"><div className="ops-card-head"><div><span>VEHICLE-LEVEL PLAYBACK</span><h3>{form.name}</h3></div><span className="ops-live-label">NATIVE RUN</span></div><TrafficSimulationScene nativeSumo roads={frame?.roads || []} frame={frame} playing networkGeometry={result.network_geometry}/><div className="ops-playback"><div><b>Simulation playback</b><span>Frame {index + 1} / {timeline.length}</span></div><button className="ops-icon-button" onClick={() => setPlaying((v) => !v)}>{playing ? 'Pause' : 'Play'}</button><input type="range" min="0" max={Math.max(0, timeline.length - 1)} value={index} onChange={(e) => { setIndex(Number(e.target.value)); setPlaying(false); }}/></div></section>
+        <section className="ops-kpi-grid"><article><span><CarFront size={16}/> Vehicles completed</span><b>{fmt(summary.vehicles_completed)}</b><small>Microscopic run</small></article><article><span><Clock3 size={16}/> Average waiting</span><b>{fmt(summary.avg_trip_waiting_seconds, 's')}</b><small>Trip records</small></article><article><span><Gauge size={16}/> Mean speed</span><b>{fmt(summary.mean_speed_kmph_final, ' km/h')}</b><small>End of run</small></article><article><span><Route size={16}/> Queue at end</span><b>{fmt(summary.queue_end)}</b><small>Halted vehicles</small></article></section></> : <section className="ops-empty-card dark"><div className="ops-road-graphic"><i/><i/><i/><i/><span><CarFront size={23}/></span></div><span>MICROSCOPIC DIGITAL TWIN</span><h3>{busy ? 'Building the road scene' : 'A living intersection model'}</h3><p>Run a detailed experiment to inspect individual vehicle movements, signal phases and road performance through the simulation timeline.</p></section>}</div>
     </div>
-  </div>;
+  </main>;
 }

@@ -71,17 +71,18 @@ def get_simulation_snapshot() -> dict:
             "predicted_queue_30min": round(float(row.predicted_queue_30min), 1),
             "level_now": str(row.level_now), "level_30min": str(row.level_30min),
         } for row in roads.head(12).itertuples(index=False)],
-        "note": "This is a historical reference-network forecast, not a live road sensor feed.",
+        "note": "Forecast is generated from the supplied SUMO simulation dataset. It is a model scenario, not a live road sensor feed.",
     }
 
 
 
 def get_simulation_scenario(minutes: int = 60, step_minutes: int = 5, scenario: str = "baseline") -> dict:
-    """Build a 60-minute, 80-road reference-network forecast timeline.
+    """Build a 60-minute, 80-road forecast timeline from 30/60-minute XGBoost models.
 
-    The timeline is a learned forecast with interpolation between trained horizons,
-    not live city telemetry or a microscopic vehicle simulation. The API returns
-    five-minute steps so the UI can advance visibly without misrepresenting data.
+    The timeline is model inference + interpolation between trained horizons, not a
+    running SUMO process. SUMO-generated training data has 36 runs x 180 minutes x 80
+    edges (518,400 records). The API returns every simulated step so the UI can advance
+    visibly without pretending to receive live city sensors.
     """
     pd, features, model_30, edge_mean, metrics_30, raw, model_60, metrics_60 = _load()
     minutes = max(15, min(60, int(minutes)))
@@ -135,32 +136,27 @@ def get_simulation_scenario(minutes: int = 60, step_minutes: int = 5, scenario: 
             "roads": [{"road": str(roads[i]), "queue": round(float(queues[i]), 1), "level": level(float(queues[i])), "vehicles": int(round(vehicles[i]))} for i in range(len(roads))],
         })
     initial, final = timeline[0], timeline[-1]
-    try:
-        from app.services.sumo_runner import NETWORK, _network_geometry
-        geometry = _network_geometry(NETWORK)
-    except Exception:
-        geometry = None
     return {
         "mode": "trained_model_scenario", "scenario": scenario, "duration_minutes": minutes,
-        "network_geometry": geometry,
         "step_minutes": step_minutes, "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
         "training_data": {"records": int(raw.shape[0]), "simulation_runs": int(raw["run_id"].nunique()), "minutes_per_run": int(raw["time_min"].max()), "road_edges": int(raw["edge_id"].nunique())},
         "models": {"horizon_30": {"mae_vehicles": round(float(metrics_30.get("xgboost", {}).get("mae", 0)), 2), "level_accuracy_percent": round(float(metrics_30.get("xgboost", {}).get("level_accuracy", 0))*100, 1)}, "horizon_60": {"mae_vehicles": round(float(metrics_60.get("mae_vehicles", 0)), 2), "level_accuracy_percent": round(float(metrics_60.get("level_accuracy", 0))*100, 1), "r2": round(float(metrics_60.get("r2", 0)), 3)}},
         "summary": {"queue_start": initial["queue_total"], "queue_end": final["queue_total"], "queue_change_percent": round((final["queue_total"]-initial["queue_total"])/max(initial["queue_total"],1)*100,1), "road_count": len(roads), "heavy_roads_start": initial["heavy_roads"], "heavy_roads_end": final["heavy_roads"]},
         "timeline": timeline,
-        "notes": ["Forecast trained on 518,400 historical records across 80 reference road segments.", "Minutes 0–30 use the short-horizon forecast; minutes 30–60 use the longer-horizon forecast with interpolation between model horizons.", "This is a model scenario, not a live road-camera feed or a microscopic vehicle simulation."] + (["Demand-surge mode applies a visible +22% queue sensitivity overlay by the selected horizon; this overlay is a what-if assumption, not a separately trained demand model."] if scenario == "demand_surge" else ["Signal-priority mode applies a bounded queue-reduction sensitivity overlay; this is not a measured signal-control outcome."] if scenario == "signal_priority" else []),
+        "notes": ["Forecast trained on 518,400 rows from 36 SUMO-generated runs across 80 road edges.", "Minutes 0–30 use the trained 30-minute model horizon; minutes 30–60 are guided by the independently trained 60-minute model with interpolation between model horizons.", "This is a model scenario, not a live road-camera feed or a running SUMO/TraCI process."] + (["Demand-surge mode applies a visible +22% queue sensitivity overlay by the selected horizon; this overlay is a what-if assumption, not a separately trained demand model."] if scenario == "demand_surge" else ["Signal-priority mode applies a bounded queue-reduction sensitivity overlay; this is not a measured signal-control outcome."] if scenario == "signal_priority" else []),
     }
 
 
 def get_xgboost_signal_scenario(
     *, north_south_green_seconds: int, east_west_green_seconds: int,
     yellow_seconds: int, all_red_seconds: int, demand_multiplier: float = 1.0,
-    name: str = "Signal timing what-if experiment",
+    name: str = "XGBoost signal sensitivity experiment",
 ) -> dict:
-    """Return a 60-minute forecast with a transparent signal sensitivity overlay.
+    """Return a 60-minute trained forecast plus a transparent what-if signal overlay.
 
-    The underlying forecast does not learn proposed signal timings. The axis split,
-    clearance and demand effects are bounded what-if assumptions layered over the
+    The XGBoost model itself predicts queues from historical SUMO features. Its training
+    features do not include proposed signal timings. The axis split, clearance and demand
+    effects below are therefore deterministic sensitivity assumptions layered over the
     forecast, not causal model predictions. No individual vehicle trajectories are made.
     """
     from copy import deepcopy
@@ -217,7 +213,7 @@ def get_xgboost_signal_scenario(
     change = round((final["queue_total"] - baseline_final["queue_total"]) / max(baseline_final["queue_total"], 1) * 100, 1)
     return {
         "mode": "xgboost_model_scenario",
-        "engine": "60-minute network forecast with signal sensitivity",
+        "engine": "XGBoost 30/60-minute queue forecast + explicit signal sensitivity overlay",
         "scenario": "signal_timing_sensitivity", "duration_minutes": 60, "step_minutes": 5,
         "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
         "experiment": {"name": name, "signal_timings": {
@@ -239,9 +235,9 @@ def get_xgboost_signal_scenario(
         }},
         "baseline_timeline": baseline_timeline, "timeline": proposed,
         "notes": [
-            "This result uses the 30/60-minute network forecast. It is not a detailed vehicle-by-vehicle simulation.",
+            "This result uses the trained XGBoost 30/60-minute queue forecasts. It is not a native SUMO run.",
             "Signal green split, clearance time and demand are represented by a bounded sensitivity overlay; these effects are assumptions, not causal predictions learned by the model.",
             "The playback colours actual forecasted edge queue estimates on the bundled 80-edge reference network. It does not invent per-vehicle positions or trajectories.",
-            "Detailed individual vehicle movement is available only when the detailed simulation capability is enabled.",
+            "For microscopic vehicle movement and true signal-phase experiments, install SUMO and use the native SUMO engine.",
         ],
     }

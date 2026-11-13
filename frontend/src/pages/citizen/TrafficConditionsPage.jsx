@@ -4,6 +4,7 @@ import PageIntro from '../../components/shared/PageIntro.jsx';
 import { EmptyState } from '../../components/shared/Toast.jsx';
 import CityMap from '../../components/maps/CityMap.jsx';
 import { api } from '../../services/api/client.js';
+import { searchPublicPlaces } from '../../services/publicRouting.js';
 import './traffic-conditions.css';
 
 const number = (value, suffix = '') => value == null || !Number.isFinite(Number(value)) ? '—' : `${Math.round(Number(value) * 10) / 10}${suffix}`;
@@ -40,8 +41,8 @@ export default function TrafficConditionsPage() {
 
     // Road geometry/flow is the primary result. News is independent so a slow
     // search provider never holds the map and road status behind a Promise.all.
-    const roadRequest = api.get(`/traffic/nearby?${params.toString()}`, { timeoutMs: 11500, fallbackGraceMs: 0 });
-    const newsRequest = api.get(`/traffic/news?${newsParams.toString()}`, { timeoutMs: 6500, fallbackGraceMs: 0 })
+    const roadRequest = api.get(`/traffic/nearby?${params.toString()}`, { timeoutMs: 22000, fallbackGraceMs: 6500 });
+    const newsRequest = api.get(`/traffic/news?${newsParams.toString()}`, { timeoutMs: 7500, fallbackGraceMs: 6500 })
       .then((value) => setNews(value))
       .catch((err) => setNews({ status: 'unavailable', provider: null, items: [], note: err.message || 'Traffic news is unavailable.' }))
       .finally(() => setNewsLoading(false));
@@ -50,8 +51,8 @@ export default function TrafficConditionsPage() {
       const trafficResult = await roadRequest;
       setTraffic(trafficResult);
       setLastUpdated(new Date().toISOString());
-      if (!trafficResult?.roads?.length) {
-        setError(trafficResult?.note || 'Road geometry is temporarily unavailable for this area. The map and incident search remain available; try Refresh shortly.');
+      if (!trafficResult?.roads?.length && trafficResult?.status !== 'available') {
+        setError(trafficResult?.note || 'Road mapping providers did not return nearby roads. Try another search area.');
       }
     } catch (err) {
       setTraffic(null);
@@ -68,9 +69,10 @@ export default function TrafficConditionsPage() {
     try {
       let results = [];
       try {
-        const response = await api.get(`/routing/geocode?q=${encodeURIComponent(clean)}&limit=5`, { timeoutMs: 8500, fallbackGraceMs: 0 });
+        const response = await api.get(`/routing/geocode?q=${encodeURIComponent(clean)}&limit=5`, { timeoutMs: 4500, fallbackGraceMs: 2500 });
         results = response?.results || [];
-      } catch { /* One bounded lookup only; don't send the same query twice. */ }
+      } catch { /* the configured API client reports a backend outage */ }
+      if (!results.length) results = await searchPublicPlaces(clean, 5).catch(() => []);
       const selected = results.find((item) => String(item.label || '').toLowerCase() === clean.toLowerCase()) || results[0];
       if (!selected || !Number.isFinite(Number(selected.latitude)) || !Number.isFinite(Number(selected.longitude))) {
         throw new Error(`No mapped location found for “${clean}”. Try a nearby landmark or full address.`);
@@ -127,19 +129,19 @@ export default function TrafficConditionsPage() {
 
     {traffic && <>
       <div className="tc-kpi-grid">
-        <article className="panel tc-kpi"><span><Gauge size={16}/>Live speed readings</span><strong>{roads.length ? measured.length : '—'}</strong><small>{roads.length ? `of ${roads.length} mapped roads` : 'Road discovery unavailable'}</small></article>
-        <article className="panel tc-kpi"><span><TrafficCone size={16}/>Heavy / closed</span><strong>{roads.length ? number(summary.heavy_roads, '') : '—'}</strong><small>{roads.length ? 'Provider-observed segments' : 'Waiting for road mapping'}</small></article>
-        <article className="panel tc-kpi"><span><Activity size={16}/>Slow traffic</span><strong>{roads.length ? number(summary.slow_roads, '') : '—'}</strong><small>{roads.length ? 'Provider-observed segments' : 'Waiting for road mapping'}</small></article>
+        <article className="panel tc-kpi"><span><Gauge size={16}/>Live speed readings</span><strong>{measured.length}</strong><small>of {roads.length} mapped roads</small></article>
+        <article className="panel tc-kpi"><span><TrafficCone size={16}/>Heavy / closed</span><strong>{number(summary.heavy_roads, '')}</strong><small>Provider-observed segments</small></article>
+        <article className="panel tc-kpi"><span><Activity size={16}/>Slow traffic</span><strong>{number(summary.slow_roads, '')}</strong><small>Provider-observed segments</small></article>
         <article className="panel tc-kpi"><span><AlertTriangle size={16}/>Incidents</span><strong>{traffic.incidents?.length ?? '—'}</strong><small>{traffic.incident_status === 'available' ? 'Provider incident feed' : 'Incident feed unavailable'}</small></article>
       </div>
       <section className="panel tc-map-panel">
-        <div className="panel-head"><div><div className="eyebrow">NEARBY ROAD NETWORK</div><h3>{place?.label || 'Selected area'}</h3><p>{roads.length ? `${roads.length} mapped road segments within ${distance(traffic.radius_m)}` : `Road geometry is temporarily unavailable within ${distance(traffic.radius_m)}`}</p></div><span className={`status-pill ${measured.length ? 'status-success' : ''}`}>{measured.length ? 'Live flow available' : 'Mapped roads only'}</span></div>
-        {markers.length || mapLines.length ? <CityMap city={place?.label || 'Lucknow'} markers={markers} routeOptions={mapLines} zoom={14} className="tc-map"/> : <div className="tc-map-empty"><EmptyState title="Map unavailable" description="Try a nearby landmark or refresh the map."/></div>}
+        <div className="panel-head"><div><div className="eyebrow">NEARBY ROAD NETWORK</div><h3>{place?.label || 'Selected area'}</h3><p>{roads.length} mapped road segments within {distance(traffic.radius_m)}</p></div><span className={`status-pill ${measured.length ? 'status-success' : ''}`}>{measured.length ? 'Live flow available' : 'Mapped roads only'}</span></div>
+        {markers.length || mapLines.length ? <CityMap markers={markers} routeOptions={mapLines} zoom={14} className="tc-map"/> : <div className="tc-map-empty"><EmptyState title="No mapped roads returned" description="Try a nearby landmark or widen the area with a different search."/></div>}
         <div className="tc-map-legend"><span><i style={{background:'#c9574f'}}/>Heavy / closed</span><span><i style={{background:'#d79a36'}}/>Slow</span><span><i style={{background:'#438e69'}}/>Moving</span><span><i style={{background:'#87928b'}}/>No speed data</span><small>Road shapes: OpenStreetMap · flow colours: TomTom when configured</small></div>
       </section>
       <div className="tc-content-grid">
         <section className="panel tc-roads-panel"><div className="panel-head"><div><div className="eyebrow">ROAD-BY-ROAD</div><h3>Nearby roads</h3></div><span className="status-pill">{roads.length} found</span></div>
-          {roads.length ? <div className="tc-road-list">{roads.slice(0, 16).map((road) => <TrafficRoadCard key={road.id} road={road}/>)}</div> : <EmptyState title="Road mapping is temporarily unavailable" description="The base map and incident feed remain available. Refresh to retry nearby road discovery."/>}
+          {roads.length ? <div className="tc-road-list">{roads.slice(0, 16).map((road) => <TrafficRoadCard key={road.id} road={road}/>)}</div> : <EmptyState title="No roads found" description="No road geometry was returned for this location."/>}
           {!measured.length && <p className="tc-source-note">{traffic.traffic_note || 'Live speed readings are not available. The map shows mapped roads without assigning guessed congestion levels.'}</p>}
         </section>
         <section className="panel tc-incidents-panel"><div className="panel-head"><div><div className="eyebrow">DISRUPTIONS</div><h3>Traffic incidents</h3></div><AlertTriangle size={18}/></div>

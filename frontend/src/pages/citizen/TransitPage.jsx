@@ -26,7 +26,6 @@ export default function TransitPage() {
   const [arrivals, setArrivals] = useState(null);
   const [arrivalBusy, setArrivalBusy] = useState(false);
   const [journeys, setJourneys] = useState(null);
-  const [journeyFallbackUrl, setJourneyFallbackUrl] = useState('');
   const [planError, setPlanError] = useState('');
   const [planBusy, setPlanBusy] = useState(false);
   const [locating, setLocating] = useState(false);
@@ -98,20 +97,8 @@ export default function TransitPage() {
       };
       const [origin, destination] = await Promise.all([geocode(from.trim()), geocode(to.trim())]);
       const params = new URLSearchParams({ origin_latitude: origin.latitude, origin_longitude: origin.longitude, destination_latitude: destination.latitude, destination_longitude: destination.longitude });
-      const url = new URL('https://www.google.com/maps/dir/');
-      url.searchParams.set('api', '1');
-      url.searchParams.set('origin', `${from.trim()}`);
-      url.searchParams.set('destination', `${to.trim()}`);
-      url.searchParams.set('travelmode', 'transit');
-      setJourneyFallbackUrl(url.toString());
-      setJourneys(await api.get(`/transit/plan?${params.toString()}`, { timeoutMs: 10000, fallbackGraceMs: 0 }));
-    } catch (err) {
-      const url = new URL('https://www.google.com/maps/dir/');
-      url.searchParams.set('api', '1'); url.searchParams.set('origin', from.trim()); url.searchParams.set('destination', to.trim()); url.searchParams.set('travelmode', 'transit');
-      setJourneyFallbackUrl(url.toString());
-      setJourneys({ status: 'provider_unavailable', options: [], limitations: ['No connected operator timetable could be reached. Use the external transit planner for current route choices.'] });
-      setPlanError('UrbanSaarthi could not retrieve an operator timetable for this trip.');
-    }
+      setJourneys(await api.get(`/transit/plan?${params.toString()}`, { timeoutMs: 15000 }));
+    } catch (err) { setPlanError(err.message || 'Could not plan this public transport trip.'); }
     finally { setPlanBusy(false); }
   }
 
@@ -129,7 +116,7 @@ export default function TransitPage() {
       </form>
       {newsError && <div className="transit-error"><AlertTriangle size={14}/>{newsError}</div>}
       {news?.items?.length ? <div className="transit-news-grid">{news.items.map((item, index) => <article className="transit-news-card" key={item.url || index}><div className="transit-news-meta"><span>{item.source || news.provider}</span><time>{publishedAt(item.published_at)}</time></div><a href={item.url} target="_blank" rel="noreferrer">{item.title}<ExternalLink size={13}/></a>{item.snippet && <p>{item.snippet}</p>}</article>)}</div> : !newsBusy && news && <EmptyState title="No recent service stories found" description={news.note || 'Try a broader city or topic.'}/>}
-      <div className="transit-source-note"><span>{news?.provider || 'Tavily Search / Google News RSS fallback'}</span><small>News results are reporting, not live vehicle locations, arrivals or proof of current delay.</small></div>
+      <div className="transit-source-note"><span>{news?.provider || 'Google News'}</span><small>News results are reporting, not live vehicle locations, arrivals or proof of current delay.</small></div>
     </section>
 
     <div className="transit-main-grid">
@@ -141,7 +128,7 @@ export default function TransitPage() {
           <button className="primary full" type="submit" disabled={planBusy}><Navigation size={15}/>{planBusy ? 'Finding options…' : 'Find public transport'}</button>
         </form>
         {planError && <div className="transit-error">{planError}</div>}
-        {journeys && <div className="transit-journey-list"><b>{journeys.status === 'available' ? `${journeys.options?.length || 0} journey options` : 'No connected timetable for this journey'}</b>{(journeys.options || []).map((option, index) => <article key={option.id || index}><div><strong>{option.label || option.route_name || option.route_short_name || `Option ${index + 1}`}</strong><small>{displayMode(option.mode || option.route_mode)}</small></div><span>{option.duration_seconds == null ? '—' : `${Math.max(1, Math.round(option.duration_seconds / 60))} min`}</span></article>)}{(journeys.limitations || []).map((item) => <small className="transit-limitation" key={item}>{item}</small>)}{journeys.status !== 'available' && journeyFallbackUrl && <div className="transit-external-fallback"><div><b>Continue planning your trip</b><small>Check available bus, train and metro connections with current external route information.</small></div><a className="primary" href={journeyFallbackUrl} target="_blank" rel="noreferrer">Open transit directions <ExternalLink size={14}/></a></div>}</div>}
+        {journeys && <div className="transit-journey-list"><b>{journeys.status === 'available' ? `${journeys.options?.length || 0} journey options` : 'No timetable journey found'}</b>{(journeys.options || []).map((option, index) => <article key={option.id || index}><div><strong>{option.label || option.route_name || option.route_short_name || `Option ${index + 1}`}</strong><small>{displayMode(option.mode || option.route_mode)}</small></div><span>{option.duration_seconds == null ? '—' : `${Math.max(1, Math.round(option.duration_seconds / 60))} min`}</span></article>)}{(journeys.limitations || []).map((item) => <small className="transit-limitation" key={item}>{item}</small>)}</div>}
         {!journeys && <div className="transit-planner-empty"><MapPin size={17}/><span>Journey options appear when a connected timetable covers the selected places.</span></div>}
       </section>
 

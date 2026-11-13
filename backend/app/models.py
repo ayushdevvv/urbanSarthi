@@ -78,6 +78,21 @@ class TrafficObservation(Base):
     )
 
 
+class TrafficAnalysisReport(TimestampMixin, Base):
+    """Compact, durable results from camera inference and traffic-agent runs."""
+    __tablename__ = "traffic_analysis_reports"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    public_id: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False)
+    report_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    junction_id: Mapped[int | None] = mapped_column(ForeignKey("junctions.id", ondelete="SET NULL"), nullable=True, index=True)
+    source_name: Mapped[str] = mapped_column(String(180), default="unknown source", nullable=False)
+    source_mode: Mapped[str] = mapped_column(String(40), default="unknown", nullable=False)
+    summary: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    result: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    __table_args__ = (Index("ix_traffic_reports_created", "created_at"),)
+
+
 class AqiObservation(Base):
     __tablename__ = "aqi_observations"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -341,24 +356,6 @@ class CityAlert(TimestampMixin, Base):
     ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-
-class TrafficAnalysisReport(TimestampMixin, Base):
-    """Persisted, auditable output from image/video/camera traffic analysis."""
-    __tablename__ = "traffic_analysis_reports"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    public_id: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False)
-    report_type: Mapped[str] = mapped_column(String(40), default="traffic_analysis", nullable=False, index=True)
-    title: Mapped[str] = mapped_column(String(180), nullable=False)
-    source_name: Mapped[str] = mapped_column(String(180), default="Traffic evidence", nullable=False)
-    status: Mapped[str] = mapped_column(String(30), default="completed", nullable=False, index=True)
-    junction_id: Mapped[int | None] = mapped_column(ForeignKey("junctions.id", ondelete="SET NULL"), nullable=True, index=True)
-    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    source_observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    evidence: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
-    result: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
-    provenance: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
-    __table_args__ = (Index("ix_traffic_report_created", "created_at"),)
 
 
 class DataSource(TimestampMixin, Base):

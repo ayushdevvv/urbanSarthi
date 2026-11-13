@@ -10,8 +10,6 @@ import './styles/global.css';
 import './styles/premium-ui.css';
 import './styles/polish.css';
 import './styles/app-shell-refinement.css';
-import './styles/release-polish.css';
-import './styles/hackathon-saas-polish.css';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>

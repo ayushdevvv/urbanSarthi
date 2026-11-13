@@ -67,31 +67,15 @@ def list_aqi(db: Session = Depends(get_db), latitude: float | None = Query(defau
 @router.get("/nearby")
 def nearby_aqi(latitude: float = Query(ge=-90, le=90), longitude: float = Query(ge=-180, le=180), radius_km: float = Query(default=20, ge=0.1, le=500), db: Session = Depends(get_db)):
     now = utc_now()
-    recent_cutoff = now - timedelta(hours=24)
-    history_cutoff = now - timedelta(days=30)
-    rows = list(db.scalars(select(AqiObservation).where(
-        AqiObservation.observed_at >= history_cutoff,
-        AqiObservation.source != "synthetic-demo",
-    ).order_by(AqiObservation.observed_at.desc()).limit(2000)))
+    cutoff = now - timedelta(hours=24)
+    rows = list(db.scalars(select(AqiObservation).where(AqiObservation.observed_at >= cutoff, AqiObservation.source != "synthetic-demo").order_by(AqiObservation.observed_at.desc()).limit(1000)))
     nearby = []
     for row in rows:
         distance = haversine_m(latitude, longitude, row.latitude, row.longitude)
         if distance <= radius_km * 1000:
-            age_seconds = max(0, int((now - row.observed_at.replace(tzinfo=row.observed_at.tzinfo or now.tzinfo)).total_seconds()))
-            is_historical = row.observed_at < recent_cutoff or bool((row.raw_payload or {}).get("data_mode") == "historical_reference")
-            nearby.append({
-                "station": AqiObservationOut.model_validate(row).model_dump(mode="json"),
-                "distance_meters": round(distance, 1), "age_seconds": age_seconds,
-                "is_historical": is_historical,
-                "data_mode": (row.raw_payload or {}).get("data_mode", "observation"),
-            })
+            nearby.append({"station": AqiObservationOut.model_validate(row).model_dump(mode="json"), "distance_meters": round(distance, 1), "age_seconds": max(0, int((now - row.observed_at.replace(tzinfo=row.observed_at.tzinfo or now.tzinfo)).total_seconds()))})
     nearby.sort(key=lambda x: x["distance_meters"])
-    recent_count = sum(1 for item in nearby if not item["is_historical"])
-    status = "available" if recent_count else "historical_reference" if nearby else "no_recent_station_data"
-    return {"generated_at": now.isoformat(), "radius_km": radius_km, "stations": nearby,
-            "recent_station_count": recent_count, "historical_station_count": len(nearby) - recent_count,
-            "status": status,
-            "note": "Historical station snapshots are shown with their original observation time; they are not live readings." if status == "historical_reference" else None}
+    return {"generated_at": now.isoformat(), "radius_km": radius_km, "stations": nearby, "status": "available" if nearby else "no_recent_station_data"}
 
 
 @router.get("/location-forecast")

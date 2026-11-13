@@ -21,7 +21,6 @@ services:
         sync: false
       - key: TOMTOM_API_KEY
         sync: false
-      - key: TAVILY_API_KEY
         sync: false
       - key: GEMINI_API_KEY
         sync: false

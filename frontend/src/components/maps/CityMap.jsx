@@ -3,9 +3,7 @@ import { MapContainer, Marker, Popup, TileLayer, Polyline, useMap } from 'react-
 import L from 'leaflet';
 
 const cityCenters = {
-  India: [26.8467, 80.9462],
-  Kanpur: [26.4499, 80.3319],
-  'Kanpur Nagar': [26.4499, 80.3319],
+  India: [22.0, 79.0],
   'Delhi NCR': [28.6139, 77.2090], 'New Delhi': [28.6139, 77.2090],
   'Rajiv Chowk': [28.6328, 77.2197], 'Akshardham': [28.6127, 77.2773], 'Connaught Place': [28.6315, 77.2167], 'ITO Crossing': [28.6289, 77.2410],
   Mumbai: [19.0760, 72.8777], Bengaluru: [12.9716, 77.5946], Chennai: [13.0827, 80.2707],
@@ -13,11 +11,7 @@ const cityCenters = {
   Lucknow: [26.8467, 80.9462], Ahmedabad: [23.0225, 72.5714], Jaipur: [26.9124, 75.7873],
   'New Delhi Railway Station': [28.6429, 77.2196], 'India Gate': [28.6129, 77.2295],
 };
-export const getLocationCoordinates = (label) => {
-  const clean = String(label || '').toLowerCase();
-  const match = Object.entries(cityCenters).find(([name]) => clean === name.toLowerCase() || clean.startsWith(`${name.toLowerCase()},`));
-  return match?.[1] || cityCenters.Lucknow;
-};
+export const getLocationCoordinates = (label) => cityCenters[label] || cityCenters.India;
 
 const dotIcon = (kind = 'normal') => L.divIcon({
   className: `map-pin map-pin-${kind}`, html: '<span></span>', iconSize: [18, 18], iconAnchor: [9, 9],
@@ -38,18 +32,18 @@ function MapViewport({ points, fallbackCenter, zoom }) {
   return null;
 }
 
-export default function CityMap({ city = 'Lucknow', markers = [], route = [], routeOptions = [], zoom = 12, className = '' }) {
+export default function CityMap({ city = 'India', markers = [], route = [], routeOptions = [], zoom = 12, className = '' }) {
   const fallbackCenter = getLocationCoordinates(city);
   const [tileProvider, setTileProvider] = useState('osm');
   const handleTileError = useCallback(() => {
-    // OSM standard tiles are the first choice. HOT is a keyless, openly attributed
-    // fallback; never switch to a tile endpoint that returns an API-key watermark.
-    if (tileProvider === 'osm') setTileProvider('hot');
+    if (tileProvider === 'osm') setTileProvider('carto');
   }, [tileProvider]);
   const tileUrl = tileProvider === 'osm'
     ? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-    : 'https://tile.openstreetmap.fr/hot/{z}/{x}/{y}.png';
-  const tileAttribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+  const tileAttribution = tileProvider === 'osm'
+    ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
   const routeCoords = useMemo(() => (route || []).filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]), [route]);
   const markerPositions = markers.filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]);
   const alternativeCoords = (routeOptions || []).flatMap((item) => (item.coordinates || []).filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]));

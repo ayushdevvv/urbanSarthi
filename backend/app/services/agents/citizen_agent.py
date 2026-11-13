@@ -281,7 +281,7 @@ def run_citizen_agent(
     # Provenance label
     badges = []
     if traffic_data:
-        badges.append(traffic_data.get("data_mode_label", "60-minute traffic forecast"))
+        badges.append(traffic_data.get("data_mode_label", "⚡ SUMO Traffic Model"))
     if aqi_data:
         badges.append(aqi_data.get("data_mode_label", "🌐 Live Open-Meteo"))
     overall_label = " · ".join(badges) if badges else "🔵 Simulated Reference Data"

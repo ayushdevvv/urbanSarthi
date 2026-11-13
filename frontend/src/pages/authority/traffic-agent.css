@@ -185,7 +185,3 @@
 .ta-evidence-source small{line-height:1.5}
 .ta-error-note{font-size:11px}
 @media(max-width:620px){.ta-live-camera-action{align-items:stretch;flex-direction:column}.ta-live-camera-action .ta-secondary-action{width:100%}}
-
-.ta-no-evidence-actions{display:flex;align-items:center;justify-content:center;gap:13px;flex-wrap:wrap;margin-top:13px}
-.ta-no-evidence-actions .ta-primary-action{font-size:12px;min-height:42px}
-@media(max-width:560px){.ta-no-evidence-actions{align-items:stretch;flex-direction:column}.ta-no-evidence-actions>*{width:100%;justify-content:center}}

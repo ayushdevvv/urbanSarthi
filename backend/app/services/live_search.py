@@ -1,7 +1,6 @@
 """Server-side, source-attributed live search for citizen mobility intelligence.
 
-Tavily is preferred when configured. Google News RSS is a no-key fallback for
-recently indexed reporting; its results are news articles, not traffic telemetry.
+Google News RSS provides source-linked reporting; it is not traffic telemetry.
 """
 from __future__ import annotations
 
@@ -18,7 +17,6 @@ _NEWS_CACHE: dict[tuple[str, int, str], tuple[float, dict]] = {}
 _NEWS_CACHE_LOCK = threading.Lock()
 _NEWS_CACHE_TTL_SECONDS = 300
 
-from app.core.config import settings
 
 
 def _iso(value: str | None) -> str | None:
@@ -60,42 +58,6 @@ def search_live_news(query: str, *, limit: int = 8, topic: str = "news") -> dict
         result["served_from_cache"] = False
         return result
 
-    if settings.tavily_api_key.strip():
-        try:
-            response = httpx.post(
-                "https://api.tavily.com/search",
-                json={
-                    "api_key": settings.tavily_api_key.strip(),
-                    "query": clean,
-                    "topic": topic,
-                    "search_depth": "basic",
-                    "max_results": max(1, min(limit, 12)),
-                    "include_answer": False,
-                    "include_raw_content": False,
-                },
-                headers={"Accept": "application/json", "User-Agent": "UrbanSaarthi/1.0"},
-                timeout=3.5,
-            )
-            response.raise_for_status()
-            payload = response.json()
-            items = []
-            for row in payload.get("results") or []:
-                url = str(row.get("url") or "").strip()
-                title = str(row.get("title") or "").strip()
-                if not title or not url.startswith(("https://", "http://")):
-                    continue
-                items.append({
-                    "title": title[:300], "url": url, "snippet": str(row.get("content") or "")[:1000],
-                    "source": str(row.get("source") or "")[:160],
-                    "published_at": _iso(row.get("published_date")),
-                })
-            return remember({"status": "available" if items else "no_results", "provider": "Tavily Search",
-                    "items": items[:limit], "query": clean, "updated_at": datetime.now(timezone.utc).isoformat(),
-                    "note": "Search results are source-linked reporting. Check publisher timestamps; they are not live vehicle or service telemetry."})
-        except (httpx.HTTPError, ValueError, TypeError, KeyError):
-            # Preserve a working keyless news path; never surface the provider's raw error.
-            pass
-
     try:
         response = httpx.get(
             "https://news.google.com/rss/search",
@@ -121,4 +83,4 @@ def search_live_news(query: str, *, limit: int = 8, topic: str = "news") -> dict
     except (httpx.HTTPError, ET.ParseError, ValueError, TypeError):
         return {"status": "unavailable", "provider": None, "items": [], "query": clean,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
-                "note": "Live search is unavailable. Configure TAVILY_API_KEY or retry when news-feed connectivity returns."}
+                "note": "Google News could not be reached. Retry when connectivity returns."}

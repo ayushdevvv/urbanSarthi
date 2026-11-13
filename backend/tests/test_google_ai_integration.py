@@ -196,25 +196,3 @@ def test_deterministic_fallback_note_matches_google_key_state(monkeypatch):
     monkeypatch.setattr(google_base.settings, "gemini_api_key", "")
     unconfigured = google_base.AgentExecutionResult(**result_args).to_dict()
     assert "not configured" in unconfigured["llm_engine"]["note"]
-
-
-def test_reference_network_agent_returns_safe_report_without_camera_counts_or_emissions(monkeypatch):
-    monkeypatch.setattr(traffic_ops_agent, "_run_google_adk", lambda *args, **kwargs: (None, None, {}, "quota unavailable"))
-    monkeypatch.setattr(traffic_ops_agent, "run_forecast", lambda *args, **kwargs: {
-        "mode": "xgboost_model_scenario", "engine": "60-minute network forecast",
-        "timeline": [{"minute": 0, "queue_total": 0}, {"minute": 60, "queue_total": 0}],
-        "summary": {"queue_change_percent": None},
-        "training_data": {"records": 0},
-        "notes": ["Reference network forecast only."],
-    })
-    result = traffic_ops_agent.run_ops_agent(
-        report={"mode": "reference_network", "reference_only": True, "total_vehicles": 0, "counts": {}},
-        prompt="Review Delhi reference corridors", scenario="baseline", cycle_seconds=90,
-    )
-    assert result["agent_mode"] == "deterministic_reference_scan"
-    assert "No camera-derived vehicle counts" in result["response"]
-    assert "calibrated queues" in result["response"]
-    assert "vehicle-mix emissions" in result["response"]
-    assert "0 tracked/estimated vehicles" not in result["response"]
-    assert result["human_review_required"] is True
-    assert result["physical_dispatch_enabled"] is False

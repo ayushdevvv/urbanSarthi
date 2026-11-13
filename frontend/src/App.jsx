@@ -51,16 +51,16 @@ export default function App() {
         <Route path="air-intelligence" element={<AirQualityOverviewPage />} />
         <Route path="aqi-forecast" element={<AirQualityOverviewPage forecastFocus />} />
         <Route path="traffic-simulation" element={<TrafficSimulationPage />} />
-        <Route path="signal-plans" element={<SignalPlansPage />} />
-        <Route path="digital-twin" element={<DigitalTwinPage />} />
         <Route path="carbon" element={<CarbonImpactPage />} />
         <Route path="traffic" element={<Navigate to="/authority/traffic-lab" replace />} />
         <Route path="traffic-model" element={<Navigate to="/authority/traffic-simulation" replace />} />
         <Route path="traffic-analysis" element={<Navigate to="/authority/traffic-lab" replace />} />
+        <Route path="signal-plans" element={<SignalPlansPage />} />
         <Route path="aqi-prediction" element={<Navigate to="/authority/air-intelligence" replace />} />
         <Route path="signals" element={<Navigate to="/authority/traffic-agent" replace />} />
         <Route path="traffic-lab" element={<RouteErrorBoundary resetKey="traffic-lab"><TrafficVisionPage authorityLab /></RouteErrorBoundary>} />
         <Route path="traffic-agent" element={<TrafficAgentPage />} />
+        <Route path="digital-twin" element={<DigitalTwinPage />} />
         <Route path="iot" element={<IotNetworkPage />} />
         <Route path="aqi" element={<Navigate to="/authority/air-intelligence" replace />} />
         <Route path="analytics" element={<AnalyticsPage />} />

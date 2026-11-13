@@ -1,5 +1,4 @@
 from datetime import timedelta
-import uuid
 from copy import deepcopy
 import threading
 import time
@@ -13,7 +12,7 @@ import httpx
 from app.core.config import settings
 from app.db import get_db
 from app.dependencies import require_ingestion_access, require_roles
-from app.models import Junction, TrafficObservation, CityCluster, TrafficAnalysisReport
+from app.models import Junction, TrafficObservation, CityCluster
 from app.schemas import JunctionCreateIn, JunctionOut, TrafficObservationIn, TrafficObservationOut
 from app.services.common import audit, utc_now
 from app.services.predictions import maybe_refresh_forecasts
@@ -96,30 +95,22 @@ def _cached_road_geometry(latitude: float, longitude: float, radius_m: int) -> t
         if cached:
             _NEARBY_ROAD_CACHE.pop(key, None)
 
-    # Query independent public Overpass mirrors concurrently. This avoids a
-    # serial timeout chain when one mirror is degraded, while still returning
-    # only provider-supplied OSM geometry (never fabricated road lines).
+    # Overpass endpoints are tried sequentially with hard, short timeouts.
     query = (f'[out:json][timeout:5];way(around:{radius_m},{latitude},{longitude})'
              f'["highway"~"^({ROAD_HIGHWAYS})$"];out center geom;')
-    endpoints = (
-        "https://overpass-api.de/api/interpreter",
-        "https://overpass.kumi.systems/api/interpreter",
-        "https://overpass.private.coffee/api/interpreter",
-    )
-    def fetch_roads(endpoint: str):
+    elements: list[dict] = []
+    provider_note = None
+    for endpoint, timeout in (("https://overpass-api.de/api/interpreter", 3.5),
+                              ("https://overpass.kumi.systems/api/interpreter", 2.5)):
         try:
             response = httpx.post(endpoint, data={"data": query},
-                                  headers={"User-Agent": "UrbanSaarthi/1.0 (nearby road discovery)"}, timeout=3.8)
+                                  headers={"User-Agent": "UrbanSaarthi/1.0 (nearby road discovery)"}, timeout=timeout)
             response.raise_for_status()
-            payload = response.json()
-            found = payload.get("elements", []) if isinstance(payload, dict) else []
-            return found if isinstance(found, list) else []
+            elements = response.json().get("elements", [])
+            if elements:
+                break
         except (httpx.HTTPError, ValueError, TypeError):
-            return []
-    with ThreadPoolExecutor(max_workers=len(endpoints)) as pool:
-        results = list(pool.map(fetch_roads, endpoints))
-    elements = next((batch for batch in results if batch), [])
-    provider_note = None if elements else "Mapped road geometry is temporarily unavailable from the public map providers. Try refreshing in a moment."
+            provider_note = "OpenStreetMap road discovery could not be reached."
 
     roads = []
     for element in elements:
@@ -303,7 +294,7 @@ def simulation_capabilities():
         "forecast_available": forecast_ready,
         "reference_network_available": NETWORK.is_file(),
         "recommended_mode": "microscopic" if native_ready else "forecast" if forecast_ready else "unavailable",
-        "message": None if native_ready else "A 60-minute network forecast is available; detailed vehicle movement is not enabled on this service." if forecast_ready else "Traffic simulation is not ready on this service.",
+        "message": None if native_ready else "A 60-minute network forecast is available; detailed vehicle tracking is not enabled on this worker." if forecast_ready else "No traffic simulation engine is ready on this worker.",
     }
 
 
@@ -315,7 +306,7 @@ def run_sumo_signal_experiment(payload: NativeSumoRunIn, _user=Depends(require_r
     but the bundled grid is not a mapped or calibrated city network.
     """
     if not sumo_binary():
-        raise HTTPException(status_code=424, detail="Detailed vehicle simulation is not available on this service. Run the 60-minute network forecast instead.")
+        raise HTTPException(status_code=424, detail="SUMO CLI is not installed or SUMO_BINARY is not configured. Install SUMO on the API worker to run this experiment; the XGBoost forecast is not substituted.")
     phases = [
         {"green_seconds": payload.north_south_green_seconds, "yellow_seconds": payload.yellow_seconds, "all_red_seconds": payload.all_red_seconds},
         {"green_seconds": payload.east_west_green_seconds, "yellow_seconds": payload.yellow_seconds, "all_red_seconds": payload.all_red_seconds},
@@ -324,9 +315,9 @@ def run_sumo_signal_experiment(payload: NativeSumoRunIn, _user=Depends(require_r
     try:
         result = run_native_sumo_simulation("baseline", report=report, proposed_phases=phases)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail="Detailed vehicle simulation could not complete. The 60-minute network forecast remains available.") from exc
+        raise HTTPException(status_code=503, detail=f"SUMO execution failed ({type(exc).__name__}). Check SUMO installation and the bundled network files.") from exc
     if result is None:
-        raise HTTPException(status_code=424, detail="Detailed vehicle simulation could not start. Run the 60-minute network forecast instead.")
+        raise HTTPException(status_code=424, detail="Native SUMO could not be started. Check SUMO_BINARY and the bundled grid network.")
     result["experiment"] = {
         "name": payload.name,
         "signal_timings": {
@@ -342,14 +333,15 @@ def run_sumo_signal_experiment(payload: NativeSumoRunIn, _user=Depends(require_r
 
 
 @router.post("/simulation/model-scenario")
-def run_xgboost_signal_experiment(payload: NativeSumoRunIn, db: Session = Depends(get_db), user=Depends(require_roles("operator", "admin"))):
-    """Run the network forecast with a clearly-labelled signal sensitivity overlay.
+def run_xgboost_signal_experiment(payload: NativeSumoRunIn, _user=Depends(require_roles("operator", "admin"))):
+    """Run the trained network forecast with a clearly-labelled signal sensitivity overlay.
 
-    The signal/demand overlay is an explicit what-if assumption because the underlying
-    forecast is based on historical queue patterns, not dedicated signal-control trials.
+    This is an XGBoost forecast, not a microscopic vehicle simulation and not SUMO.
+    The signal/demand overlay is an explicit what-if assumption because these model
+    artifacts were trained on queue features, not signal timing control experiments.
     """
     try:
-        result = get_xgboost_signal_scenario(
+        return get_xgboost_signal_scenario(
             north_south_green_seconds=payload.north_south_green_seconds,
             east_west_green_seconds=payload.east_west_green_seconds,
             yellow_seconds=payload.yellow_seconds,
@@ -357,37 +349,26 @@ def run_xgboost_signal_experiment(payload: NativeSumoRunIn, db: Session = Depend
             demand_multiplier=payload.demand_multiplier,
             name=payload.name,
         )
-        report = TrafficAnalysisReport(
-            public_id=str(uuid.uuid4()), report_type="signal_plan_scenario",
-            title=f"Signal timing study · {payload.name}"[:180], source_name="XGBoost signal sensitivity study",
-            status="completed", created_by_user_id=user.id,
-            evidence={"signal_timings": result.get("experiment", {}).get("signal_timings", {}),
-                      "demand_multiplier": payload.demand_multiplier, "scenario": "signal_timing_sensitivity"},
-            result={"mode": result.get("mode"), "summary": result.get("summary"),
-                    "traffic_comparison": result.get("traffic_comparison"),
-                    "baseline_timeline": result.get("baseline_timeline"), "timeline": result.get("timeline"),
-                    "notes": result.get("notes", [])},
-            provenance={"model_family": "XGBoost 30/60 minute forecast",
-                        "comparison_type": "bounded sensitivity overlay, not a learned causal signal optimizer",
-                        "human_review_required": True, "physical_dispatch_enabled": False},
-        )
-        db.add(report); db.commit(); db.refresh(report)
-        result["report_id"] = report.public_id
-        return result
     except Exception as exc:
         raise HTTPException(status_code=503, detail="The 60-minute traffic forecast could not be completed. Please check the server forecast files and try again.") from exc
 
 
 @router.get("/simulation")
 def traffic_simulation():
-    """Return the current 30-minute reference-network forecast."""
+    """Forecast 30 minutes using the supplied SUMO dataset and trained model."""
     return get_simulation_snapshot()
 
 
 @router.get("/simulation/scenario")
 def traffic_simulation_scenario(minutes: int = Query(default=60, ge=15, le=60), step_minutes: int = Query(default=5, ge=1, le=15), scenario: str = Query(default="baseline", pattern="^(baseline|demand_surge|signal_priority)$")):
-    """Return a multi-step forecast timeline for interactive 60-minute playback."""
-    return get_simulation_scenario(minutes=minutes, step_minutes=step_minutes, scenario=scenario)
+    """Return a multi-step 60-minute XGBoost forecast and its reference road geometry."""
+    result = get_simulation_scenario(minutes=minutes, step_minutes=step_minutes, scenario=scenario)
+    try:
+        from app.services.sumo_runner import NETWORK, _network_geometry
+        result["network_geometry"] = _network_geometry(NETWORK)
+    except Exception:
+        result["network_geometry"] = {"roads": [], "junctions": [], "bounds": {"x_min": 0, "y_min": 0, "x_max": 1000, "y_max": 1000}}
+    return result
 
 
 @router.get("/junctions", response_model=list[JunctionOut])
