@@ -22,4 +22,4 @@ RUN python -m pip install --upgrade pip && pip install -r requirements.txt
 COPY backend/ ./
 COPY --from=web-build /workspace/frontend/dist ./app/static
 EXPOSE 8080
-CMD ["sh", "-c", "alembic upgrade heads && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["sh", "scripts/start.sh"]

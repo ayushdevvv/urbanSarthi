@@ -6,7 +6,7 @@ services:
     runtime: python
     rootDir: ./backend
     buildCommand: pip install -r requirements.txt
-    startCommand: "alembic upgrade heads && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    startCommand: "sh scripts/start.sh"
     healthCheckPath: /healthz
     envVars:
       - key: APP_ENV
@@ -20,7 +20,6 @@ services:
       - key: INGESTION_API_KEY
         sync: false
       - key: TOMTOM_API_KEY
-        sync: false
         sync: false
       - key: GEMINI_API_KEY
         sync: false

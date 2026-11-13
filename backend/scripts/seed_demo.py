@@ -7,7 +7,7 @@ import argparse
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from sqlalchemy import select
+from sqlalchemy import select, text
 from app.db import SessionLocal
 from app.models import AqiObservation, CityCluster, DataSource, Junction, TrafficObservation
 from app.services.common import utc_now
@@ -21,6 +21,10 @@ def main():
     demo_network = args.demo_network or args.demo_telemetry
     db = SessionLocal()
     try:
+        # Several Cloud Run instances can start together. Serialize the
+        # idempotent connector seed on PostgreSQL to avoid unique-key races.
+        if db.bind is not None and db.bind.dialect.name == "postgresql":
+            db.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": 741_902_613_2027})
         if demo_network:
             for i in range(1, 25):
                 external_id = f"DEMO-CLUSTER-{i:02d}"
