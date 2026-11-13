@@ -44,6 +44,8 @@ export default function TrafficAgentPage() {
   const [prompt, setPrompt] = useState('Review the traffic evidence, estimate corridor emissions, draft a safe adaptive signal plan and run the 60-minute forecast.');
   const [distanceKm, setDistanceKm] = useState(String(savedEvidence?.value?.segment_distance_km || 0.5));
   const [workflow, setWorkflow] = useState(null);
+  const [savedReports, setSavedReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [dispatchPreview, setDispatchPreview] = useState(null);
@@ -76,8 +78,17 @@ export default function TrafficAgentPage() {
     return () => { alive = false; };
   }, []);
 
-  const runWorkflow = useCallback(async ({ automatic = false } = {}) => {
-    const source = report;
+  const loadSavedReports = useCallback(async () => {
+    setReportsLoading(true);
+    try {
+      const data = await api.get('/traffic-detection/reports?limit=20', { timeoutMs: 10000, fallbackGraceMs: 0 });
+      setSavedReports((Array.isArray(data?.items) ? data.items : []).filter((item) => ['camera_analysis', 'corridor_preview'].includes(item.report_type)));
+    } catch { setSavedReports([]); }
+    finally { setReportsLoading(false); }
+  }, []);
+
+  const runWorkflow = useCallback(async ({ automatic = false, evidenceOverride = null } = {}) => {
+    const source = evidenceOverride || report;
     if (!source) return;
     setLoading(true);
     setError('');
@@ -97,14 +108,49 @@ export default function TrafficAgentPage() {
       }, { timeoutMs: 40000 });
       setWorkflow(result);
       saveLocalRecord('traffic-agent-last-workflow', result);
-      notify(String(result.agent?.agent_mode || '').startsWith('google_adk_') ? 'TrafficSaarthi completed its analysis run.' : 'TrafficSaarthi completed its analysis workflow.');
+      void loadSavedReports();
+      notify(String(result.agent?.agent_mode || '').startsWith('google_adk_') ? 'TrafficSaarthi completed its analysis run.' : 'TrafficSaarthi completed its analysis workflow.' );
     } catch (err) {
       setError(err?.message || 'The Traffic Agent could not complete the workflow.');
       if (!automatic) notify('The live agent workflow did not complete. No result was substituted.');
     } finally {
       setLoading(false);
     }
-  }, [report, junctionId, scenario, prompt, cycleSeconds, distanceKm, notify]);
+  }, [report, junctionId, scenario, prompt, cycleSeconds, distanceKm, notify, loadSavedReports]);
+
+  useEffect(() => { void loadSavedReports(); }, [loadSavedReports]);
+
+  function runReferenceScan() {
+    const referenceEvidence = {
+      mode: 'reference_network', model: 'Public reference network',
+      source_filename: 'Delhi public corridor reference dataset',
+      video: { sampled_frames: 0, duration_seconds: 0, sampling_interval_seconds: 0 },
+      counts: { car: 0, bus: 0, motorbike: 0, bicycle: 0, truck: 0 },
+      total_vehicles: 0, peak_vehicles_in_frame: 0, mean_vehicles_per_sampled_frame: null,
+      congestion_estimate: 'Not measured', congestion_score_heuristic: null,
+      tracking_ids_available: false, confidence_threshold: null,
+      congestion_note: 'No camera-derived vehicle observations are attached. This report uses the seeded Delhi public corridor references and the bundled forecast baseline only.',
+      segment_distance_km: Number(distanceKm) || 0.5, reference_only: true,
+    };
+    autoStarted.current = true;
+    setReport(referenceEvidence);
+    void runWorkflow({ evidenceOverride: referenceEvidence });
+  }
+
+  function openSavedReport(item) {
+    const evidence = item?.evidence || null;
+    setError('');
+    if (evidence) setReport(evidence);
+    if (item?.report_type === 'camera_analysis' && evidence) {
+      // A camera report is evidence, not an agent result. Re-run the workflow
+      // from that persisted evidence so this button always opens usable outputs.
+      autoStarted.current = true;
+      setWorkflow(null);
+      void runWorkflow({ evidenceOverride: evidence });
+      return;
+    }
+    setWorkflow({ ...(item?.result || {}), preview_only: !item?.junction_id, report_id: item?.public_id, saved_report: true });
+  }
 
   // Saved camera evidence can start a read-only corridor preview immediately.
   // A registered junction is only needed to persist a formal reviewable signal plan.
@@ -203,6 +249,7 @@ export default function TrafficAgentPage() {
   const totalVehicles = report?.total_vehicles ?? report?.peak_vehicles_in_frame ?? 0;
   const plan = workflow?.plan;
   const emissions = workflow?.emissions_estimate?.totals;
+  const referenceOnly = report?.mode === 'reference_network';
 
   return <main className="traffic-agent-page">
     <header className="ta-hero">
@@ -229,8 +276,8 @@ export default function TrafficAgentPage() {
         <div className="ta-panel-heading"><div><span>INPUT EVIDENCE</span><h2>What the agent is analysing</h2></div><span className="ta-soft-icon"><Activity size={18}/></span></div>
         {hasEvidence ? <>
           <div className="ta-evidence-source"><div className="ta-file-icon"><Gauge size={20}/></div><div><b>{report.source_filename || 'Saved traffic evidence'}</b><small>Vehicle detection · {report.source_observed_at ? `Camera sample · ${new Date(report.source_observed_at).toLocaleString()}` : `${report.video?.sampled_frames || 1} sampled frames`}{reportSavedAt ? ` · ${new Date(reportSavedAt).toLocaleString()}` : ''}</small></div><span>VEHICLE REPORT</span></div>
-          <div className="ta-source-metrics"><div><small>Vehicles</small><b>{Number(totalVehicles).toLocaleString()}</b></div><div><small>Scene density</small><b>{report.congestion_estimate || '—'}</b></div><div><small>Confidence</small><b>{Math.round(Number(report.confidence_threshold || 0.3) * 100)}%</b></div></div>
-        </> : <div className="ta-no-evidence"><div><Gauge size={22}/></div><b>No saved vehicle report yet</b><p>Run a real upload in Traffic Lab or load a recent edge-camera sample below. The agent will start when measured evidence is available.</p><Link to="/authority/traffic-lab" className="ta-inline-link">Create traffic evidence <ArrowRight size={14}/></Link></div>}
+          <div className="ta-source-metrics"><div><small>{referenceOnly ? 'Camera vehicles' : 'Vehicles'}</small><b>{referenceOnly ? '—' : Number(totalVehicles).toLocaleString()}</b></div><div><small>Scene density</small><b>{referenceOnly ? 'Not measured' : report.congestion_estimate || '—'}</b></div><div><small>Confidence</small><b>{referenceOnly || report.confidence_threshold == null ? '—' : `${Math.round(Number(report.confidence_threshold) * 100)}%`}</b></div></div>
+        </> : <div className="ta-no-evidence"><div><Gauge size={22}/></div><b>No camera report linked yet</b><p>You can still run a Delhi corridor reference scan. It uses published corridor context and the forecast baseline, without inventing vehicle counts.</p><div className="ta-no-evidence-actions"><button type="button" className="ta-primary-action" onClick={runReferenceScan} disabled={loading}>Run Delhi reference scan <ArrowRight size={14}/></button><Link to="/authority/traffic-lab" className="ta-inline-link">Upload camera evidence <ArrowRight size={14}/></Link></div></div>}
         <div className="ta-control-grid">
           <label><span>Junction</span><select value={junctionId} onChange={(event) => setJunctionId(event.target.value)}><option value="">Choose junction (optional)</option>{junctions.map((item) => <option key={item.id} value={item.id}>{item.name} · #{item.id}</option>)}</select></label>
           <label><span>Forecast scenario</span><select value={scenario} onChange={(event) => setScenario(event.target.value)}><option value="baseline">Baseline</option><option value="signal_priority">Signal priority sensitivity</option><option value="demand_surge">Demand surge sensitivity</option></select></label>
@@ -262,17 +309,17 @@ export default function TrafficAgentPage() {
         <div className="ta-workstream-note">The agent runs evidence inspection, emissions estimation, signal drafting and forecasting on the server. Tool completion is confirmed from the response, not inferred from this progress animation.</div>
         {loading && <div className="ta-running-callout"><span className="ta-running-orb"><Bot size={18}/></span><div><b>TrafficSaarthi is working through the evidence</b><p>The operations workflow is running as one job. Results and the executed-tool trace appear when the backend returns.</p></div><span className="ta-elapsed"><Timer size={13}/> {waitSeconds}s</span></div>}
         {error && <div className="ta-error-note"><XCircle size={15}/><span>{error}</span></div>}
-        {preview && <div className="ta-preview-disclosure"><Sparkles size={15}/><span><b>Illustrative preview</b> · locally calculated from the saved report (or an example scenario). It is not a live backend result and cannot be approved or dispatched.</span></div>}
+        {preview && <div className="ta-preview-disclosure"><Sparkles size={15}/><span><b>Read-only corridor preview</b> · this is a saved backend analysis without a mapped junction. It can be reviewed, but cannot be approved or dispatched.</span></div>}
         {!workflow && !loading && <div className="ta-waiting-state"><span><Bot size={24}/></span><b>Waiting for an evidence-backed run</b><small>A saved camera report can be analysed immediately. Without a registered junction, the result is a read-only corridor preview.</small></div>}
       </div>
     </section>
 
     {workflow && <>
-      <div className="ta-results-heading"><div><span>WORKFLOW OUTPUT</span><h2>{preview ? 'Illustrative operations preview' : 'Analysis, plan and forecast'}</h2></div><span className={`ta-result-mode ${preview ? 'preview' : ''}`}>{preview ? 'REFERENCE CALCULATION' : String(workflow.agent?.agent_mode || '').startsWith('google_adk_') ? 'ASSISTED WORKFLOW' : 'OPERATIONS WORKFLOW'}</span></div>
+      <div className="ta-results-heading"><div><span>WORKFLOW OUTPUT</span><h2>{preview ? 'Read-only corridor assessment' : 'Analysis, plan and forecast'}</h2></div><span className={`ta-result-mode ${preview ? 'preview' : ''}`}>{preview ? 'CORRIDOR REPORT' : String(workflow.agent?.agent_mode || '').startsWith('google_adk_') ? 'ASSISTED WORKFLOW' : 'OPERATIONS WORKFLOW'}</span></div>
       <section className="ta-metrics-grid">
-        <article className="ta-metric-card ta-metric-primary"><span>ESTIMATED CO₂</span><strong>{emissions ? `${Number(emissions.co2_g || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} g` : '—'}</strong><small>Tailpipe proxy · indicative factors</small><Leaf size={19}/></article>
-        <article className="ta-metric-card"><span>ESTIMATED NOx</span><strong>{emissions ? `${Number(emissions.nox_g || 0).toFixed(3)} g` : '—'}</strong><small>Vehicle class × corridor distance</small><Wind size={18}/></article>
-        <article className="ta-metric-card"><span>ESTIMATED PARTICULATE</span><strong>{emissions ? `${Number(emissions.pm_g || 0).toFixed(3)} g` : '—'}</strong><small>Tailpipe PM estimate, not ambient PM</small><Activity size={18}/></article>
+        <article className="ta-metric-card ta-metric-primary"><span>ESTIMATED CO₂</span><strong>{!referenceOnly && emissions ? `${Number(emissions.co2_g || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} g` : '—'}</strong><small>{referenceOnly ? 'No camera evidence attached' : 'Tailpipe proxy · indicative factors'}</small><Leaf size={19}/></article>
+        <article className="ta-metric-card"><span>ESTIMATED NOx</span><strong>{!referenceOnly && emissions ? `${Number(emissions.nox_g || 0).toFixed(3)} g` : '—'}</strong><small>{referenceOnly ? 'Awaiting vehicle evidence' : 'Vehicle class × corridor distance'}</small><Wind size={18}/></article>
+        <article className="ta-metric-card"><span>ESTIMATED PARTICULATE</span><strong>{!referenceOnly && emissions ? `${Number(emissions.pm_g || 0).toFixed(3)} g` : '—'}</strong><small>{referenceOnly ? 'Awaiting vehicle evidence' : 'Tailpipe PM estimate, not ambient PM'}</small><Activity size={18}/></article>
         <article className="ta-metric-card"><span>QUEUE CHANGE · +60 MIN</span><strong>{summary.queue_change_vs_baseline_percent ?? summary.queue_change_percent ?? '—'}{summary.queue_change_vs_baseline_percent != null || summary.queue_change_percent != null ? '%' : ''}</strong><small>Forecast output · see model caveats</small><TrendingUp size={18}/></article>
       </section>
 
@@ -297,6 +344,11 @@ export default function TrafficAgentPage() {
       {workflow.simulation?.caveats?.length > 0 && <div className="ta-caveats"><ShieldCheck size={15}/><span>{workflow.simulation.caveats.join(' ')}</span></div>}
       {dispatchPreview && <pre className="ta-dispatch-preview">{JSON.stringify(dispatchPreview, null, 2)}</pre>}
     </>}
+
+    <section className="ta-panel ta-saved-reports">
+      <div className="ta-panel-heading"><div><span>SAVED OUTPUTS</span><h2>Traffic reports</h2></div><button className="ta-secondary-action" type="button" onClick={() => { setReportsLoading(true); api.get('/traffic-detection/reports?limit=12', { timeoutMs: 10000, fallbackGraceMs: 0 }).then((data) => setSavedReports((data?.items || []).filter((item) => ['camera_analysis', 'corridor_preview'].includes(item.report_type)))).catch(() => notify('Saved reports could not be refreshed.')).finally(() => setReportsLoading(false)); }}><RefreshCw size={14}/> Refresh</button></div>
+      {reportsLoading ? <div className="ta-report-loading"><LoaderCircle size={16} className="ta-spin"/> Loading saved reports…</div> : savedReports.length ? <div className="ta-report-list">{savedReports.map((item) => <button type="button" className="ta-report-row" key={item.public_id} onClick={() => openSavedReport(item)}><span className="ta-report-icon"><Activity size={16}/></span><span><b>{item.title}</b><small>{new Date(item.created_at).toLocaleString()} · {item.junction_id ? `Junction #${item.junction_id}` : 'Corridor preview'} · {item.report_type.replaceAll('_', ' ')}</small></span><strong>Open report <ArrowRight size={13}/></strong></button>)}</div> : <div className="ta-report-empty"><b>No saved analysis reports yet</b><p>Analyze a road image or video in Traffic Lab, then run the Traffic Agent. Completed outputs are saved here automatically.</p><Link to="/authority/traffic-lab" className="ta-inline-link">Open Traffic Lab <ArrowRight size={13}/></Link></div>}
+    </section>
 
     <footer className="ta-footer"><span>URBANSAARTHI · TRAFFICSAARTHI AGENT</span><span>Evidence → Analysis → Draft → Forecast → Human review</span></footer>
   </main>;

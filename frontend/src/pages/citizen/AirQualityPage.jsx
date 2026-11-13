@@ -52,7 +52,7 @@ function AirQualityTrend({ rows }) {
 }
 
 export default function AirQualityPage({ authorityMode = false, forecastFocus = false } = {}) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(() => authorityMode ? 'Delhi, India' : '');
   const [location, setLocation] = useState(null);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -97,6 +97,12 @@ export default function AirQualityPage({ authorityMode = false, forecastFocus = 
       await load(place.latitude, place.longitude, place.label || text);
     } catch (err) { if (requestId === requestSequence.current) { setError(err?.message || 'Could not find that location.'); setLoading(false); } }
   };
+
+  useEffect(() => {
+    if (authorityMode && !location) {
+      void load(28.6139, 77.2090, 'Delhi, India');
+    }
+  }, [authorityMode, location, load]);
 
   const useLocation = () => {
     const requestId = ++requestSequence.current;

@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from sqlalchemy.orm import Session
+from app.db import get_db
 import json
 from starlette.concurrency import run_in_threadpool
 from app.services.traffic_detection import analyze_image, status
@@ -14,10 +16,65 @@ def traffic_model_status():
     return status()
 
 
+def _compact_traffic_evidence(data: dict, fallback_name: str) -> dict:
+    """Keep the report payload small and JSON-safe; never store annotated frame bytes."""
+    raw_counts = data.get("counts") if isinstance(data.get("counts"), dict) else {}
+    vehicle_types = ("car", "bus", "motorbike", "bicycle", "truck")
+    counts = {}
+    for vehicle_type in vehicle_types:
+        try:
+            counts[vehicle_type] = max(0, min(100000, int(raw_counts.get(vehicle_type) or 0)))
+        except (TypeError, ValueError):
+            counts[vehicle_type] = 0
+    total = sum(counts.values())
+    try:
+        peak = max(0, min(100000, int(data.get("peak_vehicles_in_frame") or total)))
+    except (TypeError, ValueError):
+        peak = total
+    try:
+        score_raw = data.get("congestion_score_heuristic")
+        score = max(0.0, min(100.0, float(score_raw))) if score_raw is not None else None
+    except (TypeError, ValueError):
+        score = None
+    try:
+        total_reported = max(0, min(100000, int(data.get("total_vehicles") or total)))
+    except (TypeError, ValueError):
+        total_reported = total
+    try:
+        mean_per_frame = float(data.get("mean_vehicles_per_sampled_frame")) if data.get("mean_vehicles_per_sampled_frame") is not None else None
+        if mean_per_frame is not None and (mean_per_frame != mean_per_frame or abs(mean_per_frame) == float("inf")):
+            mean_per_frame = None
+    except (TypeError, ValueError):
+        mean_per_frame = None
+    compact = {
+        "mode": str(data.get("mode") or "image"),
+        "model": str(data.get("model") or "Vehicle detector"),
+        "source_filename": str(data.get("source_filename") or fallback_name or "Traffic evidence")[:180],
+        "counts": counts,
+        "total_vehicles": total_reported,
+        "peak_vehicles_in_frame": peak,
+        "mean_vehicles_per_sampled_frame": mean_per_frame,
+        "congestion_estimate": data.get("congestion_estimate"),
+        "congestion_score_heuristic": score,
+        "congestion_note": data.get("congestion_note"),
+        "tracking_ids_available": bool(data.get("tracking_ids_available")),
+        "unique_count_method": data.get("unique_count_method"),
+        "confidence_threshold": data.get("confidence_threshold"),
+        "approach_calibration": data.get("approach_calibration") if isinstance(data.get("approach_calibration"), dict) else {"enabled": False},
+        "approach_demand": data.get("approach_demand") if isinstance(data.get("approach_demand"), dict) else {},
+        "video": data.get("video") if isinstance(data.get("video"), dict) else {},
+        "report_version": "traffic-report-v1",
+        "evidence_mode": "sampled_camera_inference",
+    }
+    # Avoid persisting image/video payloads; all metrics are bounded scalars.
+    return compact
+
+
 @router.post("/analyze")
 async def analyze_traffic_image(
     file: UploadFile = File(...),
     confidence: float = Query(default=0.25, ge=0.05, le=0.9),
+    db: Session = Depends(get_db),
     user=Depends(require_roles("operator", "admin")),
 ):
     if file.content_type not in ALLOWED_TYPES:
@@ -29,7 +86,12 @@ async def analyze_traffic_image(
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Image is too large. Maximum upload size is 8 MB.")
     try:
-        return analyze_image(raw, confidence=confidence)
+        data = await run_in_threadpool(analyze_image, raw, confidence=confidence)
+        evidence = _compact_traffic_evidence(data, file.filename or "uploaded-road-image")
+        saved = _persist_traffic_report(db, evidence=evidence, result={"detection": evidence}, user=user, junction=None, report_type="camera_analysis")
+        db.commit(); db.refresh(saved)
+        data["report_id"] = saved.public_id
+        return data
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except FileNotFoundError as exc:
@@ -46,9 +108,10 @@ from datetime import datetime, timezone
 import uuid
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 from app.db import get_db
 from app.dependencies import require_roles
-from app.models import Junction, SignalPlan, SimulationRun, TrafficObservation
+from app.models import Junction, SignalPlan, SimulationRun, TrafficObservation, TrafficAnalysisReport
 from app.services.traffic_video import analyze_video, video_status
 from app.services.traffic_ops_agent import build_draft_phases, run_forecast, run_ops_agent
 from app.services.emissions import estimate_from_counts
@@ -78,8 +141,9 @@ def traffic_video_status():
 async def analyze_traffic_video(
     file: UploadFile = File(...),
     confidence: float = Query(default=0.25, ge=0.05, le=0.9),
-    sample_every_seconds: int = Query(default=1, ge=1, le=5),
+    sample_every_seconds: int = Query(default=3, ge=1, le=10),
     approach_rois: str | None = Query(default=None, description="JSON array of normalized camera polygons keyed to canonical signal movements"),
+    db: Session = Depends(get_db),
     user=Depends(require_roles("operator", "admin")),
 ):
     if file.content_type not in ALLOWED_VIDEO_TYPES and not (file.filename or "").lower().endswith((".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v")):
@@ -95,7 +159,12 @@ async def analyze_traffic_video(
         parsed_rois = json.loads(approach_rois) if approach_rois else None
         if parsed_rois is not None and not isinstance(parsed_rois, list):
             raise ValueError("approach_rois must be a JSON array")
-        return await run_in_threadpool(analyze_video, raw, filename, confidence, sample_every_seconds, parsed_rois)
+        data = await run_in_threadpool(analyze_video, raw, filename, confidence, sample_every_seconds, parsed_rois)
+        evidence = _compact_traffic_evidence(data, filename)
+        saved = _persist_traffic_report(db, evidence=evidence, result={"detection": evidence}, user=user, junction=None, report_type="camera_analysis")
+        db.commit(); db.refresh(saved)
+        data["report_id"] = saved.public_id
+        return data
     except (ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except FileNotFoundError as exc:
@@ -106,10 +175,45 @@ async def analyze_traffic_video(
         raise HTTPException(status_code=503, detail=f"Video analysis could not complete. Check the server video-processing setup and model files.") from exc
 
 
+def _persist_traffic_report(db: Session, *, evidence: dict, result: dict, user, junction: Junction | None, report_type: str = "video_analysis") -> TrafficAnalysisReport:
+    source_name = str(evidence.get("source_filename") or "Traffic evidence")[:180]
+    source_observed_at = None
+    raw_time = evidence.get("source_observed_at")
+    if raw_time:
+        try:
+            source_observed_at = datetime.fromisoformat(str(raw_time).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            source_observed_at = None
+    row = TrafficAnalysisReport(
+        public_id=str(uuid.uuid4()), report_type=report_type,
+        title=f"Traffic assessment · {source_name}"[:180], source_name=source_name,
+        status="completed", junction_id=junction.id if junction else None,
+        created_by_user_id=getattr(user, "id", None), source_observed_at=source_observed_at,
+        evidence=evidence, result=result,
+        provenance={"evidence_mode": evidence.get("mode"), "model": evidence.get("model"),
+                    "created_from": "traffic_agent_workflow", "review_required": True,
+                    "junction_linked": bool(junction), "data_quality": "measured_evidence_with_estimates"},
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _traffic_report_out(row: TrafficAnalysisReport) -> dict:
+    return {"id": row.id, "public_id": row.public_id, "report_type": row.report_type,
+            "title": row.title, "source_name": row.source_name, "status": row.status,
+            "junction_id": row.junction_id, "created_at": row.created_at.isoformat() if row.created_at else None,
+            "source_observed_at": row.source_observed_at.isoformat() if row.source_observed_at else None,
+            "evidence": row.evidence, "result": row.result, "provenance": row.provenance}
+
+
 @router.post("/ops-workflow", status_code=201)
 def run_traffic_ops_workflow(payload: OpsWorkflowIn, request: Request, db: Session = Depends(get_db), user=Depends(require_roles("operator", "admin"))):
     """Persist measured video evidence, run safe analysis tools, and create a human-reviewed draft."""
     junction = db.get(Junction, payload.junction_id) if payload.junction_id is not None else None
+    if junction is not None and (junction.configuration or {}).get("reference_only"):
+        # Public map references are not controller-verified junctions.
+        junction = None
     report = payload.report
     try:
         total = max(0, min(100000, int(report.get("total_vehicles") or report.get("peak_vehicles_in_frame") or 0)))
@@ -155,14 +259,19 @@ def run_traffic_ops_workflow(payload: OpsWorkflowIn, request: Request, db: Sessi
             raise HTTPException(status_code=503, detail="Traffic analysis is temporarily unavailable. Try again after the service recovers.") from exc
         timeline = forecast.get("timeline") or []
         compact_timeline = [{key: point.get(key) for key in ("minute", "queue_total", "vehicles", "heavy_roads", "moderate_roads", "free_roads", "mean_speed_kmph", "roads")} for point in timeline]
-        return {
+        response_payload = {
             "success": True, "preview_only": True, "observation_id": None,
             "plan": {"id": None, "public_id": None, "status": "preview", "cycle_seconds": draft.get("cycle_seconds", payload.cycle_seconds), "phases": draft.get("phases", []), "rationale": draft.get("rationale", "Candidate timing plan generated from the uploaded road evidence."), "junction_id": None, "model_version": "preview-only"},
-            "simulation": {"id": None, "engine": forecast.get("engine"), "status": "completed", "name": f"60-minute {payload.scenario.replace('_', ' ')} corridor preview", "summary": forecast.get("summary", {}), "timeline": compact_timeline, "baseline_timeline": forecast.get("baseline_timeline"), "models": forecast.get("models"), "training_data": forecast.get("training_data"), "emissions_comparison": forecast.get("emissions_comparison"), "traffic_comparison": forecast.get("traffic_comparison"), "engine_label": "60-minute road forecast", "mode": forecast.get("mode"), "engine_fallback_note": forecast.get("engine_fallback_note"), "caveats": list(forecast.get("notes") or []) + ["Preview only: no registered junction is linked. Register a junction to save and review a formal signal plan.", "No physical traffic signal commands are sent."]},
+            "simulation": {"id": None, "engine": forecast.get("engine"), "status": "completed", "name": f"60-minute {payload.scenario.replace('_', ' ')} corridor preview", "summary": forecast.get("summary", {}), "timeline": compact_timeline, "baseline_timeline": forecast.get("baseline_timeline"), "models": forecast.get("models"), "training_data": forecast.get("training_data"), "emissions_comparison": forecast.get("emissions_comparison"), "traffic_comparison": forecast.get("traffic_comparison"), "engine_label": "60-minute road forecast", "mode": forecast.get("mode"), "engine_fallback_note": forecast.get("engine_fallback_note"), "caveats": list(forecast.get("notes") or []) + ["Read-only corridor preview: no registered junction is linked, so no formal junction plan is created.", "No physical traffic signal commands are sent."]},
             "agent": {key: value for key, value in agent_result.items() if key != "tool_results"},
             "tools": agent_result.get("tools_called", []), "emissions_estimate": estimated_emissions,
             "human_review_required": True, "physical_dispatch_enabled": False,
         }
+        saved = _persist_traffic_report(db, evidence=evidence, result=response_payload, user=user, junction=None, report_type="corridor_preview")
+        db.commit()
+        db.refresh(saved)
+        response_payload["report_id"] = saved.public_id
+        return response_payload
 
     observation = TrafficObservation(
         junction_id=junction.id, external_junction_id=junction.external_id,
@@ -228,11 +337,21 @@ def run_traffic_ops_workflow(payload: OpsWorkflowIn, request: Request, db: Sessi
         "forecast_caveats": simulation.caveats,
     }
     db.add(simulation)
+    report_result = {
+        "plan": {"id": plan.id, "public_id": plan.public_id, "status": plan.status, "cycle_seconds": plan.cycle_seconds, "phases": phases, "rationale": plan.rationale},
+        "simulation": {"mode": forecast.get("mode"), "summary": summary, "timeline": compact_timeline, "traffic_comparison": forecast.get("traffic_comparison"), "notes": simulation.caveats},
+        "agent": {key: value for key, value in agent_result.items() if key != "tool_results"},
+        "tools": agent_result.get("tools_called", []), "emissions_estimate": estimated_emissions,
+        "human_review_required": True, "physical_dispatch_enabled": False,
+    }
+    saved_report = _persist_traffic_report(db, evidence=evidence, result=report_result, user=user, junction=junction)
     db.commit()
+    db.refresh(saved_report)
     db.refresh(plan)
     db.refresh(simulation)
     return {
         "success": True,
+        "report_id": saved_report.public_id,
         "observation_id": observation.id,
         "plan": {"id": plan.id, "public_id": plan.public_id, "status": plan.status, "cycle_seconds": plan.cycle_seconds, "phases": plan.phases, "rationale": plan.rationale, "junction_id": plan.junction_id, "model_version": plan.model_version},
         "simulation": {"id": simulation.id, "engine": simulation.engine, "status": simulation.status, "name": simulation.name, "summary": summary, "timeline": compact_timeline, "baseline_timeline": forecast.get("baseline_timeline"), "models": forecast.get("models"), "training_data": forecast.get("training_data"), "emissions_comparison": forecast.get("emissions_comparison"), "traffic_comparison": forecast.get("traffic_comparison"), "engine_label": forecast.get("engine") or forecast.get("mode") or simulation.engine, "mode": forecast.get("mode"), "engine_fallback_note": forecast.get("engine_fallback_note"), "caveats": simulation.caveats},
@@ -242,3 +361,22 @@ def run_traffic_ops_workflow(payload: OpsWorkflowIn, request: Request, db: Sessi
         "human_review_required": True,
         "physical_dispatch_enabled": False,
     }
+
+
+@router.get("/reports")
+def list_traffic_analysis_reports(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles("operator", "admin")),
+):
+    rows = list(db.scalars(select(TrafficAnalysisReport).order_by(TrafficAnalysisReport.created_at.desc()).offset(offset).limit(limit)))
+    return {"items": [_traffic_report_out(row) for row in rows], "count": len(rows), "limit": limit, "offset": offset}
+
+
+@router.get("/reports/{public_id}")
+def get_traffic_analysis_report(public_id: str, db: Session = Depends(get_db), _user=Depends(require_roles("operator", "admin"))):
+    row = db.scalar(select(TrafficAnalysisReport).where(TrafficAnalysisReport.public_id == public_id))
+    if row is None:
+        raise HTTPException(status_code=404, detail="Traffic report not found")
+    return _traffic_report_out(row)

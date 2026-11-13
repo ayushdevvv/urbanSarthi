@@ -1,80 +1,76 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Check, ChevronRight, Play, Plus, RefreshCw, SlidersHorizontal, Zap } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, Download, Gauge, Play, RefreshCw, Route, ShieldCheck, Signal } from 'lucide-react';
 import PageIntro from '../../components/shared/PageIntro.jsx';
-import { EmptyState, ErrorNotice } from '../../components/shared/Toast.jsx';
-import useApiResource from '../../hooks/useApiResource.js';
-import { api, endpoints } from '../../services/api/client.js';
-import { useApp } from '../../context/AppContext.jsx';
+import TrafficSimulationScene from './TrafficSimulationScene.jsx';
+import { api } from '../../services/api/client.js';
+import './traffic-simulation-page.css';
+import './traffic-studio.css';
 
-const seconds = (n) => Number.isFinite(n) ? `${n}s` : '—';
+const DEFAULTS = { name: 'Central corridor timing study', north_south_green_seconds: 42, east_west_green_seconds: 42, yellow_seconds: 3, all_red_seconds: 1, demand_multiplier: 1 };
+const num = (v, suffix = '') => v == null || !Number.isFinite(Number(v)) ? '—' : `${Number(v).toLocaleString('en-IN', { maximumFractionDigits: 1 })}${suffix}`;
+
+function saveJson(name, content) { const url = URL.createObjectURL(new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url); }
+
 export default function SignalPlansPage() {
-  const { notify } = useApp();
-  const navigate = useNavigate();
-  const { data: plans, loading, error, reload } = useApiResource(() => api.get(endpoints.signalPlans), []);
-  const { data: junctions } = useApiResource(() => api.get(endpoints.junctions), []);
-  const [selectedId, setSelectedId] = useState(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [junctionId, setJunctionId] = useState('');
-  const [name, setName] = useState('Operator submitted signal plan');
+  const [form, setForm] = useState(DEFAULTS);
+  const [result, setResult] = useState(null);
+  const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState('');
-  const previewMode = false;
-  const list = Array.isArray(plans) ? plans : [];
-  const selected = list.find((plan) => plan.id === selectedId) || list[0] || null;
-  const phases = useMemo(() => selected?.phases || [], [selected]);
-  const selectedPlanType = String(selected?.plan_type || '').toLowerCase();
-  const previewClass = selectedPlanType.includes('peak') || selectedPlanType.includes('surge') ? 'network-heavy' : selectedPlanType.includes('transit') || selectedPlanType.includes('priority') || selectedPlanType.includes('adaptive') ? 'network-priority' : 'network-balanced';
+  const [error, setError] = useState('');
+  const [history, setHistory] = useState([]);
+  const [historyError, setHistoryError] = useState('');
+  const timeline = result?.timeline || [];
+  const frame = timeline[Math.min(index, Math.max(0, timeline.length - 1))] || null;
+  const baseline = result?.baseline_timeline?.at?.(-1)?.queue_total;
+  const finalQueue = timeline.at?.(-1)?.queue_total;
+  const delta = baseline == null || finalQueue == null ? null : ((finalQueue - baseline) / Math.max(1, baseline)) * 100;
+  const roads = useMemo(() => [...(frame?.roads || [])].sort((a, b) => Number(b.queue || 0) - Number(a.queue || 0)).slice(0, 8), [frame]);
 
-  function publishPlanImpact(plan) {
-    const type = String(plan?.plan_type || '').toLowerCase();
-    const scenario = type.includes('transit') || type.includes('priority') || type.includes('adaptive') ? 'signal_priority' : type.includes('peak') || type.includes('surge') ? 'demand_surge' : 'baseline';
-    const label = scenario === 'signal_priority' ? 'Signal-priority sensitivity' : scenario === 'demand_surge' ? 'Higher demand' : 'Balanced flow';
-    try { localStorage.setItem('urbansarthi.activeTrafficScenario', scenario); } catch { /* scenario will still be announced in this session */ }
-    window.dispatchEvent(new CustomEvent('urbansarthi:traffic-scenario', { detail: { scenario, label } }));
-    return label;
-  }
+  const loadHistory = useCallback(async () => {
+    try { const data = await api.get('/traffic-detection/reports?limit=8', { timeoutMs: 10000, fallbackGraceMs: 0 }); setHistory((data?.items || []).filter((item) => item.report_type === 'signal_plan_scenario')); setHistoryError(''); }
+    catch (err) { setHistoryError(err.message || 'Saved studies could not be loaded.'); }
+  }, []);
+  useEffect(() => { loadHistory(); }, [loadHistory]);
 
-  async function simulateSelected() {
-    if (!selected) return notify('Select an existing plan first.');
-    setBusy(true); setNotice('');
+  async function run(event) {
+    event.preventDefault(); setBusy(true); setError(''); setIndex(0);
     try {
-      const result = await api.post(`/signals/plans/${selected.id}/simulate`, {});
-      const scenarioLabel = publishPlanImpact(selected);
-      setNotice(`Analytical simulation completed. Citizen road activity now follows the ${scenarioLabel.toLowerCase()} scenario. Review the results before approval; no command was sent to physical traffic lights.`);
-      notify(result?.engine ? `Simulation complete · ${result.engine}` : `Scenario published · ${scenarioLabel}`);
-      reload();
-    } catch (err) { notify(err.message); }
-    finally { setBusy(false); }
-  }
-  async function createPlan(event) {
-    event.preventDefault();
-    if (!junctionId) return notify('Choose a junction returned by the API.');
-    setBusy(true);
-    try {
-      await api.post('/signals/plans', { junction_id: Number(junctionId), plan_type: 'manual', rationale: name, phases: [
-        { name: 'North–South', movement: 'north_south', green_seconds: 26, yellow_seconds: 3, all_red_seconds: 1, demand_weight: 1 },
-        { name: 'East–West', movement: 'east_west', green_seconds: 18, yellow_seconds: 3, all_red_seconds: 1, demand_weight: 1 },
-      ] });
-      notify('Signal plan created through the API.'); setCreateOpen(false); await reload();
-    } catch (err) { notify(err.message); }
+      const data = await api.post('/traffic/simulation/model-scenario', form, { timeoutMs: 45000, fallbackGraceMs: 0 });
+      if (!Array.isArray(data?.timeline) || !data.timeline.length) throw new Error('No timing comparison was returned.');
+      setResult(data); await loadHistory();
+    } catch (err) { setError(err?.payload?.detail || err.message || 'The signal timing study could not finish.'); }
     finally { setBusy(false); }
   }
 
-  return <>
-    <PageIntro eyebrow="ADAPTIVE CONTROL" title="Signal plans" description="Review operator-authored signal plans and run a what-if forecast. Only registered junction plans appear here." action={<><button className="utility" onClick={() => navigate('/authority/traffic-model')}><Play size={14}/> Traffic Simulation</button><button className="utility" onClick={reload}><RefreshCw size={14}/> Refresh</button><button className="primary" onClick={simulateSelected} disabled={busy || !selected}><Play size={15}/>{busy ? 'Working…' : 'Apply selected plan'}</button></>} />
-    {Array.isArray(plans) && <div className="notice scenario-notice"><Zap size={14}/>Registered signal plans · analysis only, no physical controller writes</div>}
-    {notice && <div className="notice"><Check size={15}/>{notice}</div>}
-    <div className="signals-grid">
-      <section className="panel plan-list"><div className="panel-head"><div><div className="eyebrow">AVAILABLE PLANS</div><h3>Timing strategies</h3></div><button className="icon-btn" onClick={reload} aria-label="Refresh plans"><SlidersHorizontal size={16}/></button></div>
-        {loading && !Array.isArray(plans) ? <div className="loading-lines">Retrieving saved signal plans…</div> : error && !Array.isArray(plans) ? <div className="empty-state"><b>Signal plans unavailable</b><p>Saved signal plans could not be refreshed. Please retry in a moment.</p><button className="utility" onClick={reload}><RefreshCw size={14}/> Retry</button></div> : list.length ? list.map((plan) => <button className={`plan ${selected?.id === plan.id ? 'selected' : ''}`} key={plan.id} onClick={() => { setSelectedId(plan.id); const scenarioLabel = publishPlanImpact(plan); setNotice(`Preview updated · ${scenarioLabel}. Apply the plan to run its timing analysis.`); }}><span className="radio-dot"/><span className="plan-copy"><b>{plan.plan_type?.replaceAll('_', ' ') || 'Signal plan'}</b><small>Junction {plan.junction_id} · {plan.status}</small></span><span className="impact"><b>{seconds(plan.cycle_seconds)} cycle</b><small>{plan.status}</small></span></button>) : <EmptyState title="No registered signal plans" description="Create a plan for a real junction after its movement phases and safety timings have been verified."/>}
-        <button className="create-plan" onClick={() => setCreateOpen(!createOpen)} disabled={!Array.isArray(junctions) || junctions.length === 0}><Plus size={14}/> Create a new signal plan</button>
-        {createOpen && <form className="create-plan-form" onSubmit={createPlan}><label>Junction<select value={junctionId} onChange={(e) => setJunctionId(e.target.value)} required><option value="">Select junction</option>{(junctions || []).map((j) => <option key={j.id} value={j.id}>{j.name} · ID {j.id}</option>)}</select></label><label>Plan rationale<input value={name} onChange={(e) => setName(e.target.value)} maxLength={3000} required/></label><button className="primary" type="submit" disabled={busy}>Create signal plan</button></form>}
-      </section>
-      <section className="panel preview"><div className="panel-head"><div><div className="eyebrow">PLAN DETAILS</div><h3>{selected ? `Junction ${selected.junction_id} · ${selected.plan_type?.replaceAll('_', ' ')}` : 'Select a plan'}</h3></div><span className="simulation">{selected?.status || 'No plan selected'}</span></div>
-        {selected ? <><div className={`intersection signal-network-preview ${previewClass}`}><div className="road-h"/><div className="road-v"/><div className="center-line h"/><div className="center-line v"/><span className="network-lane-label label-n">NORTH</span><span className="network-lane-label label-s">SOUTH</span><span className="network-lane-label label-w">WEST</span><span className="network-lane-label label-e">EAST</span><div className="signal-stack signal-stack-ns"><i className="lamp-red"/><i className="lamp-amber"/><i className="lamp-green"/></div><div className="signal-stack signal-stack-ew"><i className="lamp-red"/><i className="lamp-amber"/><i className="lamp-green"/></div><span className="time north">N/S {seconds(phases.find((p) => /north|south/i.test(p.movement || p.name))?.green_seconds)}</span><span className="time west">W {seconds(phases.find((p) => /west/i.test(p.movement || p.name))?.green_seconds)}</span><span className="time east">E {seconds(phases.find((p) => /east/i.test(p.movement || p.name))?.green_seconds)}</span><span className="time south">S {seconds(phases.find((p) => /south/i.test(p.movement || p.name))?.green_seconds)}</span><i className="network-car car-n1"/><i className="network-car car-n2"/><i className="network-car car-e1"/><i className="network-car car-w1"/><span className="network-plan-chip">{previewClass === 'network-heavy' ? 'HIGH DEMAND' : previewClass === 'network-priority' ? 'SIGNAL PRIORITY' : 'BALANCED FLOW'}</span></div>
-          <div className="preview-stats"><div><small>Signal cycle</small><b>{seconds(selected.cycle_seconds)}</b></div><div><small>Plan status</small><b>{selected.status}</b></div><div><small>Phases</small><b>{phases.length}</b></div></div><div className="plan-rationale"><Zap size={16}/><span><b>Plan rationale</b><small>{selected.rationale || 'No rationale was supplied.'}</small></span></div><div className="phase-list">{phases.map((phase, i) => <div key={`${phase.name}-${i}`}><b>{phase.name || phase.movement}</b><span>{phase.movement}</span><strong>{seconds(phase.green_seconds)} green</strong></div>)}</div><p className="api-note">Simulation is an analytical scenario result. It does not write to physical traffic lights.</p></> : <EmptyState title="No plan selected" description="Connect a junction and create a signal plan to preview its phase timings."/>}
-      </section>
+  const timing = result?.experiment?.signal_timings || form;
+  return <div className="city-studio">
+    <PageIntro eyebrow="SIGNAL CONTROL" title="Signal plan studio" description="Compare candidate green splits and clearance times against the network baseline." action={<button className="utility" onClick={loadHistory}><RefreshCw size={15}/> Refresh studies</button>}/>
+    <section className="city-studio-toolbar"><div><span className="studio-kicker">TIMING WORKSPACE</span><h2>Build a signal scenario</h2><p>Run a 60-minute comparison without requiring a registered junction.</p></div><span className="studio-mode-pill">HUMAN REVIEW REQUIRED</span></section>
+    <div className="studio-planner-grid">
+      <form className="studio-card studio-form" onSubmit={run}>
+        <div className="studio-card-head"><div><span className="studio-kicker">CANDIDATE PLAN</span><h2>Signal timings</h2></div><Signal size={19}/></div>
+        <label>Study name<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} maxLength={160}/></label>
+        <div className="studio-form-grid">
+          <label>North / South green <div className="studio-input-unit"><input type="number" min="8" max="100" value={form.north_south_green_seconds} onChange={(e) => setForm({ ...form, north_south_green_seconds: Number(e.target.value) })}/><span>sec</span></div></label>
+          <label>East / West green <div className="studio-input-unit"><input type="number" min="8" max="100" value={form.east_west_green_seconds} onChange={(e) => setForm({ ...form, east_west_green_seconds: Number(e.target.value) })}/><span>sec</span></div></label>
+          <label>Yellow clearance <div className="studio-input-unit"><input type="number" min="3" max="8" value={form.yellow_seconds} onChange={(e) => setForm({ ...form, yellow_seconds: Number(e.target.value) })}/><span>sec</span></div></label>
+          <label>All-red clearance <div className="studio-input-unit"><input type="number" min="1" max="5" value={form.all_red_seconds} onChange={(e) => setForm({ ...form, all_red_seconds: Number(e.target.value) })}/><span>sec</span></div></label>
+        </div>
+        <label className="studio-range-label">Traffic demand <b>{Number(form.demand_multiplier).toFixed(1)}×</b><input type="range" min="0.5" max="2" step="0.1" value={form.demand_multiplier} onChange={(e) => setForm({ ...form, demand_multiplier: Number(e.target.value) })}/><small>0.5× lighter · 2× heavier</small></label>
+        <div className="studio-cycle-summary"><span>Cycle length <b>{form.north_south_green_seconds + form.east_west_green_seconds + 2 * (form.yellow_seconds + form.all_red_seconds)} sec</b></span><span>Horizon <b>60 minutes</b></span></div>
+        {error && <div className="studio-error"><AlertTriangle size={15}/>{error}</div>}
+        <button className="studio-primary full" type="submit" disabled={busy}>{busy ? <><span className="studio-mini-spinner"/> Comparing plans…</> : <><Play size={15}/> Compare signal plan</>}</button>
+        <p className="studio-footnote"><ShieldCheck size={14}/> This comparison is a bounded model sensitivity study. It is not a measured signal-control effect and does not send commands to field controllers.</p>
+      </form>
+      <div className="studio-result-column">
+        {result ? <>
+          <div className="city-stats-grid compact"><article className="city-stat"><small>Baseline queue at 60 min</small><strong>{num(baseline)}</strong><span>Reference outlook</span></article><article className="city-stat primary"><small>Candidate queue at 60 min</small><strong>{num(finalQueue)}</strong><span>Selected timings</span></article><article className="city-stat"><small>Queue sensitivity</small><strong>{num(delta, '%')}</strong><span>{delta == null ? 'Not available' : delta < 0 ? 'Lower than baseline' : delta > 0 ? 'Higher than baseline' : 'No change'}</span></article></div>
+          <div className="studio-scene-card"><div className="studio-card-head"><div><span className="studio-kicker">PLAN PREVIEW</span><h2>Network response</h2></div><button className="studio-icon-button" onClick={() => saveJson('urbansaarthi-signal-study.json', result)} title="Download study"><Download size={16}/></button></div><TrafficSimulationScene roads={frame?.roads || []} frame={frame} playing={false} areaName="Reference network" modelForecast networkGeometry={result.network_geometry} signalTimings={timing}/><div className="studio-slider-row"><label>Forecast step <b>{num(frame?.minute, ' min')}</b><input type="range" min="0" max={timeline.length - 1} value={index} onChange={(e) => setIndex(Number(e.target.value))}/></label></div></div>
+          <section className="studio-card"><div className="studio-card-head"><div><span className="studio-kicker">ROAD IMPACT</span><h2>Most affected segments</h2></div><Gauge size={18}/></div><div className="studio-road-list">{roads.map((road) => <div className="studio-road-row" key={road.road}><div><b>{road.road}</b><small>{num(road.vehicles)} vehicles</small></div><strong>{num(road.queue)} queue</strong><span className={`studio-level ${String(road.level || '').toLowerCase()}`}>{road.level}</span></div>)}</div></section>
+          <div className="studio-footnote"><Activity size={14}/> Saved as report {result.report_id ? `#${result.report_id.slice(0, 8)}` : 'in this session'}. No field signal device is connected.</div>
+        </> : <div className="studio-empty"><div className="studio-empty-icon"><Signal size={27}/></div><h2>Ready to compare timings</h2><p>Adjust green splits and traffic demand, then run a comparison to see the 60-minute network response and save a study report.</p></div>}
+      </div>
     </div>
-  </>;
+    <section className="studio-card studio-history"><div className="studio-card-head"><div><span className="studio-kicker">SAVED WORK</span><h2>Recent signal studies</h2></div><span className="studio-count">{history.length} studies</span></div>{historyError && <div className="studio-inline-muted">{historyError}</div>}{history.length ? history.map((item) => <div className="studio-history-row" key={item.public_id}><div><b>{item.title}</b><small>{new Date(item.created_at).toLocaleString()}</small></div><span className="studio-level free">Saved</span></div>) : <p className="studio-inline-muted">Your completed timing studies will appear here.</p>}</section>
+  </div>;
 }

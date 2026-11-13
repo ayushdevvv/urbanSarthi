@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -11,18 +11,33 @@ from app.services.common import utc_now
 router = APIRouter(prefix="/command-center", tags=["City command centre"])
 
 
+def _as_utc(value: datetime | None, reference: datetime) -> datetime | None:
+    if value is None:
+        return None
+    return value.replace(tzinfo=value.tzinfo or timezone.utc)
+
+
 @router.get("/overview")
 def command_overview(db: Session = Depends(get_db), user=Depends(require_roles("operator", "admin"))):
     now = utc_now()
     recent_cutoff = now - timedelta(minutes=30)
     hour_cutoff = now - timedelta(hours=1)
     all_junctions = list(db.scalars(select(Junction).order_by(Junction.name)))
-    live_junctions = [j for j in all_junctions if not (j.configuration or {}).get("is_synthetic")]
-    live_junction_ids = {j.id for j in live_junctions}
     all_clusters = list(db.scalars(select(CityCluster).order_by(CityCluster.name)))
     live_clusters = [c for c in all_clusters if not (c.config or {}).get("is_synthetic")]
-    junctions_total = len(live_junctions)
+    # Publicly seeded corridor references help orient the map, but they are not
+    # physical signal controllers and must not inflate the connected network KPIs.
+    field_junctions = [j for j in all_junctions
+        if not (j.configuration or {}).get("is_synthetic")
+        and not (j.configuration or {}).get("reference_only")]
+    reference_corridors = [j for j in all_junctions
+        if not (j.configuration or {}).get("is_synthetic")
+        and (j.configuration or {}).get("reference_only")]
+    live_junctions = field_junctions
+    live_junction_ids = {j.id for j in live_junctions}
+    junctions_total = len(field_junctions)
     clusters_total = len(live_clusters)
+    primary_city = next((cluster.city for cluster in live_clusters if cluster.city), "Delhi")
     online_clusters = sum(c.status == "online" for c in live_clusters)
     # A junction is effectively online only while a real observation has
     # arrived recently. Stored status alone is not a live heartbeat.
@@ -40,12 +55,16 @@ def command_overview(db: Session = Depends(get_db), user=Depends(require_roles("
             latest_by_junction[observation.junction_id] = observation
     congestion_scores = [o.congestion_score for o in latest_by_junction.values() if o.congestion_score is not None]
     alerts = list(db.scalars(select(CityAlert).where(CityAlert.status == "active").order_by(CityAlert.severity.desc(), CityAlert.created_at.desc()).limit(100)))
-    aqi_rows = list(db.scalars(select(AqiObservation).where(AqiObservation.observed_at >= hour_cutoff, AqiObservation.source != "synthetic-demo").order_by(AqiObservation.observed_at.desc()).limit(1000)))
-    latest_aqi: dict[str, AqiObservation] = {}
+    aqi_rows = list(db.scalars(select(AqiObservation).where(AqiObservation.source != "synthetic-demo")
+        .order_by(AqiObservation.observed_at.desc()).limit(2000)))
+    latest_aqi_all: dict[str, AqiObservation] = {}
+    latest_aqi_recent: dict[str, AqiObservation] = {}
     for row in aqi_rows:
         key = row.external_station_id or row.station_name
-        if key not in latest_aqi:
-            latest_aqi[key] = row
+        if key not in latest_aqi_all:
+            latest_aqi_all[key] = row
+        if (_as_utc(row.observed_at, now) or now) >= hour_cutoff and key not in latest_aqi_recent:
+            latest_aqi_recent[key] = row
     real_sources = [source for source in db.scalars(select(DataSource)) if not (source.safe_config or {}).get("is_synthetic")]
     source_counts: dict[str, int] = {}
     for source in real_sources:
@@ -69,16 +88,28 @@ def command_overview(db: Session = Depends(get_db), user=Depends(require_roles("
             latest_forecast_by_junction[f.junction_id] = f
     return {
         "generated_at": now.isoformat(),
+        "city": {"name": primary_city}, "city_name": primary_city,
         "network": {"clusters_total": clusters_total, "clusters_online": online_clusters,
                     "junctions_total": junctions_total, "junctions_online": online_junctions,
+                    "reference_corridors": len(reference_corridors),
                     "junctions_with_recent_traffic_data": len(latest_by_junction)},
         "traffic": {"mean_congestion_score": round(sum(congestion_scores) / len(congestion_scores), 1) if congestion_scores else None,
                     "junctions_high_congestion": high_congestion[:30], "vehicle_count_latest_observations": sum(o.vehicle_count for o in latest_by_junction.values()),
                     "forecasted_junction_count": len(latest_forecast_by_junction)},
-        "air_quality": {"stations_with_recent_data": len(latest_aqi), "mean_aqi": round(sum(r.aqi for r in latest_aqi.values() if r.aqi is not None) / len([r for r in latest_aqi.values() if r.aqi is not None]), 1) if any(r.aqi is not None for r in latest_aqi.values()) else None,
-                         "last_observed_at": max((r.observed_at for r in latest_aqi.values()), default=None).isoformat() if latest_aqi else None,
-                         "stations": [{"id": row.id, "station_name": row.station_name, "latitude": row.latitude, "longitude": row.longitude, "aqi": row.aqi, "category": row.category, "source": row.source, "observed_at": row.observed_at.isoformat()} for row in latest_aqi.values()]},
-        "alerts": {"active_count": len(alerts), "items": [{"id": a.id, "public_id": a.public_id, "title": a.title, "severity": a.severity, "category": a.category, "latitude": a.latitude, "longitude": a.longitude, "created_at": a.created_at.isoformat()} for a in alerts[:15]]},
+        "air_quality": {"stations_with_recent_data": len(latest_aqi_recent),
+                         "historical_station_count": sum(1 for row in latest_aqi_all.values() if (_as_utc(row.observed_at, now) or now) < hour_cutoff),
+                         "mean_aqi": round(sum(r.aqi for r in latest_aqi_recent.values() if r.aqi is not None) / len([r for r in latest_aqi_recent.values() if r.aqi is not None]), 1) if any(r.aqi is not None for r in latest_aqi_recent.values()) else None,
+                         "last_observed_at": max((_as_utc(r.observed_at, now) for r in latest_aqi_recent.values()), default=None).isoformat() if latest_aqi_recent else None,
+                         "stations": [{"id": row.id, "station_name": row.station_name, "latitude": row.latitude, "longitude": row.longitude, "aqi": row.aqi, "category": row.category, "source": row.source, "observed_at": row.observed_at.isoformat(),
+                             "age_seconds": max(0, int((now - (_as_utc(row.observed_at, now) or now)).total_seconds())),
+                             "is_historical": (_as_utc(row.observed_at, now) or now) < hour_cutoff,
+                             "data_mode": (row.raw_payload or {}).get("data_mode", "observation")}
+                             for row in latest_aqi_all.values()]},
+        "alerts": {"active_count": sum(1 for a in alerts if a.starts_at is None or (_as_utc(a.starts_at, now) or now) <= now),
+                   "scheduled_count": sum(1 for a in alerts if a.starts_at is not None and (_as_utc(a.starts_at, now) or now) > now),
+                   "items": [{"id": a.id, "public_id": a.public_id, "title": a.title, "severity": a.severity, "category": a.category, "latitude": a.latitude, "longitude": a.longitude, "created_at": a.created_at.isoformat(),
+                       "starts_at": a.starts_at.isoformat() if a.starts_at else None, "ends_at": a.ends_at.isoformat() if a.ends_at else None,
+                       "state": "scheduled" if a.starts_at and (_as_utc(a.starts_at, now) or now) > now else "active"} for a in alerts[:15]]},
         "data_sources": {"status_counts": source_counts, "configured_sources": len(real_sources),
                          "warning": "Only non-synthetic ingested observations are shown. Registered source records are not considered online until a verified heartbeat or successful sync is received."},
     }

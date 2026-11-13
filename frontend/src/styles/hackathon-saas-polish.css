@@ -1,0 +1,107 @@
+/* UrbanSaarthi SaaS finishing layer: stronger type hierarchy, calm surfaces, responsive command spaces. */
+:root {
+  --us-ink: #123a2d;
+  --us-muted: #6d8074;
+  --us-line: #dce7dc;
+  --us-surface: #ffffff;
+  --us-surface-soft: #f5f8f2;
+  --us-green: #174a39;
+  --us-lime: #8cad62;
+}
+.citizen-app, .authority-app { letter-spacing: -.01em; }
+.citizen-app :where(h1,h2,h3,h4), .authority-app :where(h1,h2,h3,h4) { letter-spacing: -.035em; }
+.citizen-app :where(p,li), .authority-app :where(p,li) { line-height: 1.62; }
+.citizen-app :where(.panel,.card,.map-panel), .authority-app :where(.panel,.card,.map-panel) {
+  border-radius: 17px;
+  box-shadow: 0 12px 34px rgba(22,59,39,.055);
+}
+.citizen-app :where(button,input,select,textarea), .authority-app :where(button,input,select,textarea) { border-radius: 10px; }
+.citizen-app :where(button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible),
+.authority-app :where(button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible) {
+  outline: 3px solid rgba(103,151,82,.24); outline-offset: 2px;
+}
+.city-studio { color: var(--us-ink); gap: 16px; }
+.city-studio .city-studio-toolbar, .city-studio .studio-card, .city-studio .studio-scene-card {
+  border-radius: 18px; border-color: var(--us-line); box-shadow: 0 12px 34px rgba(22,59,39,.055);
+}
+.city-studio .city-studio-toolbar { padding: 20px 22px; }
+.city-studio .city-studio-toolbar h2 { font-size: clamp(21px,2vw,26px); }
+.city-studio .city-studio-toolbar p, .city-studio .studio-provenance p { font-size: 14px; line-height: 1.65; }
+.city-studio .city-stat { padding: 19px; border-radius: 16px; }
+.city-studio .city-stat small { font-size: 12px; }
+.city-studio .city-stat strong { font-size: clamp(27px,2.5vw,34px); }
+.city-studio .city-stat > span:last-child { font-size: 12px; }
+.city-studio .studio-card { padding: 19px; }
+.city-studio .studio-card-head h2 { font-size: 20px; }
+.city-studio .studio-card-head p { font-size: 13px; }
+.city-studio .studio-kicker { font-size: 10px; letter-spacing: 1.15px; }
+.city-studio .studio-form > label, .city-studio .studio-form-grid > label { font-size: 13px; }
+.city-studio .studio-form input:not([type=range]), .city-studio .studio-form select { min-height: 45px; font-size: 14px; }
+.city-studio .studio-road-row b { font-size: 14px; }
+.city-studio .studio-road-row small { font-size: 12px; }
+.city-studio .studio-road-row strong { font-size: 13px; }
+.city-studio .studio-level { font-size: 10px; }
+.traffic-sim-scene { overflow: hidden; border-radius: 17px; border: 1px solid #cbd8cb; box-shadow: inset 0 1px rgba(255,255,255,.6); }
+.traffic-sim-scene-head { padding: 18px 20px; background: linear-gradient(115deg,#f8fbf6,#edf4eb); border-bottom: 1px solid #dbe5d9; }
+.traffic-sim-scene-head h3 { font-size: clamp(18px,1.8vw,23px); color: #173c2f; }
+.traffic-sim-scene-head p { font-size: 13px; max-width: 720px; }
+.traffic-sim-scene-canvas { background: #dfe8dd; }
+.traffic-sim-scene-canvas svg { filter: saturate(.92) contrast(1.02); }
+.sim-city-backdrop { isolation: isolate; }
+.sim-city-backdrop > g { filter: drop-shadow(0 3px 2px rgba(30,57,39,.08)); }
+.sim-city-backdrop polygon { vector-effect: non-scaling-stroke; }
+.native-sumo-scene .traffic-sim-scene-footer { padding: 15px 19px; background: #f6f9f4; }
+.traffic-sim-road-key { gap: 13px; font-size: 11px; }
+.traffic-sim-live { padding: 8px 11px; border-radius: 9px; background: #eaf4e7; color: #477c49; font-size: 11px; font-weight: 850; }
+.traffic-agent-page { max-width: 1680px; }
+.ta-hero { padding-block: 27px; }
+.ta-hero h1 { font-size: clamp(36px,3.6vw,50px); }
+.ta-hero-copy > p { font-size: 15px; }
+.ta-panel { border-radius: 17px; box-shadow: 0 12px 34px rgba(22,59,39,.055); }
+.ta-source-panel,.ta-execution-panel,.ta-plan-panel,.ta-forecast-panel { padding: 22px; }
+.ta-panel-heading h2,.ta-results-heading h2 { font-size: 23px; }
+.ta-panel-heading > div > span,.ta-results-heading > div > span { font-size: 10px; }
+.ta-step b { font-size: 14px; }
+.ta-step small { font-size: 11px; }
+.ta-step-state { font-size: 10px; }
+.ta-metric-card { padding: 18px; border-radius: 15px; }
+.ta-metric-card > span { font-size: 10px; }
+.ta-metric-card > strong { font-size: clamp(23px,2vw,30px); }
+.ta-metric-card > small { font-size: 11px; }
+.ta-plan-rationale,.ta-agent-assessment p { font-size: 13px; }
+.ta-report-list { display:grid; gap:9px; }
+.ta-report-row { display:grid; grid-template-columns:42px minmax(0,1fr) auto; align-items:center; gap:12px; padding:13px 15px; text-align:left; border:1px solid #e1eadc; border-radius:12px; background:#fbfdf9; cursor:pointer; transition:transform .18s ease,border-color .18s ease,background .18s ease; }
+.ta-report-row:hover { transform:translateY(-1px); border-color:#b8d0aa; background:#f4f9f1; }
+.ta-report-icon { display:grid; place-items:center; width:40px; height:40px; border-radius:11px; background:#eaf3e5; color:#5e8b4d; }
+.ta-report-row > span:nth-child(2) { display:grid; gap:5px; min-width:0; }
+.ta-report-row b { color:#244936; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ta-report-row small { color:#788a7d; font-size:11px; }
+.ta-report-row > strong { display:flex; align-items:center; gap:5px; color:#477b4d; font-size:11px; white-space:nowrap; }
+.ta-report-empty,.ta-report-loading { padding:22px; border:1px dashed #d8e4d2; border-radius:12px; background:#f8fbf5; color:#738477; font-size:13px; }
+.ta-report-empty p { font-size:12px; line-height:1.6; }
+.ul-saved-camera-reports { margin: 18px 0; padding: 20px; }
+.ul-saved-camera-reports .ul-panel-head { display:flex; align-items:center; justify-content:space-between; gap:15px; }
+.ul-saved-camera-reports .ul-panel-head h3 { margin:5px 0; font-size:21px; color:#1a4031; }
+.ul-saved-camera-reports .ul-panel-head small { color:#78897c; font-size:12px; }
+.ul-saved-report-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:11px; }
+.ul-saved-report-card { display:grid; justify-items:start; gap:7px; min-width:0; padding:15px; border:1px solid #e0eadb; border-radius:13px; background:#fbfdf9; text-align:left; cursor:pointer; }
+.ul-saved-report-card:hover { border-color:#b9d0aa; background:#f4f9f0; }
+.ul-saved-report-card > span { display:grid; place-items:center; width:35px; height:35px; border-radius:10px; background:#e9f3e4; color:#5c884d; }
+.ul-saved-report-card b { color:#294b39; font-size:13px; line-height:1.4; }
+.ul-saved-report-card small { color:#7d8c80; font-size:11px; }
+.ul-saved-report-card em { color:#4b7d4a; font-size:11px; font-style:normal; font-weight:800; }
+.ul-saved-report-state { display:flex; align-items:center; gap:9px; padding:18px 3px; color:#718275; font-size:13px; }
+@media(max-width:900px) { .ul-saved-report-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:650px) {
+  .city-studio .city-studio-toolbar { padding:15px; }
+  .city-studio .studio-card { padding:14px; }
+  .city-studio .city-stat { padding:14px; }
+  .traffic-sim-scene-head { padding:14px; }
+  .traffic-sim-scene-head p { font-size:12px; }
+  .ta-source-panel,.ta-execution-panel,.ta-plan-panel,.ta-forecast-panel { padding:15px; }
+  .ta-report-row { grid-template-columns:36px minmax(0,1fr); padding:11px; }
+  .ta-report-row > strong { grid-column:2; }
+  .ul-saved-camera-reports { padding:14px; }
+  .ul-saved-camera-reports .ul-panel-head { align-items:flex-start; flex-direction:column; }
+  .ul-saved-report-grid { grid-template-columns:1fr; }
+}

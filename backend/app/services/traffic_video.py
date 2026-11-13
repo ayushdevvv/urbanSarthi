@@ -18,8 +18,8 @@ from app.services.traffic_detection import _load_model, VEHICLE_ALIASES
 from app.services.traffic_calibration import normalize_rois, point_in_polygon
 
 MAX_VIDEO_SECONDS = 600
-MAX_SAMPLED_FRAMES = 24
-MAX_SIDE = 720
+MAX_SAMPLED_FRAMES = 12
+MAX_SIDE = 640
 
 
 @lru_cache(maxsize=1)
@@ -179,7 +179,7 @@ def analyze_video(raw: bytes, filename: str, confidence: float = 0.25, sample_ev
     suffix = Path(filename or "traffic.mp4").suffix.lower()
     if suffix not in {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}:
         suffix = ".mp4"
-    if not 1 <= int(sample_every_seconds) <= 5:
+    if not 1 <= int(sample_every_seconds) <= 10:
         raise ValueError("Sampling interval must be between 1 and 5 seconds.")
     rois = normalize_rois(approach_rois)
 
@@ -239,10 +239,10 @@ def analyze_video(raw: bytes, filename: str, confidence: float = 0.25, sample_ev
                 if scale < 1:
                     frame = cv2.resize(frame, (int(frame.shape[1] * scale), int(frame.shape[0] * scale)), interpolation=cv2.INTER_AREA)
                 try:
-                    predicted = model.track(frame, persist=True, tracker="bytetrack.yaml", imgsz=384, conf=confidence, verbose=False)
+                    predicted = model.track(frame, persist=True, tracker="bytetrack.yaml", imgsz=320, conf=confidence, verbose=False)
                 except Exception:
                     # Inference is still real YOLO; this fallback only disables the tracker config if unsupported.
-                    predicted = model.predict(frame, imgsz=384, conf=confidence, verbose=False)
+                    predicted = model.predict(frame, imgsz=320, conf=confidence, verbose=False)
                 if not predicted:
                     frame_index += 1
                     continue

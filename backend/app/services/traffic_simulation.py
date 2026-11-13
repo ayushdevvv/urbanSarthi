@@ -135,8 +135,14 @@ def get_simulation_scenario(minutes: int = 60, step_minutes: int = 5, scenario: 
             "roads": [{"road": str(roads[i]), "queue": round(float(queues[i]), 1), "level": level(float(queues[i])), "vehicles": int(round(vehicles[i]))} for i in range(len(roads))],
         })
     initial, final = timeline[0], timeline[-1]
+    try:
+        from app.services.sumo_runner import NETWORK, _network_geometry
+        geometry = _network_geometry(NETWORK)
+    except Exception:
+        geometry = None
     return {
         "mode": "trained_model_scenario", "scenario": scenario, "duration_minutes": minutes,
+        "network_geometry": geometry,
         "step_minutes": step_minutes, "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
         "training_data": {"records": int(raw.shape[0]), "simulation_runs": int(raw["run_id"].nunique()), "minutes_per_run": int(raw["time_min"].max()), "road_edges": int(raw["edge_id"].nunique())},
         "models": {"horizon_30": {"mae_vehicles": round(float(metrics_30.get("xgboost", {}).get("mae", 0)), 2), "level_accuracy_percent": round(float(metrics_30.get("xgboost", {}).get("level_accuracy", 0))*100, 1)}, "horizon_60": {"mae_vehicles": round(float(metrics_60.get("mae_vehicles", 0)), 2), "level_accuracy_percent": round(float(metrics_60.get("level_accuracy", 0))*100, 1), "r2": round(float(metrics_60.get("r2", 0)), 3)}},

@@ -19,6 +19,7 @@ function compactReport(report) {
     mode: report.mode,
     model: report.model,
     source_filename: report.source_filename || report.filename || 'uploaded road scene',
+    report_id: report.report_id || null,
     video: report.video || { sampled_frames: 1, duration_seconds: 0, sampling_interval_seconds: 1 },
     counts: report.counts || {},
     total_vehicles: report.total_vehicles ?? 0,
@@ -52,6 +53,7 @@ export default function TrafficVisionPage() {
   const [report, setReport] = useState(() => initialReportSnapshot?.value?.preview_only ? null : initialReportSnapshot?.value || null);
   const [reportRestored, setReportRestored] = useState(Boolean(initialReportSnapshot?.value && !initialReportSnapshot.value.preview_only));
   const [reportSavedAt, setReportSavedAt] = useState(initialReportSnapshot?.value?.preview_only ? null : initialReportSnapshot?.savedAt || null);
+  const [reportOrigin, setReportOrigin] = useState(initialReportSnapshot?.value && !initialReportSnapshot.value.preview_only ? 'local' : 'new');
   const [systemStatus, setSystemStatus] = useState(null);
   const [confidence, setConfidence] = useState(0.3);
   const [sampleEvery, setSampleEvery] = useState('5');
@@ -64,6 +66,19 @@ export default function TrafficVisionPage() {
   const [cameraBusy, setCameraBusy] = useState(false);
   const [cameraCommand, setCameraCommand] = useState('');
   const [cameraError, setCameraError] = useState('');
+  const [savedReports, setSavedReports] = useState([]);
+  const [savedReportsLoading, setSavedReportsLoading] = useState(false);
+
+  const loadSavedReports = async () => {
+    setSavedReportsLoading(true);
+    try {
+      const data = await api.get('/traffic-detection/reports?limit=12', { timeoutMs: 9000, fallbackGraceMs: 0 });
+      setSavedReports((Array.isArray(data?.items) ? data.items : []).filter((item) => item.report_type === 'camera_analysis'));
+    } catch { setSavedReports([]); }
+    finally { setSavedReportsLoading(false); }
+  };
+
+  useEffect(() => { void loadSavedReports(); }, []);
 
   useEffect(() => {
     let alive = true;
@@ -126,6 +141,7 @@ export default function TrafficVisionPage() {
       const analyzedReport = { ...data, mode, source_filename: file.name, segment_distance_km: Number(segmentDistanceKm) || 0.5, saved_at: new Date().toISOString() };
       setReport(analyzedReport);
       setReportRestored(false);
+      setReportOrigin('new');
       setReportSavedAt(Date.now());
       // Keep compact evidence in browser storage; annotated base64 frames can be several MB.
       saveLocalRecord('traffic-lab-last-report', { ...compactReport(analyzedReport), saved_at: analyzedReport.saved_at });
@@ -140,6 +156,7 @@ export default function TrafficVisionPage() {
         });
       }
       notify(mode === 'video' ? `Video analysis completed successfully.` : 'Road image analysis completed.');
+      void loadSavedReports();
     } catch (e) {
       if (report) setReportRestored(true);
       const availabilityFailure = e?.status === 0 || e?.status >= 500 || /timed out|could not be reached|refresh/i.test(e?.message || '');
@@ -247,7 +264,7 @@ export default function TrafficVisionPage() {
           {busy ? <><LoaderCircle size={16} className="ul-spin"/> Analysing selected footage…</> : <><ScanLine size={16}/> Analyze road scene <ArrowUpRight size={16}/></>}
         </button>
         {busy && <div className="ul-analysis-progress" role="status" aria-live="polite">
-          <div className="ul-analysis-progress-copy"><LoaderCircle size={17} className="ul-spin"/><div><b>Reviewing your road footage</b><small>Sampling up to 24 frames and counting visible vehicles. Longer clips are sampled at wider intervals.</small></div></div>
+          <div className="ul-analysis-progress-copy"><LoaderCircle size={17} className="ul-spin"/><div><b>Reviewing your road footage</b><small>Sampling up to 12 frames and counting visible vehicles. Longer clips are sampled at wider intervals.</small></div></div>
           <div className="ul-analysis-progress-track"><span/></div>
         </div>}
         {systemStatus && !videoReadiness && <div className="ul-setup-hint"><CircleHelp size={15}/><span>Camera analysis is temporarily unavailable. Your upload is safe; please retry in a moment or contact the workspace administrator.</span></div>}
@@ -257,8 +274,8 @@ export default function TrafficVisionPage() {
       <section className="ul-panel ul-evidence-panel">
         <div className="ul-panel-head"><div><span className="ul-panel-kicker">SCENE OUTPUT</span><h3>Scene report</h3></div>{report && <button className="ul-text-button" onClick={downloadReport}><ArrowDownToLine size={14}/> Export JSON</button>}</div>
         {!visibleReport ? <div className="ul-empty-evidence"><div className="ul-scan-illustration"><span/><span/><span/><i/></div><b>Waiting for source evidence</b><p>Run the detector to populate class counts, track metrics and a report tied to your uploaded footage.</p><div className="ul-empty-track"><span>01 Capture</span><i/><span>02 Detect</span><i/><span>03 Verify</span></div></div> : <>
-          <div className="ul-report-status"><span><CheckCircle2 size={16}/></span><div><b>{reportRestored ? 'Last successful analysis' : 'Inference completed'}</b><small>Vehicle detection · {visibleReport.source_filename || file?.name}</small></div><em>{reportRestored ? 'SAVED RESULT' : 'MODEL OUTPUT'}</em></div>
-          {reportRestored && <div className="ul-saved-report-note">Restored from this browser · {reportSavedAt ? new Date(reportSavedAt).toLocaleString() : 'Saved earlier'}. This is a previous analysis, not a new inference.</div>}
+          <div className="ul-report-status"><span><CheckCircle2 size={16}/></span><div><b>{reportRestored ? (reportOrigin === 'server' ? 'Saved server analysis' : 'Last successful analysis') : 'Inference completed'}</b><small>Vehicle detection · {visibleReport.source_filename || file?.name}</small></div><em>{reportRestored ? 'SAVED RESULT' : 'MODEL OUTPUT'}</em></div>
+          {reportRestored && <div className="ul-saved-report-note">{reportOrigin === 'server' ? 'Restored from the server report history' : 'Restored from this browser'} · {reportSavedAt ? new Date(reportSavedAt).toLocaleString() : 'Saved earlier'}. This is a previous analysis, not a new inference.</div>}
           <div className="ul-metric-grid">
             <div className="ul-metric-card"><span>{visibleReport.tracking_ids_available ? 'Tracked vehicles' : visibleReport.mode === 'video' ? 'Peak vehicles' : 'Vehicles detected'}</span><strong>{vehicleTotal}</strong><small>{visibleReport.tracking_ids_available ? 'Unique IDs across sampled frames' : visibleReport.mode === 'video' ? 'IDs not returned by tracker' : 'From this frame only'}</small></div>
             <div className="ul-metric-card"><span>Peak in frame</span><strong>{visibleReport.peak_vehicles_in_frame ?? visibleReport.total_vehicles ?? 0}</strong><small>Highest concurrent count</small></div>
@@ -276,6 +293,11 @@ export default function TrafficVisionPage() {
         </>}
       </section>
     </div>
+
+    <section className="ul-panel ul-saved-camera-reports">
+      <div className="ul-panel-head"><div><span className="ul-panel-kicker">REPORT HISTORY</span><h3>Saved camera analyses</h3><small>Results stored by the server, available after refresh or on another device.</small></div><button className="ul-secondary-button" type="button" onClick={loadSavedReports} disabled={savedReportsLoading}>{savedReportsLoading ? <LoaderCircle size={14} className="ul-spin"/> : <Activity size={14}/>} Refresh reports</button></div>
+      {savedReportsLoading ? <div className="ul-saved-report-state"><LoaderCircle size={16} className="ul-spin"/> Loading saved analyses…</div> : savedReports.length ? <div className="ul-saved-report-grid">{savedReports.map((item) => <button type="button" className="ul-saved-report-card" key={item.public_id} onClick={() => { if (item.evidence) { setReport(item.evidence); setReportRestored(true); setReportOrigin('server'); setReportSavedAt(item.created_at); setFile(null); setPreviewUrl((old) => { if (old) URL.revokeObjectURL(old); return ''; }); window.scrollTo({ top: 0, behavior: 'smooth' }); } }}><span><ScanLine size={17}/></span><b>{item.title || item.source_name || 'Traffic analysis'}</b><small>{item.created_at ? new Date(item.created_at).toLocaleString() : 'Saved report'} · {Number(item.evidence?.total_vehicles || 0)} detected</small><em>Open saved result</em></button>)}</div> : <div className="ul-saved-report-state">No server reports yet. A report will appear here automatically after a successful image or video analysis.</div>}
+    </section>
 
     <section className="ul-agent-handoff">
       <div className="ul-agent-handoff-copy">

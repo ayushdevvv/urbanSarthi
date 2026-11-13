@@ -52,6 +52,58 @@ function Person({ x, y, scale = 1 }) {
   </g>;
 }
 
+
+function IsometricBuilding({ x, y, width = 42, depth = 28, height = 24, tone = 0 }) {
+  const roof = ['#eef2ed', '#e6ece7', '#f4f4ee'][tone % 3];
+  const left = ['#bbc8c0', '#c5cec7', '#b5c4bb'][tone % 3];
+  const right = ['#9ead9f', '#aab9ad', '#91a496'][tone % 3];
+  return <g transform={`translate(${x} ${y})`}>
+    <polygon points={`2,${depth/2+5} ${width/2+3},2 ${width+7},${depth/2+5} ${width/2+3},${depth+8}`} fill="#6f8574" opacity=".18"/>
+    <polygon points={`0,${depth/2} ${width/2},0 ${width},${depth/2} ${width/2},${depth}`} fill={roof} stroke="#aab9ad" strokeWidth="1"/>
+    <polygon points={`0,${depth/2} ${width/2},${depth} ${width/2},${depth+height} 0,${depth/2+height}`} fill={left} stroke="#91a294" strokeWidth=".8"/>
+    <polygon points={`${width/2},${depth} ${width},${depth/2} ${width},${depth/2+height} ${width/2},${depth+height}`} fill={right} stroke="#829487" strokeWidth=".8"/>
+    {Array.from({length: Math.max(2, Math.floor(height/9))}, (_, row) => <g key={row} opacity=".72">
+      <path d={`M${5} ${depth/2+7+row*9} l${width/2-8} 8`} stroke="#edf4ef" strokeWidth="2"/>
+      <path d={`M${width/2+6} ${depth-5+row*9} l${width/2-10} -7`} stroke="#e7eee8" strokeWidth="2"/>
+    </g>)}
+  </g>;
+}
+
+function CityBackdrop({ prefix = 'city' }) {
+  const blocks = Array.from({ length: 16 }, (_, index) => ({
+    index, x: 42 + (index % 4) * 230, y: 42 + Math.floor(index / 4) * 230,
+    green: index % 5 === 0 || index % 7 === 0,
+  }));
+  return <g className="sim-city-backdrop">
+    <rect width="1000" height="1000" fill="#dfe8dd"/>
+    <path d="M0 120 Q210 40 390 150 T770 115 T1000 130 V0 H0Z" fill="#e8eee5" opacity=".7"/>
+    {blocks.map(({index, x, y, green}) => <g key={`${prefix}-block-${index}`}>
+      <rect x={x} y={y} width="178" height="178" rx="13" fill={green ? '#b9d2ad' : '#cbd8c9'} stroke="#b8c8b8" strokeWidth="2"/>
+      {green ? <g>
+        <path d={`M${x+16} ${y+88} Q${x+75} ${y+62} ${x+160} ${y+96}`} fill="none" stroke="#e8eee0" strokeWidth="13"/>
+        {[0,1,2,3,4].map((t) => <g key={t} transform={`translate(${x+26+(t%3)*58} ${y+30+Math.floor(t/3)*78})`}><circle r="12" fill="#739d70"/><circle r="7" fill="#8fb887"/><rect x="-2" y="7" width="4" height="12" fill="#8b775e"/></g>)}
+      </g> : <g>
+        <path d={`M${x+12} ${y+82} H${x+166} M${x+86} ${y+12} V${y+166}`} stroke="#e5ece2" strokeWidth="9"/>
+        <IsometricBuilding x={x+16} y={y+20} width={49+(index%3)*5} depth={27} height={22+(index%4)*6} tone={index}/>
+        <IsometricBuilding x={x+91} y={y+26} width={45+(index%2)*8} depth={26} height={18+(index%3)*8} tone={index+1}/>
+        <IsometricBuilding x={x+38} y={y+102} width={43+(index%3)*5} depth={25} height={17+(index%2)*9} tone={index+2}/>
+        <g fill="#739b72"><circle cx={x+145} cy={y+119} r="9"/><circle cx={x+145} cy={y+146} r="8"/></g>
+      </g>}
+    </g>)}
+  </g>;
+}
+
+function CityCrosswalk({ x, y }) {
+  return <g opacity=".92" transform={`translate(${x} ${y})`}>
+    {Array.from({length:7},(_,i)=><g key={i}>
+      <rect x={-43+i*13} y="-43" width="7" height="27" rx="1" fill="#f5f4e9"/>
+      <rect x={-43+i*13} y="16" width="7" height="27" rx="1" fill="#f5f4e9"/>
+      <rect x="-43" y={-43+i*13} width="27" height="7" rx="1" fill="#f5f4e9"/>
+      <rect x="16" y={-43+i*13} width="27" height="7" rx="1" fill="#f5f4e9"/>
+    </g>)}
+  </g>;
+}
+
 function NativeVehicle({ vehicle }) {
   const type = String(vehicle.type || 'car').toLowerCase();
   const specs = {
@@ -104,20 +156,20 @@ function NativeSumoScene({ roads = [], frame, playing = false, areaName, signalT
           <pattern id="sumo-ground-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#d5e0d2" strokeWidth="1"/></pattern>
           <pattern id="sumo-road-mark" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M0 16H32" stroke="#e8e2b8" strokeWidth="2" strokeDasharray="8 9"/></pattern>
         </defs>
-        <rect width="1000" height="1000" fill="#e7eee3"/>
-        <rect width="1000" height="1000" fill="url(#sumo-ground-grid)"/>
-        {Array.from({ length: 16 }, (_, i) => <rect key={`block-${i}`} x={72 + (i % 4) * 225} y={72 + Math.floor(i / 4) * 225} width="150" height="150" rx="15" fill={i % 3 === 0 ? '#dce7d5' : '#e1e9dc'} stroke="#d0dccb" strokeWidth="2"/>)}
+        <CityBackdrop prefix="sumo-city"/>
         {mapRoads.map((road) => {
           const points = (road.points || []).map((point) => `${point.x},${point.y}`).join(' ');
           if (!points) return null;
           return <g key={road.id}>
-            <polyline points={points} fill="none" stroke="#f4f6ef" strokeWidth="35" strokeLinecap="round" strokeLinejoin="round"/>
-            <polyline points={points} fill="none" stroke="#87948a" strokeWidth="29" strokeLinecap="round" strokeLinejoin="round"/>
-            <polyline points={points} fill="none" stroke="#e7dfad" strokeWidth="1.7" strokeDasharray="10 12" opacity=".9"/>
+            <polyline points={points} fill="none" stroke="#b8c5b9" strokeWidth="56" strokeLinecap="round" strokeLinejoin="round"/>
+            <polyline points={points} fill="none" stroke="#e9eee6" strokeWidth="50" strokeLinecap="round" strokeLinejoin="round"/>
+            <polyline points={points} fill="none" stroke="#3d4b49" strokeWidth="39" strokeLinecap="round" strokeLinejoin="round"/>
+            <polyline points={points} fill="none" stroke="#e8e4c4" strokeWidth="1.8" strokeDasharray="11 13" opacity=".95"/>
+            <polyline points={points} fill="none" stroke="#f5f5ed" strokeWidth="1.1" strokeDasharray="1 19" opacity=".8"/>
           </g>;
         })}
         {!mapRoads.length && <text x="500" y="500" textAnchor="middle" fill="#65776b" fontSize="25">Reference road geometry is unavailable</text>}
-        {junctions.map((junction) => <NativeSignal key={junction.id} junction={junction} active={active}/>)}
+        {junctions.map((junction) => <g key={`crosswalk-${junction.id}`}><CityCrosswalk x={junction.x} y={junction.y}/><NativeSignal junction={junction} active={active}/></g>)}
         {vehicles.map((vehicle) => <NativeVehicle key={vehicle.id} vehicle={vehicle}/>)}
         {mapRoads.length > 0 && vehicles.length === 0 && <g><rect x="330" y="465" width="340" height="70" rx="14" fill="#f7faf5" stroke="#c7d5c2"/><text x="500" y="493" textAnchor="middle" fill="#50675a" fontSize="18" fontWeight="800">No FCD vehicles in this sample</text><text x="500" y="518" textAnchor="middle" fill="#829083" fontSize="12">Move the timeline to inspect another point in the run</text></g>}
       </svg>
@@ -199,21 +251,22 @@ function ModelForecastScene({ frame, areaName = 'Reference road network', networ
     <div className="traffic-sim-scene-canvas native-sumo-canvas model-forecast-canvas">
       <svg viewBox="0 0 1000 1000" role="img" aria-label={`Forecast road network at minute ${frame?.minute ?? 0}`}>
         <defs><pattern id="model-ground-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#d5e0d2" strokeWidth="1"/></pattern></defs>
-        <rect width="1000" height="1000" fill="#e7eee3"/><rect width="1000" height="1000" fill="url(#model-ground-grid)"/>
-        {Array.from({ length: 16 }, (_, i) => <rect key={`model-block-${i}`} x={72 + (i % 4) * 225} y={72 + Math.floor(i / 4) * 225} width="150" height="150" rx="15" fill={i % 3 === 0 ? '#dce7d5' : '#e1e9dc'} stroke="#d0dccb" strokeWidth="2"/>)}
+        <CityBackdrop prefix="model-city"/>
         {mapRoads.map((road) => {
           const points = (road.points || []).map((point) => `${point.x},${point.y}`).join(' ');
           if (!points) return null;
           const data = roadData.get(String(road.id));
           const color = colorFor(data?.level);
           return <g key={road.id}><title>{`${road.id} · ${data?.level || 'No forecast'} · Queue ${data?.queue ?? '—'}`}</title>
-            <polyline points={points} fill="none" stroke="#f4f6ef" strokeWidth="34" strokeLinecap="round" strokeLinejoin="round"/>
-            <polyline points={points} fill="none" stroke={color} strokeWidth="24" strokeLinecap="round" strokeLinejoin="round" opacity={data ? .94 : .32}/>
-            <polyline points={points} fill="none" stroke="#fff" strokeWidth="1.5" strokeDasharray="8 12" opacity=".8"/>
+            <polyline points={points} fill="none" stroke="#b8c5b9" strokeWidth="56" strokeLinecap="round" strokeLinejoin="round"/>
+            <polyline points={points} fill="none" stroke="#e9eee6" strokeWidth="50" strokeLinecap="round" strokeLinejoin="round"/>
+            <polyline points={points} fill="none" stroke="#3d4b49" strokeWidth="39" strokeLinecap="round" strokeLinejoin="round"/>
+            <polyline points={points} fill="none" stroke={color} strokeWidth="6" strokeDasharray="17 21" strokeLinecap="round" opacity={data ? .95 : .18}/>
+            <polyline points={points} fill="none" stroke="#e8e4c4" strokeWidth="1.7" strokeDasharray="11 13" opacity=".95"/>
             <title>{road.label || road.id} · {data?.level || "No forecast"} · queue {data?.queue ?? "—"}</title>
           </g>;
         })}
-        {junctions.map((junction) => <g key={junction.id} transform={`translate(${junction.x} ${junction.y})`}><circle r="12" fill="#f6faf3" stroke="#607769" strokeWidth="2"/><circle r="4" fill={active === 'ALL_RED' ? '#d75a52' : active.includes('YELLOW') ? '#dfa83e' : '#48a275'}/><title>{junction.id} · proposed signal phase</title></g>)}
+        {junctions.map((junction) => <g key={junction.id}><CityCrosswalk x={junction.x} y={junction.y}/><g transform={`translate(${junction.x} ${junction.y})`}><circle r="12" fill="#f6faf3" stroke="#607769" strokeWidth="2"/><circle r="4" fill={active === 'ALL_RED' ? '#d75a52' : active.includes('YELLOW') ? '#dfa83e' : '#48a275'}/><title>{junction.id} · proposed signal phase</title></g></g>)}
         {trafficMarkers.map((vehicle) => <g key={vehicle.id} transform={`translate(${vehicle.x} ${vehicle.y}) rotate(${vehicle.angle})`} style={{ transition: playing ? 'transform .75s linear' : 'none' }}><title>{`${vehicle.road} · ${vehicle.level} forecast · representative flow marker`}</title><rect x="-10" y="-5" width="20" height="10" rx="3" fill={vehicle.level === 'Heavy' ? '#f0bd61' : vehicle.level === 'Moderate' ? '#82b7dc' : '#77c49a'} stroke="#284d3c" strokeWidth="1.4"/><rect x="-3.5" y="-3.2" width="7" height="6.4" rx="1.4" fill="#315a62"/><path d="M-7 -4 h2 M5 -4 h2" stroke="#fff8d6" strokeWidth="1.4" strokeLinecap="round"/></g>)}
         {!mapRoads.length && <text x="500" y="500" textAnchor="middle" fill="#65776b" fontSize="25">Reference road geometry unavailable</text>}
       </svg>

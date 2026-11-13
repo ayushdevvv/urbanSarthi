@@ -96,6 +96,60 @@ def test_traffic_detection_status_and_rejects_unsupported_upload(client):
     assert rejected.status_code == 415
 
 
+def test_traffic_image_analysis_persists_a_reopenable_report(client, monkeypatch):
+    from app.api import traffic_detection as api
+
+    monkeypatch.setattr(api, "analyze_image", lambda raw, confidence=0.25: {
+        "mode": "model", "model": "YOLO test", "counts": {"car": 5, "bus": 1},
+        "total_vehicles": 6, "total_detections": 6, "congestion_estimate": "Medium",
+        "confidence_threshold": confidence, "annotated_image": "large-base64-payload",
+    })
+    response = client.post("/api/v1/traffic-detection/analyze", files={"file": ("junction.jpg", b"image-bytes", "image/jpeg")})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body.get("report_id")
+    reports = client.get("/api/v1/traffic-detection/reports?limit=5")
+    assert reports.status_code == 200, reports.text
+    saved = next(item for item in reports.json()["items"] if item["public_id"] == body["report_id"])
+    assert saved["report_type"] == "camera_analysis"
+    assert saved["evidence"]["counts"] == {"car": 5, "bus": 1, "motorbike": 0, "bicycle": 0, "truck": 0}
+    assert "annotated_image" not in str(saved["evidence"])
+
+
+def test_command_center_includes_historical_delhi_references_without_marking_them_live(client):
+    from datetime import datetime, timezone
+    from app.models import CityCluster, Junction, AqiObservation, CityAlert
+    override = client.app.dependency_overrides[get_db]
+    db = next(override())
+    try:
+        cluster = CityCluster(external_id="delhi-test", name="Delhi Reference", city="Delhi", status="degraded", config={})
+        db.add(cluster); db.flush()
+        db.add(Junction(external_id="delhi-reference-junction", name="Anand Vihar", cluster_id=cluster.id,
+            latitude=28.6469, longitude=77.3160, status="reference", lane_count=4,
+            baseline_cycle_seconds=90, configuration={"reference_only": True, "telemetry_connected": False}))
+        db.add(AqiObservation(external_station_id="delhi-test-aqi", station_name="R K Puram", latitude=28.5633,
+            longitude=77.1869, source="public_historical_AQI_snapshot",
+            observed_at=datetime(2026, 10, 27, 5, 30, tzinfo=timezone.utc), aqi=233, category="Poor",
+            raw_payload={"data_mode": "historical_reference", "live": False}))
+        db.add(CityAlert(public_id="delhi-test-alert", title="Delhi traffic advisory", description="Reference notice",
+            category="event_traffic", severity="medium", status="active", latitude=28.612, longitude=77.2434,
+            starts_at=datetime(2026, 11, 20, tzinfo=timezone.utc), ends_at=datetime(2026, 11, 21, tzinfo=timezone.utc)))
+        db.commit()
+    finally:
+        db.close()
+    response = client.get("/api/v1/command-center/overview")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["city"]["name"] == "Delhi"
+    assert body["network"]["reference_corridors"] == 1
+    assert body["network"]["junctions_total"] == 0
+    assert body["air_quality"]["mean_aqi"] is None
+    assert body["air_quality"]["historical_station_count"] == 1
+    assert body["air_quality"]["stations"][0]["is_historical"] is True
+    assert body["alerts"]["scheduled_count"] == 1
+    assert body["alerts"]["items"][0]["state"] == "scheduled"
+
+
 def test_command_center_overview_groups_data_source_statuses(client):
     # Seed at least one source so the grouped status query is non-empty.
     override = client.app.dependency_overrides[get_db]
@@ -206,10 +260,15 @@ def test_xgboost_model_scenario_endpoint_accepts_signal_settings(client, monkeyp
         "all_red_seconds": 2, "demand_multiplier": 1.3,
     })
     assert response.status_code == 200, response.text
-    assert response.json()["mode"] == "xgboost_model_scenario"
+    body = response.json()
+    assert body["mode"] == "xgboost_model_scenario"
+    assert body.get("report_id")
     assert captured["north_south_green_seconds"] == 58
     assert captured["east_west_green_seconds"] == 34
     assert captured["demand_multiplier"] == 1.3
+    saved = client.get(f"/api/v1/traffic-detection/reports/{body['report_id']}")
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["report_type"] == "signal_plan_scenario"
 
 
 def test_nearby_traffic_returns_cached_osm_roads_without_fake_flow(client, monkeypatch):
@@ -380,6 +439,43 @@ def test_simulation_capabilities_reports_available_forecast_without_native_engin
     assert body["recommended_mode"] in {"forecast", "unavailable"}
 
 
+def test_reference_network_agent_scan_saves_report_without_camera_evidence(client, monkeypatch):
+    from app.api import traffic_detection as api
+
+    monkeypatch.setattr(api, "run_ops_agent", lambda **kwargs: {
+        "agent_mode": "deterministic_preview", "tools_called": ["inspect_video_evidence", "draft_signal_timing"],
+        "tool_results": {"draft_signal_timing": {"phases": [{"movement": "north_south", "green_seconds": 42, "yellow_seconds": 3, "all_red_seconds": 1}], "cycle_seconds": 90, "rationale": "Reference corridor timing draft; no camera observation attached."}},
+    })
+    monkeypatch.setattr(api, "run_forecast", lambda *args, **kwargs: {
+        "timeline": [
+            {"minute": 0, "queue_total": 14, "vehicles": 26, "heavy_roads": 1, "moderate_roads": 4, "free_roads": 13, "roads": []},
+            {"minute": 60, "queue_total": 11, "vehicles": 24, "heavy_roads": 1, "moderate_roads": 3, "free_roads": 14, "roads": []},
+        ],
+        "summary": {"road_count": 18, "queue_start": 14, "queue_end": 11},
+        "mode": "xgboost_model_scenario", "engine": "forecast", "notes": ["Historical reference model; not live traffic."],
+    })
+    response = client.post("/api/v1/traffic-detection/ops-workflow", json={
+        "junction_id": None,
+        "report": {
+            "mode": "reference_network", "model": "Public reference network",
+            "source_filename": "Delhi public corridor reference dataset",
+            "counts": {"car": 0, "bus": 0, "motorbike": 0, "bicycle": 0, "truck": 0},
+            "total_vehicles": 0, "peak_vehicles_in_frame": 0,
+            "congestion_estimate": "Not measured", "congestion_score_heuristic": None,
+        },
+        "scenario": "baseline", "prompt": "Review the public corridor reference and create a read-only city scan.",
+        "cycle_seconds": 90, "segment_distance_km": 0.5,
+    })
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["preview_only"] is True
+    assert body.get("report_id")
+    detail = client.get(f"/api/v1/traffic-detection/reports/{body['report_id']}")
+    assert detail.status_code == 200
+    assert detail.json()["evidence"]["mode"] == "reference_network"
+    assert detail.json()["result"]["simulation"]["timeline"][-1]["minute"] == 60
+
+
 def test_traffic_ops_workflow_runs_preview_without_registered_junction(client, monkeypatch):
     from app.api import traffic_detection as api
 
@@ -416,3 +512,10 @@ def test_traffic_ops_workflow_runs_preview_without_registered_junction(client, m
     assert len(body["simulation"]["timeline"]) == 2
     assert body["human_review_required"] is True
     assert body["physical_dispatch_enabled"] is False
+    assert body.get("report_id")
+    saved_list = client.get("/api/v1/traffic-detection/reports?limit=12")
+    assert saved_list.status_code == 200, saved_list.text
+    assert any(item["public_id"] == body["report_id"] for item in saved_list.json()["items"])
+    saved_detail = client.get(f"/api/v1/traffic-detection/reports/{body['report_id']}")
+    assert saved_detail.status_code == 200, saved_detail.text
+    assert saved_detail.json()["report_type"] == "corridor_preview"

@@ -15,6 +15,8 @@ import SettingsPage from './pages/authority/SettingsPage.jsx';
 import TrafficVisionPage from './pages/citizen/TrafficVisionPage.jsx';
 import TrafficAgentPage from './pages/authority/TrafficAgentPage.jsx';
 import TrafficSimulationPage from './pages/authority/TrafficSimulationPage.jsx';
+import SignalPlansPage from './pages/authority/SignalPlansPage.jsx';
+import DigitalTwinPage from './pages/authority/DigitalTwinPage.jsx';
 import CitizenHomePage from './pages/citizen/CitizenHomePage.jsx';
 import RoutePlannerPage from './pages/citizen/RoutePlannerPage.jsx';
 import AirQualityPage from './pages/citizen/AirQualityPage.jsx';
@@ -49,11 +51,12 @@ export default function App() {
         <Route path="air-intelligence" element={<AirQualityOverviewPage />} />
         <Route path="aqi-forecast" element={<AirQualityOverviewPage forecastFocus />} />
         <Route path="traffic-simulation" element={<TrafficSimulationPage />} />
+        <Route path="signal-plans" element={<SignalPlansPage />} />
+        <Route path="digital-twin" element={<DigitalTwinPage />} />
         <Route path="carbon" element={<CarbonImpactPage />} />
         <Route path="traffic" element={<Navigate to="/authority/traffic-lab" replace />} />
         <Route path="traffic-model" element={<Navigate to="/authority/traffic-simulation" replace />} />
         <Route path="traffic-analysis" element={<Navigate to="/authority/traffic-lab" replace />} />
-        <Route path="signal-plans" element={<Navigate to="/authority/traffic-agent" replace />} />
         <Route path="aqi-prediction" element={<Navigate to="/authority/air-intelligence" replace />} />
         <Route path="signals" element={<Navigate to="/authority/traffic-agent" replace />} />
         <Route path="traffic-lab" element={<RouteErrorBoundary resetKey="traffic-lab"><TrafficVisionPage authorityLab /></RouteErrorBoundary>} />

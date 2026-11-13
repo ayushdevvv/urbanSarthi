@@ -1,4 +1,5 @@
 from datetime import timedelta
+import uuid
 from copy import deepcopy
 import threading
 import time
@@ -12,7 +13,7 @@ import httpx
 from app.core.config import settings
 from app.db import get_db
 from app.dependencies import require_ingestion_access, require_roles
-from app.models import Junction, TrafficObservation, CityCluster
+from app.models import Junction, TrafficObservation, CityCluster, TrafficAnalysisReport
 from app.schemas import JunctionCreateIn, JunctionOut, TrafficObservationIn, TrafficObservationOut
 from app.services.common import audit, utc_now
 from app.services.predictions import maybe_refresh_forecasts
@@ -341,14 +342,14 @@ def run_sumo_signal_experiment(payload: NativeSumoRunIn, _user=Depends(require_r
 
 
 @router.post("/simulation/model-scenario")
-def run_xgboost_signal_experiment(payload: NativeSumoRunIn, _user=Depends(require_roles("operator", "admin"))):
+def run_xgboost_signal_experiment(payload: NativeSumoRunIn, db: Session = Depends(get_db), user=Depends(require_roles("operator", "admin"))):
     """Run the network forecast with a clearly-labelled signal sensitivity overlay.
 
     The signal/demand overlay is an explicit what-if assumption because the underlying
     forecast is based on historical queue patterns, not dedicated signal-control trials.
     """
     try:
-        return get_xgboost_signal_scenario(
+        result = get_xgboost_signal_scenario(
             north_south_green_seconds=payload.north_south_green_seconds,
             east_west_green_seconds=payload.east_west_green_seconds,
             yellow_seconds=payload.yellow_seconds,
@@ -356,6 +357,23 @@ def run_xgboost_signal_experiment(payload: NativeSumoRunIn, _user=Depends(requir
             demand_multiplier=payload.demand_multiplier,
             name=payload.name,
         )
+        report = TrafficAnalysisReport(
+            public_id=str(uuid.uuid4()), report_type="signal_plan_scenario",
+            title=f"Signal timing study · {payload.name}"[:180], source_name="XGBoost signal sensitivity study",
+            status="completed", created_by_user_id=user.id,
+            evidence={"signal_timings": result.get("experiment", {}).get("signal_timings", {}),
+                      "demand_multiplier": payload.demand_multiplier, "scenario": "signal_timing_sensitivity"},
+            result={"mode": result.get("mode"), "summary": result.get("summary"),
+                    "traffic_comparison": result.get("traffic_comparison"),
+                    "baseline_timeline": result.get("baseline_timeline"), "timeline": result.get("timeline"),
+                    "notes": result.get("notes", [])},
+            provenance={"model_family": "XGBoost 30/60 minute forecast",
+                        "comparison_type": "bounded sensitivity overlay, not a learned causal signal optimizer",
+                        "human_review_required": True, "physical_dispatch_enabled": False},
+        )
+        db.add(report); db.commit(); db.refresh(report)
+        result["report_id"] = report.public_id
+        return result
     except Exception as exc:
         raise HTTPException(status_code=503, detail="The 60-minute traffic forecast could not be completed. Please check the server forecast files and try again.") from exc
 

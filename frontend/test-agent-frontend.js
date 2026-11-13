@@ -76,6 +76,7 @@ assert(citizenTraffic.includes('timeoutMs: 11500') && citizenTraffic.includes('f
 const carbonPage = read('src/pages/authority/CarbonImpactPage.jsx');
 assert(!carbonPage.includes('readLocalRecord(\'carbon-last-estimate\')') && carbonPage.includes('setResult(null);'), 'Old carbon results must not appear as initial fallback before the current estimate request');
 const traffic = read('src/pages/citizen/TrafficVisionPage.jsx');
+assert(traffic.includes('Saved camera analyses') && traffic.includes('/traffic-detection/reports?limit=12') && traffic.includes('Open saved result'), 'Traffic Lab must list and reopen persisted server-side camera reports');
 assert(traffic.includes('/traffic-detection/analyze-video'), 'Traffic Lab must call the video-analysis API');
 assert(traffic.includes('/authority/traffic-agent') && !traffic.includes('/traffic-detection/ops-workflow'), 'Traffic Lab must hand the workflow to a separate Traffic Agent page');
 assert(traffic.includes('approach_rois'), 'Traffic Lab must support camera ROI calibration');
@@ -83,8 +84,12 @@ assert(traffic.includes('saveLatestVisionEvidence'), 'Traffic Lab must hand vehi
 const evidenceStore = read('src/services/visionEvidence.js');
 assert(evidenceStore.includes('airtraffic.latestVisionEvidence') && evidenceStore.includes('LEGACY_STORAGE_KEY'), 'Video evidence storage must use the neutral key and preserve existing saved evidence');
 const sumoPage = read('src/pages/authority/TrafficSimulationPage.jsx');
-assert(sumoPage.includes("api.post('/traffic/sumo/run'") && sumoPage.includes("api.post('/traffic/simulation/model-scenario'") && sumoPage.includes("api.get('/traffic/simulation/capabilities'") && sumoPage.includes('native_simulation_available') && sumoPage.includes('north_south_green_seconds') && sumoPage.includes('east_west_green_seconds') && sumoPage.includes('ROAD NETWORK PREVIEW') && sumoPage.includes('60-minute forecast'), 'Simulation workbench must probe engine availability and avoid calling an unavailable native engine');
-assert(sumoPage.includes('Forecast frames update every five minutes') && sumoPage.includes('Detailed vehicle positions, when enabled, are sampled every 30 seconds.'), 'Simulation page must disclose forecast and detailed vehicle sampling intervals');
+const signalPlanPage = read('src/pages/authority/SignalPlansPage.jsx');
+const digitalTwinPage = read('src/pages/authority/DigitalTwinPage.jsx');
+assert(sumoPage.includes('/traffic/simulation/scenario?minutes=60&step_minutes=5') && sumoPage.includes('TrafficSimulationScene') && sumoPage.includes('60-minute outlook'), 'The 60-minute what-if forecast must be its own road-network workspace');
+assert(signalPlanPage.includes("api.post('/traffic/simulation/model-scenario'") && signalPlanPage.includes('Signal plan studio') && signalPlanPage.includes('model-scenario'), 'XGBoost signal-plan studies must have a separate saved workspace');
+assert(digitalTwinPage.includes("api.get('/traffic/simulation/capabilities'") && digitalTwinPage.includes("api.post('/traffic/sumo/run'") && digitalTwinPage.includes('native_simulation_available') && digitalTwinPage.includes('disabled={busy || !capabilities?.native_simulation_available}'), 'Digital Twin must be separate and must not call unavailable native simulation');
+assert(sumoPage.includes('13 forecast frames') && digitalTwinPage.includes('Individual vehicle movement'), 'Forecast and vehicle-level digital-twin purposes must be explained independently');
 assert(app.includes('RouteErrorBoundary') && app.includes('traffic-lab" element={<RouteErrorBoundary'), 'Traffic Lab route must show a recoverable error state instead of going blank on a render exception');
 const routeBoundary = read('src/components/shared/RouteErrorBoundary.jsx');
 assert(routeBoundary.includes('Traffic Lab could not load') && routeBoundary.includes('Try again') && routeBoundary.includes('/authority/control'), 'Traffic Lab render fallback must give the operator a recovery path');
@@ -165,9 +170,10 @@ assert(app.includes('path="aqi-forecast" element={<AirQualityPage forecastFocus 
 assert(!airQualityPage.includes('autoLoadStarted') && !airQualityPage.includes('void search()') && airQualityPage.includes('forecast-first'), 'Citizen AQI must require a selected city or explicit browser location rather than silently loading a guessed location');
 assert(airQualityPage.includes('forecastAverage') && airQualityPage.includes('forecastIntervalLabel') && airQualityPage.includes('forecastCategory(row)'), 'Citizen forecast must show correctly scaled summary metrics and provider-aware time intervals');
 const signalUi = read('src/pages/authority/SignalPlansPage.jsx');
+assert(read('src/pages/authority/TrafficAgentPage.jsx').includes('Run Delhi reference scan') && read('src/pages/authority/TrafficAgentPage.jsx').includes('Public reference network'), 'Traffic Agent must run a read-only reference scan without requiring junction or camera evidence');
 const signalApi = fs.readFileSync(path.join(root, '../backend/app/api/signals.py'), 'utf8');
 const signalService = fs.readFileSync(path.join(root, '../backend/app/services/signal_planning.py'), 'utf8');
-assert(signalUi.includes('Signal plans') && signalApi.includes('/signals/plans') && signalService.includes('generate_recommendation'), 'Signal plan UI, API routes and planning service must remain in the release');
+assert(signalUi.includes('Signal plan studio') && signalApi.includes('/signals/plans') && signalService.includes('generate_recommendation'), 'Signal plan UI, API routes and planning service must remain in the release');
 console.log('✓ Signal planning source files retained');
 console.log('✓ Live-first loading, error-only fallback, route sorting, AQI provenance and workflow navigation verified');
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Activity, Bell, Bot, Camera, ChevronRight, Database, House, Leaf, Menu, Moon, RadioTower, Settings, Sun, Wind, Route } from 'lucide-react';
+import { Activity, Bell, Bot, Camera, ChevronRight, Database, House, Leaf, Menu, Moon, RadioTower, Settings, Sun, Wind, Route, Signal, Workflow } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 import FloatingAgentWidget from '../shared/FloatingAgentWidget.jsx';
@@ -21,7 +21,9 @@ const navGroups = [
   { label: 'TRAFFIC', items: [
     { label: 'Camera system', to: '/authority/traffic-lab', icon: Camera },
     { label: 'Traffic agent', to: '/authority/traffic-agent', icon: Bot },
-    { label: 'Traffic simulation', to: '/authority/traffic-simulation', icon: Route },
+    { label: '60-minute simulation', to: '/authority/traffic-simulation', icon: Route },
+    { label: 'Signal plan studio', to: '/authority/signal-plans', icon: Signal },
+    { label: 'Digital twin', to: '/authority/digital-twin', icon: Workflow },
   ]},
   { label: 'INSIGHTS & SYSTEM', items: [
     { label: 'City analytics', to: '/authority/analytics', icon: Activity },
@@ -35,6 +37,8 @@ const meta = {
   '/authority/air-intelligence': ['Air quality', 'AQI overview'],
   '/authority/aqi-forecast': ['Air quality', 'AQI forecasting'],
   '/authority/traffic-simulation': ['Traffic', '60-minute traffic simulation'],
+  '/authority/signal-plans': ['Traffic', 'Signal plan studio'],
+  '/authority/digital-twin': ['Traffic', 'Digital twin'],
   '/authority/iot': ['Field network', 'IoT sensor network'],
   '/authority/analytics': ['Insights', 'City analytics'],
   '/authority/sources': ['Manage', 'Data sources'],
