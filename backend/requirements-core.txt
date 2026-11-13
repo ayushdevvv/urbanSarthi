@@ -23,3 +23,6 @@ xgboost>=2.1,<4
 
 # Official SUMO application wheel (includes the Linux binaries; no apt/Docker required).
 eclipse-sumo==1.28.0
+
+# Google ADK is optional at runtime but available in the standard API+agent install.
+-r requirements-agent.txt

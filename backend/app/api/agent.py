@@ -25,7 +25,7 @@ from app.models import CityAlert
 from app.services.agent_engine import run_agent
 from app.services.agents.citizen_agent import run_citizen_agent
 from app.services.agents.authority_agent import run_authority_agent
-from app.services.agents.base import get_llm_provider
+from app.services.agents.base import get_llm_provider, get_google_api_key, get_google_models
 from app.core.config import settings
 
 router = APIRouter(prefix="/agent", tags=["Traffic Intelligence Agents"])
@@ -222,6 +222,14 @@ def agent_analyze(payload: AgentAnalyzeRequest):
     )
 
 
+def _google_adk_ready() -> bool:
+    try:
+        from importlib.util import find_spec
+        return find_spec("google.adk") is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
+        return False
+
+
 @router.get("/status")
 def agent_status():
     """Report the current capability status of the multi-agent system."""
@@ -239,7 +247,7 @@ def agent_status():
 
     return {
         "agent_name": "UrbanSaarthi Multi-Agent System",
-        "agent_version": "2.0.0",
+        "agent_version": "3.0.0",
         "tools_available": [
             {"name": "get_traffic_snapshot", "label": "Traffic Snapshot", "available": True},
             {"name": "get_aqi_snapshot", "label": "AQI Snapshot", "available": True},
@@ -261,10 +269,16 @@ def agent_status():
             },
         ],
         "llm_engine": {
-            "provider": provider,
+            "provider": "Google AI" if provider == "google" else "deterministic",
             "model": model_name,
-            "is_live_llm": provider != "fallback",
-            "fallback_label": "Deterministic rule-based tool-use fallback active (Keyless operation).",
+            "fallback_model": get_google_models()[1] if get_google_api_key() else None,
+            # A configured key is not proof of successful upstream connectivity.
+            # Live model use is reported by individual execution responses instead.
+            "is_live_llm": False,
+            "credentials_configured": bool(get_google_api_key()),
+            "connectivity": "not_checked" if get_google_api_key() else "not_configured",
+            "adk_tool_calling_ready": _google_adk_ready() and bool(get_google_api_key()),
+            "fallback_label": "Google credentials and ADK availability are configuration checks only. Each execution reports the actual model used; deterministic decision tools remain available when Google AI is unavailable or rate-limited.",
         },
         "simulation_models": {
             "sumo_xgboost": {"available": sumo_available, "note": sumo_note},

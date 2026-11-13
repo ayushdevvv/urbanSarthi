@@ -7,7 +7,7 @@
 - Kept Traffic Lab on the shared light, forest-green and sage theme used by the rest of UrbanSaarthi. Improved control, heading, result and note legibility.
 - Kept the agent workflow on its own `/authority/traffic-agent` page. Traffic Lab is now evidence capture and YOLO/OpenCV reporting, with a handoff to TrafficSaarthi Agent.
 - The Agent auto-starts the real `POST /traffic-detection/ops-workflow` request when a genuine saved YOLO report and a registered junction are available. It can also be rerun by the operator.
-- The backend workflow calls the evidence-inspection, emissions-estimation, signal-drafting and 60-minute-forecast tools. LangGraph + Groq is used when configured; the backend's deterministic tool implementation remains available without Groq credentials.
+- The backend workflow calls the evidence-inspection, emissions-estimation, signal-drafting and 60-minute-forecast tools. Google ADK with Gemini primary and Gemma fallback is used when configured; deterministic tools remain available without Google credentials or when the provider is unavailable.
 - Added a legible execution-stage indicator. The indicator advances while the backend job is running; exact tool completion is only marked from the actual response's returned `tools` list. The page explicitly explains that the HTTP endpoint returns the chain as one job and the indicator is not tool telemetry.
 - Fixed the 40-second Agent preview timer so an in-flight request no longer suppresses the local preview. A later real response can replace the preview.
 - Added a page-level 40-second illustrative Traffic Lab scene state when no prior real YOLO report exists. It is local-only, never persisted, and never submitted to the Agent.

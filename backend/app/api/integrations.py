@@ -38,9 +38,27 @@ def integration_status(db: Session = Depends(get_db), user=Depends(require_roles
         native_sumo = sumo_binary()
     except Exception:
         native_sumo = None
+    from app.services.agents.base import get_google_api_key, get_google_models
+    google_key_present = bool(get_google_api_key())
+    google_primary, google_fallback = get_google_models()
+    try:
+        from importlib.util import find_spec
+        google_adk_installed = find_spec("google.adk") is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
+        google_adk_installed = False
+
     return {
         "generated_at": utc_now().isoformat(),
         "providers": {
+            "google_ai_agent": {
+                "configured": google_key_present,
+                "dependencies_ready": google_adk_installed,
+                "healthy": None,
+                "mode": "Google ADK agent with Gemini/Gemma routing" if google_key_present and google_adk_installed else "Google AI key configured; ADK package missing" if google_key_present else "not_configured",
+                "primary_model": google_primary if google_key_present else None,
+                "fallback_model": google_fallback if google_key_present else None,
+                "key_server_side_only": True,
+            },
             "openaq": {"configured": bool(settings.openaq_api_key), "healthy": openaq_recent, "mode": "pull" if settings.openaq_api_key else "not_configured", "api_version": "v3", "last_sync_at": openaq_source.last_success_at.isoformat() if openaq_source and openaq_source.last_success_at else None},
             "tomtom_traffic": {"configured": bool(settings.tomtom_api_key), "healthy": None, "mode": "current road flow API; verified when a selected coordinate is queried" if settings.tomtom_api_key else "not_configured", "key_server_side_only": True},
             "openweather_air": {"configured": bool(settings.weather_api_key), "healthy": None, "mode": "current air quality and forecast provider" if settings.weather_api_key else "not_configured"},

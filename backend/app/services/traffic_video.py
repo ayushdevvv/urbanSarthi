@@ -52,7 +52,6 @@ def video_status() -> dict[str, Any]:
         native_sumo_path = sumo_binary()
     except Exception:
         native_sumo_path = None
-    from app.core.config import settings
     from app.services.traffic_simulation import BASE as simulation_base
     try:
         from importlib.util import find_spec
@@ -60,7 +59,13 @@ def video_status() -> dict[str, Any]:
     except (ImportError, ValueError):
         xgboost_available = False
     forecast_artifacts_present = all((simulation_base / "models" / name).is_file() for name in ("queue_model.json", "queue_model_60min.json", "metrics.json", "metrics_60min.json", "edge_mean.json")) and (simulation_base / "data" / "raw.csv").is_file()
-    agent_packages_available = all(find_spec(name) is not None for name in ("langgraph", "langchain_core", "langchain_groq"))
+    try:
+        agent_packages_available = find_spec("google.adk") is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
+        agent_packages_available = False
+    from app.services.agents.base import get_google_api_key, get_google_models
+    google_api_key = get_google_api_key()
+    google_primary_model, google_fallback_model = get_google_models()
     if not model_status.get("weights_present"):
         readiness_note = "Vehicle detection is not configured on this server yet. Restore the required model files and restart the service."
     elif not model_status.get("inference_dependency_available"):
@@ -85,7 +90,10 @@ def video_status() -> dict[str, Any]:
         "forecast_artifacts_present": forecast_artifacts_present,
         "forecast_ready": bool(forecast_artifacts_present and xgboost_available) or bool(native_sumo_path),
         "agent_tools_ready": True,
-        "llm_tool_calling_ready": bool(agent_packages_available and settings.groq_api_key.strip() or agent_packages_available and os.getenv("GROQ_API_KEY", "").strip()),
+        "llm_tool_calling_ready": bool(agent_packages_available and google_api_key),
+        "llm_provider": "Google AI" if agent_packages_available and google_api_key else "deterministic",
+        "llm_primary_model": google_primary_model if google_api_key else None,
+        "llm_fallback_model": google_fallback_model if google_api_key else None,
         "video_analysis_ready": bool(model_status.get("ready") and opencv_available and (opencv_ffmpeg_enabled or ffmpeg_fallback_available)),
         "video_max_seconds": MAX_VIDEO_SECONDS,
         "video_max_sampled_frames": MAX_SAMPLED_FRAMES,

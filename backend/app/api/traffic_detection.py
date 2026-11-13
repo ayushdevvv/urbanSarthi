@@ -142,7 +142,7 @@ def run_traffic_ops_workflow(payload: OpsWorkflowIn, request: Request, db: Sessi
     estimated_emissions = estimate_from_counts(counts_for_emissions, distance_km)
     evidence["emissions_estimate"] = estimated_emissions
     evidence["segment_distance_km_assumption"] = distance_km
-    evidence["segment_distance_km"] = distance_km  # consumed by the deterministic and LangGraph emissions tools
+    evidence["segment_distance_km"] = distance_km  # consumed by the deterministic and Google ADK emissions tools
     observation = TrafficObservation(
         junction_id=junction.id, external_junction_id=junction.external_id,
         source="opencv_yolo_video", observed_at=datetime.now(timezone.utc),
@@ -170,7 +170,7 @@ def run_traffic_ops_workflow(payload: OpsWorkflowIn, request: Request, db: Sessi
         status="draft", plan_type="adaptive_recommendation", cycle_seconds=cycle, phases=phases,
         rationale=str(draft.get("rationale") or "Draft generated from video evidence; lane calibration not available.")[:3000],
         projected_outcomes={"video_observation_id": observation.id, "video_evidence": evidence, "human_review_required": True, "physical_dispatch_enabled": False},
-        model_version="langgraph-groq-video-ops-v1" if agent_result.get("agent_mode") == "langgraph_groq_tool_calling" else "deterministic-video-ops-v1",
+        model_version=(f"google-adk-{agent_result.get('llm_model')}" if str(agent_result.get("agent_mode", "")).startswith("google_adk_") else "deterministic-video-ops-v1"),
     )
     db.add(plan)
     db.flush()

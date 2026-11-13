@@ -21,12 +21,11 @@ class Settings(BaseSettings):
     # Optional server-side Tavily search for location-aware traffic and transit news.
     tavily_api_key: str = ""
     model_path: str = ""
-    # Optional LLM API keys for agentic tool-calling; rule-based fallback active when omitted
+    # Google AI is optional: deterministic workflows remain available without credentials.
     gemini_api_key: str = ""
-    openai_api_key: str = ""
-    # Optional Groq key for LangGraph native tool-calling in the Traffic Lab.
-    groq_api_key: str = ""
-    groq_model: str = "openai/gpt-oss-120b"
+    google_ai_primary_model: str = "gemini-3.8-flash"
+    google_ai_fallback_model: str = "gemma-4-26b-a4b-it"
+    google_ai_timeout_seconds: int = 16
     # Optional override for the bundled YOLO traffic checkpoint.
     traffic_model_path: str = ""
     sumo_binary: str = ""

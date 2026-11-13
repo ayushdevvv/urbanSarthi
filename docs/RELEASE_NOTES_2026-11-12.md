@@ -46,7 +46,7 @@ A production Vite bundle is **not verified**: npm dependencies could not be rest
 
 1. Provision managed PostgreSQL, set exact CORS origins, production auth, JWT secret, ingestion key, and bootstrap administrator credentials.
 2. Set frontend `VITE_API_URL` and rebuild the public hackathon frontend; no login flag is required.
-3. Add provider credentials as needed: `TOMTOM_API_KEY`, `OPENAQ_API_KEY`, and optionally `WEATHER_API_KEY` and `GROQ_API_KEY`.
+3. Add provider credentials as needed: `TOMTOM_API_KEY`, `OPENAQ_API_KEY`, optionally `WEATHER_API_KEY`, and `GEMINI_API_KEY` for Google AI reasoning.
 4. Register surveyed junctions and real data sources; deploy the RTSP worker on a machine with authorized camera-network access.
 5. Supply an authorized CPCB/CAAQMS adapter if official AQI is required; OpenAQ and CAMS are not CPCB station observations.
 6. Supply a city-specific SUMO network, edge/junction mapping, turning counts, signal timing and calibration data before claiming a city-calibrated digital twin.

@@ -123,7 +123,7 @@ Updated the frontend smoke test to assert that these existing feature pages stay
 | `/authority/iot` — IoT Network | Recent sensor observations and manual HTTP observation ingestion | Partial; no MQTT broker or secure device provisioning |
 | `/authority/sources` — Data Sources | Source registry, health summary and source-record creation | Registry only; adding a record does not connect/poll a provider |
 | `/authority/traffic-lab` — Camera System | Upload image/video, YOLO analysis, ROI calibration, annotated frame/report export | Code implemented; inference requires compatible Ultralytics/PyTorch runtime; no RTSP/CCTV or browser webcam capture |
-| `/authority/traffic-agent` — Traffic Agent | Evidence review, operational tools, signal plan draft, scenario, human review/approval/rejection and dispatch preview | Deterministic workflow verified; LangGraph/Groq synthesis optional and not configured in audit runtime; no physical signal write |
+| `/authority/traffic-agent` — Traffic Agent | Evidence review, operational tools, signal plan draft, scenario, human review/approval/rejection and dispatch preview | Deterministic workflow verified; Google ADK with Gemini/Gemma synthesis optional; no physical signal write |
 | `/authority/traffic-simulation` — Traffic Simulation | 0–60 minute model playback, road queues, scenario controls | Implemented as XGBoost forecast/sensitivity scenario, not live SUMO/TraCI |
 | `/authority/analytics` — City Analytics | City mobility summary and period filter | Implemented but reads recorded trip activity, not a complete sensor-wide city-data lake; now added to sidebar |
 | `/authority/settings` — Settings | Shared light/dark theme, language preference and API URL display | Basic frontend preferences only; not an operational admin configuration console; now added to sidebar |
@@ -155,7 +155,7 @@ Updated the frontend smoke test to assert that these existing feature pages stay
 **Traffic Agent**
 - Has a backend operations workflow that accepts camera evidence, persists a traffic observation, estimates emissions, creates a signal plan, runs a scenario and returns tool output for human review.
 - Deterministic fallback was exercised successfully with a sample evidence request; it created an actual backend result rather than merely rendering a local mock.
-- LangGraph/Groq is an optional enhanced reasoning path. The environment tested did not have `langgraph`/`langchain_groq` or a configured `GROQ_API_KEY`, so LLM-based reasoning was not verified.
+- Google ADK with Gemini primary and Gemma fallback is the optional reasoning path. Google calls require a server-side `GEMINI_API_KEY` and available model quota; deterministic tools remain usable without it.
 - If there is no saved report or junction context, the page may show an explicitly illustrative local preview after a delay. That is not an agent execution.
 - Approve/reject are workflow state transitions. `dispatch-preview` is a preview only; it is not a traffic-signal command.
 
@@ -242,7 +242,7 @@ The FastAPI application registers **94 API routes** across 86 OpenAPI path entri
 
 1. **Authentication and authorization are disabled.** `dependencies.py` supplies a shared demo admin identity; authority and ingestion writes are accessible without actual login/roles. Restore secure user auth, role checks, tenant/city boundaries, CSRF/session policy as appropriate, rate limits and audit logs before exposing to real users.
 2. **No production frontend build verified.** Resolve dependency installation/build in the intended Node environment and add browser-level route testing.
-3. **No secrets or operational feeds in the source archive.** Provider integrations must be configured in backend-only secrets/host environment. Never put Groq/provider keys in Vite client variables.
+3. **No secrets or operational feeds in the source archive.** Provider integrations must be configured in backend-only secrets/host environment. Never put Google AI/provider keys in Vite client variables.
 4. **No physical control integration.** Keep all signal operations human-approved and preview-only until a controller interface, safety interlocks, operator authorization and rollback are implemented and tested.
 
 ### P1 — Needed for the requested “all features” live platform
@@ -252,7 +252,7 @@ The FastAPI application registers **94 API routes** across 86 OpenAPI path entri
 3. **Native digital twin:** install SUMO, run baseline/intervention tests, map actual city links/junctions to SUMO edges, calibrate traffic demand from measured counts, run TraCI or controlled batch simulations, and store scenario reproducibility metadata. Current 80-edge grid is synthetic.
 4. **Continuous data pipelines:** provider adapters + background scheduler/queue, retries/backoff, freshness/heartbeat from actual records, schema validation, deduplication and observability. A manual source registry row is not a connected source.
 5. **AQI station integration:** CPCB/OpenAQ/authorized sensor ingestion, station metadata/location, calibrated PM2.5/PM10 readings, missing-data quality flags and clear separation of measured vs CAMS model output.
-6. **Agent LLM path:** install/configure LangGraph and Groq server-side, use a valid model, add tool timeout/retry and structured output validation, trace each tool call, and persist reasoning/evidence provenance. Keep deterministic fallback visible and safe.
+6. **Agent LLM path:** use Google ADK with Gemini/Gemma server-side, add quota-aware request limits and structured output validation, trace tool calls, and persist evidence provenance. Keep deterministic fallback visible and safe.
 7. **GTFS and GTFS-Realtime:** import a real operator feed, validate route/stop IDs and service calendars, ingest vehicle positions/alerts/trip updates and test arrival freshness. Add payment only through a real authorized ticketing provider.
 
 ### P2 — Product completeness and usability
@@ -268,7 +268,7 @@ The FastAPI application registers **94 API routes** across 86 OpenAPI path entri
 
 1. **City data ingestion layer:** source registry backed by real connectors and scheduled workers for cameras, traffic counters, CPCB/OpenAQ, weather, GTFS/GTFS-RT and IoT.
 2. **Evidence layer:** time-stamped, geospatially indexed events with source quality, confidence, camera/station identity and immutable provenance.
-3. **Intelligence layer:** traffic detector/tracker, queue/speed estimation calibrated to each camera, AQI nowcast/forecast, congestion prediction, emissions estimator and LangGraph traffic operations agent.
+3. **Intelligence layer:** traffic detector/tracker, queue/speed estimation calibrated to each camera, AQI nowcast/forecast, congestion prediction, emissions estimator and Google ADK traffic operations agent.
 4. **Simulation layer:** mapped road network plus SUMO/TraCI, calibrated demand, baseline/intervention experiments and scenario comparison.
 5. **Decision layer:** agent-generated recommendations with evidence, confidence, predicted impact, approval, expiry, rollback plan and audit trail.
 6. **Operations layer:** command centre, camera health, sensor health, alerts, incidents, signal plans, analytics, access control and full audit logs.

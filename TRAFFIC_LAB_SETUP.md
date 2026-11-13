@@ -41,7 +41,7 @@ npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite, usually `http://localhost:5173`. `VITE_API_URL` should be `http://127.0.0.1:8000/api/v1`. Never add a Groq or other secret key to `VITE_*` variables.
+Open the local URL printed by Vite, usually `http://localhost:5173`. `VITE_API_URL` should be `http://127.0.0.1:8000/api/v1`. Never add a Google AI or other secret key to `VITE_*` variables.
 
 ## 3. External downloads / API keys
 
@@ -49,7 +49,7 @@ Open the local URL printed by Vite, usually `http://localhost:5173`. `VITE_API_U
 |---|---|---|
 | YOLO checkpoint `best.pt` | Included | Local object detection; no model-hosting API key.
 | OpenCV + Ultralytics + PyTorch | Install from backend requirements | Local video/frame decoding, vehicle inference and tracking. CPU inference works but can be slow. A compatible NVIDIA CUDA setup is optional, not required.
-| Groq developer API key | Optional | Enables actual LLM reasoning/tool selection with LangGraph and a Groq-hosted model. Create one at <https://console.groq.com/keys>. Provider quotas and pricing depend on your account and can change; check the current model/pricing page before relying on it as free. This key is optional.
+| Google AI Studio API key | Optional | Enables Google ADK reasoning and tool selection. Create a key at <https://aistudio.google.com/api-keys>. Gemini is primary and Gemma is fallback; free-tier quotas apply. Keep the key server-side only.
 | SUMO traffic simulator | Optional | Enables native 3,600-second simulations for baseline and proposed signal timing on the included synthetic grid. No API key. Official downloads: <https://eclipse.dev/sumo/docs/Downloads.html>.
 | TomTom / OpenWeather / OpenAQ / mapping keys | Not required for this Traffic Lab flow | Other features may use these providers if configured; they are not required for YOLO reports, the local XGBoost fallback or deterministic agent tools.
 
@@ -58,11 +58,12 @@ Open the local URL printed by Vite, usually `http://localhost:5173`. `VITE_API_U
 Open `backend/.env` and set:
 
 ```dotenv
-GROQ_API_KEY=your_groq_key_here
-GROQ_MODEL=openai/gpt-oss-120b
+GEMINI_API_KEY=your_google_ai_studio_key
+GOOGLE_AI_PRIMARY_MODEL=gemini-3.8-flash
+GOOGLE_AI_FALLBACK_MODEL=gemma-4-26b-a4b-it
 ```
 
-Restart Uvicorn after changing the file. When configured and the installed LangGraph/LangChain-Groq packages plus provider endpoint are available, the agent calls three bounded tools: inspect video evidence, draft signal timings, and run the 60-minute scenario. If the key is absent or the LLM stack fails, the workflow transparently switches to deterministic local tools and shows the reason. No external LLM is needed for vehicle detection itself.
+Restart Uvicorn after changing the file. The Traffic Agent uses Google ADK with Gemini primary and Gemma fallback. It can inspect YOLO evidence, estimate emissions, draft a reviewable signal plan, and run a 60-minute SUMO or XGBoost forecast. If Google AI or ADK is unavailable, deterministic tools still complete the workflow.
 
 The key is secret: do not commit `.env`, paste it into screenshots, or put it in frontend environment variables.
 
@@ -140,7 +141,7 @@ If the camera does not have all four canonical movement ROIs calibrated, the sig
 
 - **YOLO unavailable:** verify `backend/models/best.pt` exists, install the backend requirements, and inspect `/api/v1/traffic-detection/video-status`.
 - **Video cannot decode:** visit `/api/v1/traffic-detection/video-status`. Confirm `decoder_ready` and `ffmpeg_fallback_available` are true. Redeploy the backend after installing updated requirements; then retry with a short MP4/H.264 clip under 150 MB/10 min.
-- **Agent uses deterministic tools:** this is expected without a valid `GROQ_API_KEY`. Check backend logs if a key is configured but the model endpoint fails.
+- **Agent uses deterministic tools:** this is expected without a valid `GEMINI_API_KEY`, when ADK is unavailable, or when Google returns an error/quota response. Check provider status and backend logs.
 - **XGBoost fallback shown:** install SUMO and set `SUMO_BINARY` if you want native simulation. Fallback is not a failure of YOLO detection.
 - **Frontend dependency/build error:** remove `frontend/node_modules` if it was copied from a different operating system, then run `npm ci` again on your machine.
 

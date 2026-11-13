@@ -25,15 +25,14 @@ Set provider credentials in Render only, never in Vercel `VITE_*` variables:
 ```env
 TOMTOM_API_KEY=
 TAVILY_API_KEY=
-GROQ_API_KEY=
+GEMINI_API_KEY=
 OPENAQ_API_KEY=
 WEATHER_API_KEY=
-GEMINI_API_KEY=
-OPENAI_API_KEY=
+
 OSRM_BASE_URL=
 ```
 
-TomTom enriches nearby road speeds/incidents; Tavily is an optional traffic/transit news search; OpenAQ returns pollutant observations (not official CPCB AQI); Open-Meteo/CAMS provides forecast data where available; Groq/Gemini/OpenAI enable their configured agent pathways. Empty optional keys mean the corresponding integration remains unconfigured.
+TomTom enriches nearby road speeds/incidents; Tavily is an optional traffic/transit news search; OpenAQ returns pollutant observations (not official CPCB AQI); Open-Meteo/CAMS provides forecast data where available; Google Gemini/Gemma enable the citizen and authority synthesis pathways; Google ADK orchestrates Traffic Agent tools. Empty optional keys mean the corresponding integration remains unconfigured.
 
 ## Current no-login Render setup
 

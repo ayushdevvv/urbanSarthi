@@ -29,6 +29,17 @@ The citizen navigation intentionally contains five destinations:
 
 The platform separates observations, forecasts, news, model scenarios and unavailable integrations. Missing live data is shown as unavailable rather than replaced with invented metrics. Physical traffic-signal writes are intentionally disabled.
 
+## Google AI integration
+
+- `gemini-3.8-flash` is the primary synthesis and reasoning model.
+- `gemma-4-26b-a4b-it` is the hosted secondary model fallback.
+- Google ADK orchestrates the Traffic Agent's backend tools (video evidence, emissions estimate, signal draft and 60-minute forecast).
+- Citizen and authority assistants use the same Google model routing through the Gemini API.
+- Set `GEMINI_API_KEY` only on the backend. Missing credentials, quota exhaustion or provider failures fall back to deterministic responses; FastAPI startup and the core portals do not depend on Google availability.
+- The current default deployment remains Vercel + the existing native Python Render service. Cloud Run is an optional future hosting target for a separately scaled agent service; BigQuery is an optional analytics target and is not a required runtime dependency in this release.
+
+See [Google AI architecture and deployment options](./docs/GOOGLE_AI_STARTUP_ARCHITECTURE.md) for the model, agent, data-safety and optional Google Cloud plan.
+
 ## Architecture
 
 - `frontend/`: React + Vite SPA, citizen and authority surfaces, responsive shared design system.

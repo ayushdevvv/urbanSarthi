@@ -23,12 +23,14 @@ services:
         sync: false
       - key: TAVILY_API_KEY
         sync: false
-      - key: GROQ_API_KEY
-        sync: false
       - key: GEMINI_API_KEY
         sync: false
-      - key: OPENAI_API_KEY
-        sync: false
+      - key: GOOGLE_AI_PRIMARY_MODEL
+        value: gemini-3.8-flash
+      - key: GOOGLE_AI_FALLBACK_MODEL
+        value: gemma-4-26b-a4b-it
+      - key: GOOGLE_AI_TIMEOUT_SECONDS
+        value: "16"
       - key: OPENAQ_API_KEY
         sync: false
       - key: WEATHER_API_KEY

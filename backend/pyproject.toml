@@ -24,6 +24,7 @@ dependencies = [
   "torchvision==0.25.0+cpu",
   "xgboost>=2.1,<4",
   "eclipse-sumo==1.28.0",
+  "google-adk==2.14.1",
 ]
 
 [tool.uv]

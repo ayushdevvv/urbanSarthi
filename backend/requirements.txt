@@ -25,9 +25,9 @@ torchvision==0.25.0+cpu
 # Supplied SUMO traffic forecast model
 xgboost>=2.1,<4
 opencv-python-headless>=4.10,<5
-langgraph>=0.2,<2
-langchain-core>=0.3,<2
-langchain-groq>=0.2,<2
+
+# Google-first agent orchestration (lazy-imported; deterministic fallback if unavailable).
+-r requirements-agent.txt
 
 # Portable FFmpeg decoder fallback for phone-recorded / cloud-incompatible video codecs
 imageio-ffmpeg>=0.5.1,<1

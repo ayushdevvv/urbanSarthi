@@ -56,7 +56,7 @@ The video file is processed from a temporary location and is not retained as a m
 - `backend/app/services/emissions.py` — vehicle-class emissions factors and calculations.
 - `backend/app/services/traffic_calibration.py` — ROI validation, polygon membership and timing allocation.
 - `backend/app/services/traffic_video.py` — OpenCV/YOLO video and ROI report, including timeline bug fix.
-- `backend/app/services/traffic_ops_agent.py` — bounded emissions tool and signal draft integration for LangGraph and deterministic fallback.
+- `backend/app/services/traffic_ops_agent.py` — Google ADK tool orchestration for video evidence, emissions estimates, signal drafts and traffic forecasts, with deterministic fallback.
 - `backend/app/services/sumo_runner.py` — same-demand native SUMO baseline/candidate runs, multi-class routes and trip-distance emissions.
 - `backend/app/api/air_intelligence.py` — factors, estimate, hotspots, plan optimization, comparison and report endpoints.
 - `backend/app/api/traffic_detection.py` — video report persistence, corridor distance and truthful forecast/plan status.
@@ -88,7 +88,7 @@ The video file is processed from a temporary location and is not retained as a m
 
 - YOLO `backend/models/best.pt` and the traffic XGBoost artifacts are bundled.
 - OpenCV, `imageio-ffmpeg`, Ultralytics and PyTorch are installed through `backend/requirements.txt`. CPU inference works but can be slow. Redeploy the backend after installing the updated requirements so the FFmpeg video-decoder fallback becomes available.
-- Groq is optional. Set `GROQ_API_KEY` and `GROQ_MODEL` in backend `.env` for hosted LLM reasoning and tool calling. Without a key, deterministic local tools still run.
+- Google AI is optional. Set `GEMINI_API_KEY`, `GOOGLE_AI_PRIMARY_MODEL=gemini-3.8-flash` and `GOOGLE_AI_FALLBACK_MODEL=gemma-4-26b-a4b-it` in backend `.env`. Traffic Lab uses Google ADK; citizen and authority assistants use the Gemini API directly. Without credentials or when quotas/providers fail, deterministic tools still run.
 - SUMO is free but optional for the dedicated baseline/intervention comparison. Configure `SUMO_BINARY` or add `sumo` to PATH. Without SUMO, the app keeps the independent XGBoost forecast but cannot run the comparative experiment.
 - No paid API key is required for the core local emissions calculation, hotspot ranking, ROI validation or deterministic tool workflow.
 

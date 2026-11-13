@@ -97,7 +97,7 @@ export default function TrafficAgentPage() {
       }, { timeoutMs: 40000 });
       setWorkflow(result);
       saveLocalRecord('traffic-agent-last-workflow', result);
-      notify(result.agent?.agent_mode === 'langgraph_groq_tool_calling' ? 'TrafficSaarthi completed its analysis run.' : 'TrafficSaarthi completed its analysis workflow.');
+      notify(String(result.agent?.agent_mode || '').startsWith('google_adk_') ? 'TrafficSaarthi completed its analysis run.' : 'TrafficSaarthi completed its analysis workflow.');
     } catch (err) {
       setError(err?.message || 'The Traffic Agent could not complete the workflow.');
       if (!automatic) notify('The live agent workflow did not complete. No result was substituted.');
@@ -268,7 +268,7 @@ export default function TrafficAgentPage() {
     </section>
 
     {workflow && <>
-      <div className="ta-results-heading"><div><span>WORKFLOW OUTPUT</span><h2>{preview ? 'Illustrative operations preview' : 'Analysis, plan and forecast'}</h2></div><span className={`ta-result-mode ${preview ? 'preview' : ''}`}>{preview ? 'REFERENCE CALCULATION' : workflow.agent?.agent_mode === 'langgraph_groq_tool_calling' ? 'ASSISTED WORKFLOW' : 'OPERATIONS WORKFLOW'}</span></div>
+      <div className="ta-results-heading"><div><span>WORKFLOW OUTPUT</span><h2>{preview ? 'Illustrative operations preview' : 'Analysis, plan and forecast'}</h2></div><span className={`ta-result-mode ${preview ? 'preview' : ''}`}>{preview ? 'REFERENCE CALCULATION' : String(workflow.agent?.agent_mode || '').startsWith('google_adk_') ? 'ASSISTED WORKFLOW' : 'OPERATIONS WORKFLOW'}</span></div>
       <section className="ta-metrics-grid">
         <article className="ta-metric-card ta-metric-primary"><span>ESTIMATED CO₂</span><strong>{emissions ? `${Number(emissions.co2_g || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} g` : '—'}</strong><small>Tailpipe proxy · indicative factors</small><Leaf size={19}/></article>
         <article className="ta-metric-card"><span>ESTIMATED NOx</span><strong>{emissions ? `${Number(emissions.nox_g || 0).toFixed(3)} g` : '—'}</strong><small>Vehicle class × corridor distance</small><Wind size={18}/></article>
