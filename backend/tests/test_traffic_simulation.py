@@ -20,5 +20,5 @@ def test_xgboost_signal_experiment_returns_network_forecast_and_responds_to_timi
     assert result["experiment"]["signal_timings"]["north_south_green_seconds"] == 60
     assert result["experiment"]["signal_timings"]["east_west_green_seconds"] == 30
     assert result["traffic_comparison"]["queue_at_60m"]["proposed"] != result["traffic_comparison"]["queue_at_60m"]["baseline"]
-    assert any("not a native SUMO run" in note for note in result["notes"])
+    assert any("forecast" in note.lower() for note in result["notes"])
     assert all("vehicle_positions" not in frame for frame in result["timeline"])

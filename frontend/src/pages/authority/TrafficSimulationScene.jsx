@@ -87,7 +87,7 @@ function NativeSignal({ junction, active }) {
 }
 
 function NativeSumoScene({ roads = [], frame, playing = false, areaName, signalTimings, networkGeometry }) {
-  const active = signalPhase(Number(frame?.minute || 0), 'baseline', signalTimings);
+  const active = signalPhase(Number(frame?.minute || 0), 'signal_priority', signalTimings);
   const mapRoads = networkGeometry?.roads || [];
   const junctions = networkGeometry?.junctions || [];
   const vehicles = frame?.vehicle_positions || [];
@@ -154,16 +154,38 @@ function pointAlongRoad(points, progress) {
 }
 
 function ModelForecastScene({ frame, areaName = 'Reference road network', networkGeometry, signalTimings, playing = false }) {
-  const mapRoads = networkGeometry?.roads || [];
-  const junctions = networkGeometry?.junctions || [];
+  const forecastRows = frame?.roads || [];
+  const referenceRoads = useMemo(() => {
+    const roads = [];
+    const horizontalY = [220, 500, 780];
+    const verticalX = [220, 500, 780];
+    let index = 0;
+    horizontalY.forEach((y, row) => {
+      for (let col = 0; col < 3; col += 1) {
+        const rowData = forecastRows[index] || {};
+        roads.push({ id: String(rowData.road || `Corridor ${index + 1}`), points: [{ x: 40 + col * 280, y }, { x: 320 + col * 280, y }], label: rowData.road || `East–west ${row + 1}.${col + 1}` });
+        index += 1;
+      }
+    });
+    verticalX.forEach((x, col) => {
+      for (let row = 0; row < 3; row += 1) {
+        const rowData = forecastRows[index] || {};
+        roads.push({ id: String(rowData.road || `Corridor ${index + 1}`), points: [{ x, y: 40 + row * 280 }, { x, y: 320 + row * 280 }], label: rowData.road || `North–south ${col + 1}.${row + 1}` });
+        index += 1;
+      }
+    });
+    return roads;
+  }, [forecastRows]);
+  const mapRoads = networkGeometry?.roads?.length ? networkGeometry.roads : referenceRoads;
+  const junctions = networkGeometry?.junctions?.length ? networkGeometry.junctions : Array.from({ length: 9 }, (_, index) => ({ id: `J-${index + 1}`, x: 220 + (index % 3) * 280, y: 220 + Math.floor(index / 3) * 280 }));
   const roadData = new Map((frame?.roads || []).map((road) => [String(road.road), road]));
   const colorFor = (level) => level === 'Heavy' ? '#c95c52' : level === 'Moderate' ? '#d4a044' : '#438d66';
-  const active = signalPhase(Number(frame?.minute || 0), 'baseline', signalTimings);
+  const active = signalPhase(Number(frame?.minute || 0), 'signal_priority', signalTimings);
   const trafficMarkers = useMemo(() => mapRoads.slice(0, 42).flatMap((road, index) => {
-    const measured = roadData.get(String(road.id));
+    const measured = roadData.get(String(road.id)) || roadData.get(String(road.label));
     const queue = Math.max(0, Number(measured?.queue || 0));
     if (!measured || queue < 1) return [];
-    const count = Math.min(2, Math.max(1, Math.ceil(queue / 28)));
+    const count = Math.min(3, Math.max(1, Math.ceil(queue / 20)));
     return Array.from({ length: count }, (_, vehicleIndex) => {
       const position = pointAlongRoad(road.points, Number(frame?.minute || 0) / 60 * 1.8 + index * .137 + vehicleIndex * .43);
       return position ? { id: `${road.id}-${vehicleIndex}`, ...position, road: road.id, level: measured.level } : null;
@@ -188,6 +210,7 @@ function ModelForecastScene({ frame, areaName = 'Reference road network', networ
             <polyline points={points} fill="none" stroke="#f4f6ef" strokeWidth="34" strokeLinecap="round" strokeLinejoin="round"/>
             <polyline points={points} fill="none" stroke={color} strokeWidth="24" strokeLinecap="round" strokeLinejoin="round" opacity={data ? .94 : .32}/>
             <polyline points={points} fill="none" stroke="#fff" strokeWidth="1.5" strokeDasharray="8 12" opacity=".8"/>
+            <title>{road.label || road.id} · {data?.level || "No forecast"} · queue {data?.queue ?? "—"}</title>
           </g>;
         })}
         {junctions.map((junction) => <g key={junction.id} transform={`translate(${junction.x} ${junction.y})`}><circle r="12" fill="#f6faf3" stroke="#607769" strokeWidth="2"/><circle r="4" fill={active === 'ALL_RED' ? '#d75a52' : active.includes('YELLOW') ? '#dfa83e' : '#48a275'}/><title>{junction.id} · proposed signal phase</title></g>)}

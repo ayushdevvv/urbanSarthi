@@ -357,7 +357,7 @@ def get_traffic_snapshot(latitude: float, longitude: float) -> dict[str, Any]:
         return {
             "tool": "get_traffic_snapshot",
             "data_mode": data_mode,
-            "data_mode_label": "⚡ SUMO XGBoost Model",
+            "data_mode_label": "60-minute traffic forecast",
             "city": city_name,
             "state": city_info.get("state", "India"),
             "latitude": latitude,
@@ -374,7 +374,7 @@ def get_traffic_snapshot(latitude: float, longitude: float) -> dict[str, Any]:
             },
             "roads": roads,
             "model_metrics": model_metrics,
-            "note": f"Traffic simulation dynamics derived from trained SUMO benchmark model projected onto monitored arterial corridors in {city_name}. Not a live physical sensor feed.",
+            "note": f"Traffic conditions are estimated from historical reference-network patterns for {city_name}. This is a forecast, not a live sensor reading.",
         }
 
     except Exception as exc:
@@ -418,7 +418,7 @@ def get_traffic_snapshot(latitude: float, longitude: float) -> dict[str, Any]:
             },
             "roads": roads,
             "model_metrics": {},
-            "note": f"SUMO model unavailable ({type(exc).__name__}). Showing reference corridor data for {city_name}.",
+            "note": f"Detailed simulation is temporarily unavailable. Showing the available reference-network outlook for {city_name}.",
             "_sumo_error": str(exc),
         }
 
@@ -889,7 +889,7 @@ def recommend_signal_strategy(
     return {
         "tool": "recommend_signal_strategy",
         "data_mode": data_mode,
-        "data_mode_label": "⚡ SUMO-Informed Strategy" if data_mode == "sumo_model" else
+        "data_mode_label": "Forecast-informed strategy" if data_mode == "sumo_model" else
                            ("🌐 Live-Data Strategy" if data_mode == "live" else "🔵 Heuristic Strategy"),
         "latitude": latitude,
         "longitude": longitude,
@@ -1336,7 +1336,7 @@ def run_agent(
         "recommendations": recommendations,
         "simulation_available": True,
         "simulation_note": (
-            "SUMO-trained XGBoost model active (518,400 rows, 80 road edges)"
+            "Historical 60-minute traffic forecast available across 80 reference road segments"
             if traffic_mode == "sumo_model"
             else "Traffic simulation benchmark data"
         ),

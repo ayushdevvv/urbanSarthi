@@ -1,0 +1,71 @@
+/* Release polish: balanced typography, responsive authority grids, and calmer loading states. */
+:root { --release-text: #173b31; --release-muted: #667a70; }
+html, body, #root { width: 100%; min-height: 100%; overflow-x: clip; }
+body { font-size: 15px; line-height: 1.55; }
+.citizen-app :where(small, .caption, .hint, .muted), .authority-app :where(small, .caption, .hint, .muted) { font-size: 12px; line-height: 1.5; }
+.citizen-app :where(label, input, select, textarea, button), .authority-app :where(label, input, select, textarea, button) { font-size: 13px; }
+.citizen-app :where(.eyebrow, .kicker), .authority-app :where(.eyebrow, .kicker) { font-size: 10px; }
+.citizen-app, .authority-app { min-width: 0; width: 100%; }
+.citizen-app { font-size: 15px; }
+.authority-app { font-size: 14px; }
+.citizen-app .intro h2, .authority-app .intro h2 { font-size: clamp(27px, 2vw, 35px); line-height: 1.15; }
+.citizen-app .intro p, .authority-app .intro p { font-size: 14px; line-height: 1.65; }
+.citizen-app .eyebrow, .authority-app .eyebrow { font-size: 10px; letter-spacing: 1.15px; }
+.citizen-app .panel-head h3, .authority-app .panel-head h3 { font-size: 18px; }
+.citizen-app input, .citizen-app select, .citizen-app textarea,
+.authority-app input, .authority-app select, .authority-app textarea { font-size: 14px; min-height: 42px; }
+.citizen-app button, .authority-app button { font-size: 13px; }
+.authority-app .content, .authority-app .control-grid, .authority-app .below-grid,
+.authority-app .panel, .authority-app .map-panel, .authority-app .hotspot { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.authority-app .content { width: 100%; overflow-x: clip; }
+.authority-app .main { flex: 1 1 0; width: auto; max-width: 100%; min-width: 0; }
+.authority-app .content > * { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+.authority-app .control-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 290px); gap: 16px; width: 100%; }
+.authority-app .control-grid > * { min-width: 0; width: 100%; }
+.authority-app .map-panel { overflow: hidden; }
+.authority-app .map-panel .leaflet-map, .authority-app .authority-map { width: 100%; min-width: 0; max-width: 100%; height: clamp(320px, 39vw, 510px); }
+.authority-app .hotspot { overflow-wrap: anywhere; }
+.authority-app .hotspot h3 { font-size: 20px; }
+.authority-app .hot-metrics b, .authority-app .kpi-value, .authority-app .kpi strong { font-size: 25px; }
+.authority-app .kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; }
+.authority-app .kpi { min-width: 0; padding: 18px; }
+.authority-app .kpi-head { font-size: 12px; }
+.authority-app .kpi small, .authority-app .scenario-notice { font-size: 12px; line-height: 1.55; }
+.leaflet-map { width: 100%; min-width: 0; overflow: hidden; border-radius: inherit; }
+.transit-external-fallback { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:14px; padding:16px; border:1px solid #dce7d8; border-radius:14px; background:#f7faf4; }
+.transit-external-fallback b, .transit-external-fallback small { display:block; }
+.transit-external-fallback b { font-size:14px; color:#173b31; }
+.transit-external-fallback small { margin-top:4px; max-width:440px; color:#687c70; font-size:12px; line-height:1.5; }
+.transit-external-fallback a { display:inline-flex; align-items:center; gap:8px; flex-shrink:0; }
+@media (max-width: 1180px) { .authority-app .control-grid { grid-template-columns:minmax(0,1fr); } .authority-app .hotspot { display:block; } }
+@media (max-width: 800px) {
+  .authority-app .main { width: auto; max-width: 100%; }
+  .authority-app .kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .authority-app .content { padding-inline:16px; }
+  .authority-app .authority-map, .authority-app .map-panel .leaflet-map { height:320px; }
+  .citizen-app .intro h2, .authority-app .intro h2 { font-size:27px; }
+  .transit-external-fallback { align-items:stretch; flex-direction:column; }
+  .transit-external-fallback a { justify-content:center; }
+}
+@media (max-width: 480px) {
+  body { font-size:14px; }
+  .authority-app .kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+  .authority-app .kpi { padding:13px 11px; }
+  .authority-app .kpi-head { font-size:10px; }
+  .authority-app .kpi b, .authority-app .kpi strong { font-size:21px; }
+  .authority-app .authority-map, .authority-app .map-panel .leaflet-map { height:260px; }
+  .citizen-app .panel-head, .authority-app .panel-head { padding:15px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; } }
+
+/* A clear, quiet progress state for camera analysis. */
+.ul-analysis-progress { margin-top: 14px; padding: 15px 16px; border: 1px solid #dce8dc; border-radius: 13px; background: #f7faf5; }
+.ul-analysis-progress-copy { display:flex; align-items:flex-start; gap:11px; color:#1d5140; }
+.ul-analysis-progress-copy > svg { flex:0 0 auto; margin-top:2px; }
+.ul-analysis-progress-copy b, .ul-analysis-progress-copy small { display:block; }
+.ul-analysis-progress-copy b { font-size:14px; }
+.ul-analysis-progress-copy small { margin-top:3px; color:#687d71; font-size:12px; line-height:1.45; }
+.ul-analysis-progress-track { height:5px; margin-top:13px; background:#e0e9df; border-radius:99px; overflow:hidden; }
+.ul-analysis-progress-track span { display:block; width:35%; height:100%; border-radius:99px; background:linear-gradient(90deg,#2c8260,#b7d96a); animation:ul-progress-sweep 1.35s ease-in-out infinite; }
+@keyframes ul-progress-sweep { 0% { transform:translateX(-110%); } 100% { transform:translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { .ul-analysis-progress-track span { animation:none; width:100%; } }

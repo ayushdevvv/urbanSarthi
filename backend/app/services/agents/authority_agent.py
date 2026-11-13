@@ -113,10 +113,10 @@ def run_authority_agent(
             "step": len(steps) + 1,
             "tool": "get_traffic_intelligence",
             "label": "Traffic & Detection Intelligence",
-            "thought": "Aggregating SUMO model queue forecasts and YOLO vehicle detection model status.",
+            "thought": "Combining traffic forecasts, camera evidence and city observations.",
             "status": "success",
             "data_mode": traffic_snapshot.get("data_mode", "unavailable"),
-            "data_mode_label": traffic_snapshot.get("data_mode_label", "⚡ SUMO XGBoost"),
+            "data_mode_label": traffic_snapshot.get("data_mode_label", "60-minute traffic forecast"),
             "result": traffic_intel,
         })
         tools_called.append("get_traffic_intelligence")
@@ -222,7 +222,7 @@ def run_authority_agent(
             "thought": "Generating demand-weighted cycle times and phase splits.",
             "status": "success",
             "data_mode": signal_strategy_res.get("data_mode", "sumo_model"),
-            "data_mode_label": signal_strategy_res.get("data_mode_label", "⚡ SUMO Strategy"),
+            "data_mode_label": signal_strategy_res.get("data_mode_label", "Forecast-informed strategy"),
             "result": signal_strategy_res,
         })
         tools_called.append("recommend_signal_strategy")
@@ -247,7 +247,7 @@ def run_authority_agent(
             parts.append(
                 f"• **Corridor State**: Congestion is **{s.get('congestion_level')}** (score {s.get('mean_congestion_score')}/100). "
                 f"{s.get('heavy_roads_now')} corridor(s) at Heavy/Severe saturation. "
-                f"YOLO detector weights are {'loaded' if traffic_intel['yolo_detection_model'].get('ready') else 'available via manual weights path'}."
+                f"Vehicle detection weights are {'loaded' if traffic_intel['yolo_detection_model'].get('ready') else 'available via manual weights path'}."
             )
 
         if sim_result:

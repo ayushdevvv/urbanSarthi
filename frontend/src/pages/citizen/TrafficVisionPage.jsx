@@ -54,7 +54,7 @@ export default function TrafficVisionPage() {
   const [reportSavedAt, setReportSavedAt] = useState(initialReportSnapshot?.value?.preview_only ? null : initialReportSnapshot?.savedAt || null);
   const [systemStatus, setSystemStatus] = useState(null);
   const [confidence, setConfidence] = useState(0.3);
-  const [sampleEvery, setSampleEvery] = useState('1');
+  const [sampleEvery, setSampleEvery] = useState('5');
   const [segmentDistanceKm, setSegmentDistanceKm] = useState('0.5');
   const [approachRoisJson, setApproachRoisJson] = useState('');
   const [busy, setBusy] = useState(false);
@@ -70,7 +70,7 @@ export default function TrafficVisionPage() {
     api.get('/traffic-detection/video-status', { timeoutMs: 9000, fallbackGraceMs: 6500 }).then((result) => {
       if (alive) setSystemStatus(result);
     }).catch((reason) => {
-      if (alive) setSystemStatus({ ready: false, opencv_available: false, video_analysis_ready: false, note: 'Live video-analysis capability is temporarily unavailable. Try again after the service reconnects.' });
+      if (alive) setSystemStatus({ ready: false, opencv_available: false, video_analysis_ready: false, note: 'Camera analysis is temporarily unavailable. Try again after the service reconnects.' });
     });
     return () => { alive = false; };
   }, []);
@@ -122,7 +122,7 @@ export default function TrafficVisionPage() {
       const endpoint = mode === 'video'
         ? `/traffic-detection/analyze-video?confidence=${confidence}&sample_every_seconds=${sampleEvery}${roiQuery}`
         : `/traffic-detection/analyze?confidence=${confidence}`;
-      const data = await api.postForm(endpoint, body, { timeoutMs: mode === 'video' ? 180000 : 60000, fallbackGraceMs: 0 });
+      const data = await api.postForm(endpoint, body, { timeoutMs: mode === 'video' ? 120000 : 45000, fallbackGraceMs: 0 });
       const analyzedReport = { ...data, mode, source_filename: file.name, segment_distance_km: Number(segmentDistanceKm) || 0.5, saved_at: new Date().toISOString() };
       setReport(analyzedReport);
       setReportRestored(false);
@@ -193,11 +193,11 @@ export default function TrafficVisionPage() {
         <h1>Traffic intelligence <em>lab.</em></h1>
         <p>Turn road footage into verified vehicle evidence, a reviewable signal strategy, and a 60-minute traffic forecast.</p>
       </div>
-      <div className="ul-head-status"><span className={`ul-status-dot ${videoReadiness ? 'ready' : ''}`}/><div><b>{videoReadiness ? 'Vision pipeline ready' : 'Vision setup incomplete'}</b><small>{systemStatus?.readiness_note || (systemStatus?.ready ? 'Vehicle detection is ready' : 'Check weights and dependencies')}</small></div></div>
+      <div className="ul-head-status"><span className={`ul-status-dot ${videoReadiness ? 'ready' : ''}`}/><div><b>{videoReadiness ? 'Vision pipeline ready' : 'Vision setup incomplete'}</b><small>{systemStatus?.ready ? 'Ready for road footage' : 'Analysis service temporarily unavailable'}</small></div></div>
     </header>
 
     <div className="ul-status-strip">
-      <div className="ul-status-item"><span className={modelReadiness ? 'ready' : ''}><Cpu size={15}/></span><div><b>Vehicle detection</b><small>{modelReadiness ? 'Weights + inference ready' : 'Not ready'}</small></div></div>
+      <div className="ul-status-item"><span className={modelReadiness ? 'ready' : ''}><Cpu size={15}/></span><div><b>Vehicle detection</b><small>{modelReadiness ? 'Ready to analyze' : 'Temporarily unavailable'}</small></div></div>
       <div className="ul-status-item"><span className={systemStatus?.decoder_ready && systemStatus?.opencv_available ? 'ready' : ''}><ScanLine size={15}/></span><div><b>Video processing</b><small>{systemStatus?.opencv_available ? 'Video decoding available' : 'Video processing unavailable'}</small></div></div>
       <div className="ul-status-item"><span className={systemStatus?.forecast_ready ? 'ready' : ''}><Activity size={15}/></span><div><b>60 min scenario</b><small>{systemStatus?.native_sumo_available ? 'Detailed vehicle simulation ready' : systemStatus?.forecast_ready ? '60-minute road forecast ready' : 'Forecast service unavailable'}</small></div></div>
       <div className="ul-status-item"><span className={systemStatus?.agent_tools_ready ? 'ready' : ''}><Bot size={15}/></span><div><b>Operations agent</b><small>{systemStatus?.llm_tool_calling_ready ? 'Assistant tools ready' : 'Decision tools available'}</small></div></div>
@@ -234,7 +234,7 @@ export default function TrafficVisionPage() {
         </div>
         <div className="ul-controls-grid">
           <label className="ul-control"><span>Detection confidence <b>{Math.round(confidence * 100)}%</b></span><input type="range" min="0.1" max="0.8" step="0.05" value={confidence} onChange={(event) => setConfidence(Number(event.target.value))}/><small>Raise to reduce low-confidence boxes.</small></label>
-          {mode === 'video' ? <label className="ul-control"><span>Sample interval</span><select value={sampleEvery} onChange={(event) => setSampleEvery(event.target.value)}><option value="1">Every 1 second</option><option value="2">Every 2 seconds</option><option value="3">Every 3 seconds</option><option value="5">Every 5 seconds</option></select><small>Automatically capped at 180 frames.</small></label> : <div className="ul-control ul-image-note"><span><ShieldCheck size={15}/> Private processing</span><small>Only the selected image is sent to the API for inference.</small></div>}
+          {mode === 'video' ? <label className="ul-control"><span>Sample interval</span><select value={sampleEvery} onChange={(event) => setSampleEvery(event.target.value)}><option value="1">Every 1 second</option><option value="2">Every 2 seconds</option><option value="3">Every 3 seconds</option><option value="5">Every 5 seconds</option></select><small>Long clips are sampled at wider intervals to keep reports responsive.</small></label> : <div className="ul-control ul-image-note"><span><ShieldCheck size={15}/> Private processing</span><small>Only the selected image is sent to the API for inference.</small></div>}
         </div>
         {mode === 'video' && <details className="ul-calibration-details">
           <summary><SlidersHorizontal size={14}/> Camera approach calibration <span>OPTIONAL · REQUIRED FOR DIRECTIONAL OPTIMIZATION</span></summary>
@@ -244,9 +244,13 @@ export default function TrafficVisionPage() {
         </details>}
         {error && <div className="ul-inline-error"><AlertTriangle size={15}/><span>{error}</span></div>}
         <button className="ul-primary-button ul-analyze-button" onClick={analyzeScene} disabled={!file || busy}>
-          {busy ? <><LoaderCircle size={16} className="ul-spin"/> Processing real frames…</> : <><ScanLine size={16}/> Analyze road scene <ArrowUpRight size={16}/></>}
+          {busy ? <><LoaderCircle size={16} className="ul-spin"/> Analysing selected footage…</> : <><ScanLine size={16}/> Analyze road scene <ArrowUpRight size={16}/></>}
         </button>
-        {systemStatus && !videoReadiness && <div className="ul-setup-hint"><CircleHelp size={15}/><span>{systemStatus.readiness_note || systemStatus.note || 'Video analysis is not ready.'} Install <code>backend/requirements.txt</code>, verify <code>backend/models/best.pt</code>, then restart the API.</span></div>}
+        {busy && <div className="ul-analysis-progress" role="status" aria-live="polite">
+          <div className="ul-analysis-progress-copy"><LoaderCircle size={17} className="ul-spin"/><div><b>Reviewing your road footage</b><small>Sampling up to 24 frames and counting visible vehicles. Longer clips are sampled at wider intervals.</small></div></div>
+          <div className="ul-analysis-progress-track"><span/></div>
+        </div>}
+        {systemStatus && !videoReadiness && <div className="ul-setup-hint"><CircleHelp size={15}/><span>Camera analysis is temporarily unavailable. Your upload is safe; please retry in a moment or contact the workspace administrator.</span></div>}
         {systemStatus?.ffmpeg_fallback_available && <div className="ul-setup-hint"><ShieldCheck size={15}/><span>Codec compatibility mode is available. If a phone-recorded clip is not compatible with the primary decoder, an alternate decoder will prepare it for the same vehicle detection process.</span></div>}
       </section>
 

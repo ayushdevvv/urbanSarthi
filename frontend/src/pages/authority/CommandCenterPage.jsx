@@ -73,7 +73,7 @@ export default function CommandCenterPage() {
     </div>
     <div className="control-grid">
       <section className="panel map-panel"><div className="panel-head"><div><div className="eyebrow">CITY MAP</div><h3>Live infrastructure map</h3></div><div className="legend"><span><i className="green-dot"/>Junction</span><span><i className="red-dot"/>Alert / hotspot</span><span><i className="aqi-dot"/>AQI station</span></div></div>
-        <CityMap markers={markers} zoom={11} className="authority-map" />
+        <CityMap city={data?.city?.name || data?.city_name || "Lucknow"} markers={markers} zoom={11} className="authority-map" />
         <div className="map-foot"><span><Navigation size={13}/> Junctions · <AirVent size={13}/> AQI · <AlertTriangle size={13}/> Alerts</span><small>{markers.length ? `${markers.length} verified locations` : 'No junction, station or alert coordinates registered yet.'}</small></div>
       </section>
       <aside className="panel hotspot"><div className="hotspot-head"><span className={picked ? 'critical' : 'status-pill'}>{picked ? 'REPORTED HOTSPOT' : 'NO RECENT HOTSPOTS'}</span><button className="icon-btn" aria-label="Toggle selected hotspot" onClick={() => setDetailOpen(!detailOpen)}>{detailOpen ? '×' : <MapPin size={16}/>}</button></div>

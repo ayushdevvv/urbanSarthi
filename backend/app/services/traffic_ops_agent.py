@@ -57,7 +57,7 @@ def run_forecast(
     cycle_seconds: int = 90,
     phases: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Run native SUMO when available; otherwise return the trained forecast."""
+    """Run detailed vehicle simulation when available; otherwise return the network forecast."""
     scenario = scenario if scenario in {"baseline", "demand_surge", "signal_priority"} else "baseline"
     native_error = None
     try:
@@ -70,17 +70,14 @@ def run_forecast(
         if native is not None:
             return native
     except Exception as exc:
-        native_error = (
-            f"Native SUMO execution failed ({type(exc).__name__}); the trained forecast was used instead. "
-            "Check the simulation capability status for native engine availability."
-        )
+        native_error = "Detailed vehicle simulation was unavailable, so the 60-minute network forecast was used instead."
 
     result = get_simulation_scenario(minutes=60, step_minutes=5, scenario=scenario)
-    result["engine"] = "trained-xgboost-60min-scenario"
+    result["engine"] = "60-minute network forecast"
     result["evidence_linkage_note"] = (
-        "The forecast uses the bundled SUMO-generated training dataset and trained 30/60-minute XGBoost models. "
+        "The forecast uses historical reference-network data and 30/60-minute forecast horizons. "
         "The uploaded clip informs the operator evidence report and draft plan, but does not directly calibrate "
-        "the global network forecast. This is not a running SUMO/TraCI process."
+        "the wider network forecast. This is not live city telemetry or a detailed vehicle-by-vehicle simulation."
     )
     if native_error:
         result["engine_fallback_note"] = native_error

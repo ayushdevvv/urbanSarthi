@@ -61,7 +61,7 @@ ALLOWED_VIDEO_TYPES = {
 
 
 class OpsWorkflowIn(BaseModel):
-    junction_id: int
+    junction_id: int | None = None
     report: dict = Field(..., description="Structured output from the traffic video or image analysis endpoint")
     scenario: str = Field(default="baseline", pattern="^(baseline|demand_surge|signal_priority)$")
     prompt: str = Field(default="Review the footage, propose a safe signal plan and run a 60-minute forecast.", min_length=3, max_length=700)
@@ -109,9 +109,7 @@ async def analyze_traffic_video(
 @router.post("/ops-workflow", status_code=201)
 def run_traffic_ops_workflow(payload: OpsWorkflowIn, request: Request, db: Session = Depends(get_db), user=Depends(require_roles("operator", "admin"))):
     """Persist measured video evidence, run safe analysis tools, and create a human-reviewed draft."""
-    junction = db.get(Junction, payload.junction_id)
-    if not junction:
-        raise HTTPException(status_code=404, detail="Junction not found. Register or select an existing junction first.")
+    junction = db.get(Junction, payload.junction_id) if payload.junction_id is not None else None
     report = payload.report
     try:
         total = max(0, min(100000, int(report.get("total_vehicles") or report.get("peak_vehicles_in_frame") or 0)))
@@ -143,6 +141,29 @@ def run_traffic_ops_workflow(payload: OpsWorkflowIn, request: Request, db: Sessi
     evidence["emissions_estimate"] = estimated_emissions
     evidence["segment_distance_km_assumption"] = distance_km
     evidence["segment_distance_km"] = distance_km  # consumed by the deterministic and Google ADK emissions tools
+
+    # An analysis-only corridor run must not require a database junction. It remains
+    # explicitly preview-only and cannot be approved or dispatched until an operator
+    # maps the corridor to a registered junction.
+    if junction is None:
+        try:
+            agent_result = run_ops_agent(report=evidence, prompt=payload.prompt, scenario=payload.scenario, cycle_seconds=payload.cycle_seconds)
+            tool_results = agent_result.get("tool_results", {})
+            draft = tool_results.get("draft_signal_timing") or build_draft_phases(evidence, payload.cycle_seconds)
+            forecast = tool_results.get("run_60_minute_traffic_forecast") or run_forecast(payload.scenario, report=evidence, cycle_seconds=payload.cycle_seconds, phases=draft.get("phases"))
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="Traffic analysis is temporarily unavailable. Try again after the service recovers.") from exc
+        timeline = forecast.get("timeline") or []
+        compact_timeline = [{key: point.get(key) for key in ("minute", "queue_total", "vehicles", "heavy_roads", "moderate_roads", "free_roads", "mean_speed_kmph", "roads")} for point in timeline]
+        return {
+            "success": True, "preview_only": True, "observation_id": None,
+            "plan": {"id": None, "public_id": None, "status": "preview", "cycle_seconds": draft.get("cycle_seconds", payload.cycle_seconds), "phases": draft.get("phases", []), "rationale": draft.get("rationale", "Candidate timing plan generated from the uploaded road evidence."), "junction_id": None, "model_version": "preview-only"},
+            "simulation": {"id": None, "engine": forecast.get("engine"), "status": "completed", "name": f"60-minute {payload.scenario.replace('_', ' ')} corridor preview", "summary": forecast.get("summary", {}), "timeline": compact_timeline, "baseline_timeline": forecast.get("baseline_timeline"), "models": forecast.get("models"), "training_data": forecast.get("training_data"), "emissions_comparison": forecast.get("emissions_comparison"), "traffic_comparison": forecast.get("traffic_comparison"), "engine_label": "60-minute road forecast", "mode": forecast.get("mode"), "engine_fallback_note": forecast.get("engine_fallback_note"), "caveats": list(forecast.get("notes") or []) + ["Preview only: no registered junction is linked. Register a junction to save and review a formal signal plan.", "No physical traffic signal commands are sent."]},
+            "agent": {key: value for key, value in agent_result.items() if key != "tool_results"},
+            "tools": agent_result.get("tools_called", []), "emissions_estimate": estimated_emissions,
+            "human_review_required": True, "physical_dispatch_enabled": False,
+        }
+
     observation = TrafficObservation(
         junction_id=junction.id, external_junction_id=junction.external_id,
         source="opencv_yolo_video", observed_at=datetime.now(timezone.utc),

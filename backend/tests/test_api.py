@@ -148,7 +148,8 @@ def test_native_sumo_endpoint_returns_clear_setup_error_when_engine_missing(clie
         "demand_multiplier": 1.2,
     })
     assert response.status_code == 424
-    assert "SUMO CLI is not installed" in response.json()["detail"]
+    assert "Detailed vehicle simulation is not available" in response.json()["detail"]
+    assert "network forecast" in response.json()["detail"]
 
 
 def test_native_sumo_endpoint_returns_native_run_and_submitted_signal_timings(client, monkeypatch):
@@ -241,9 +242,11 @@ def test_nearby_traffic_returns_cached_osm_roads_without_fake_flow(client, monke
     assert payload["roads"][0]["traffic"] is None
     assert payload["traffic_status"] == "not_configured"
 
+    first_call_count = len(calls)
+    assert first_call_count == 3  # independent public mirrors queried concurrently
     second = client.get("/api/v1/traffic/nearby?latitude=26.8467&longitude=80.9462&radius_m=3500")
     assert second.status_code == 200
-    assert len(calls) == 1
+    assert len(calls) == first_call_count  # successful geometry is cached
     assert second.json()["roads"][0]["name"] == "Test Ring Road"
 
 
@@ -375,3 +378,41 @@ def test_simulation_capabilities_reports_available_forecast_without_native_engin
     assert body["native_simulation_available"] is False
     assert "forecast_available" in body
     assert body["recommended_mode"] in {"forecast", "unavailable"}
+
+
+def test_traffic_ops_workflow_runs_preview_without_registered_junction(client, monkeypatch):
+    from app.api import traffic_detection as api
+
+    phases = [{"movement": "north_south", "green_seconds": 42, "yellow_seconds": 3, "all_red_seconds": 1}]
+    timeline = [
+        {"minute": 0, "queue_total": 18, "vehicles": 42, "heavy_roads": 2, "moderate_roads": 5, "free_roads": 11, "roads": []},
+        {"minute": 60, "queue_total": 12, "vehicles": 38, "heavy_roads": 1, "moderate_roads": 4, "free_roads": 13, "roads": []},
+    ]
+    monkeypatch.setattr(api, "run_ops_agent", lambda **kwargs: {
+        "agent_mode": "deterministic_preview", "tools_called": ["inspect_video_evidence", "draft_signal_timing"],
+        "tool_results": {"draft_signal_timing": {"phases": phases, "cycle_seconds": 90, "rationale": "Preview plan"}},
+    })
+    monkeypatch.setattr(api, "run_forecast", lambda *args, **kwargs: {
+        "timeline": timeline, "summary": {"road_count": 18, "queue_start": 18, "queue_end": 12},
+        "mode": "xgboost_model_scenario", "engine": "forecast", "notes": ["Forecast only"],
+        "traffic_comparison": {"queue_at_60m": {"baseline": 18, "proposed": 12, "change_percent": -33.3}},
+    })
+
+    response = client.post("/api/v1/traffic-detection/ops-workflow", json={
+        "junction_id": None,
+        "report": {"mode": "video", "source_filename": "sample.mp4", "counts": {"car": 20, "bus": 2}, "total_vehicles": 22, "peak_vehicles_in_frame": 22},
+        "scenario": "signal_priority",
+        "prompt": "Review the footage and suggest a safe plan.",
+        "cycle_seconds": 90,
+        "segment_distance_km": 0.5,
+    })
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["success"] is True
+    assert body["preview_only"] is True
+    assert body["plan"]["id"] is None
+    assert body["simulation"]["status"] == "completed"
+    assert len(body["simulation"]["timeline"]) == 2
+    assert body["human_review_required"] is True
+    assert body["physical_dispatch_enabled"] is False

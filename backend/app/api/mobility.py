@@ -69,7 +69,7 @@ def geocode_location(q: str = Query(min_length=2, max_length=180), limit: int = 
             "https://nominatim.openstreetmap.org/search",
             params={"q": clean_query, "format": "jsonv2", "addressdetails": 1, "limit": safe_limit},
             headers=headers,
-            timeout=5.5,
+            timeout=3.4,
         )
         response.raise_for_status()
         results = _nominatim_items(response.json(), clean_query)
@@ -85,7 +85,7 @@ def geocode_location(q: str = Query(min_length=2, max_length=180), limit: int = 
             "https://photon.komoot.io/api/",
             params={"q": clean_query, "limit": safe_limit},
             headers=headers,
-            timeout=5.5,
+            timeout=3.4,
         )
         response.raise_for_status()
         results = _photon_items(response.json(), clean_query)
@@ -105,7 +105,7 @@ def reverse_geocode(latitude: float = Query(ge=-90, le=90), longitude: float = Q
             "https://nominatim.openstreetmap.org/reverse",
             params={"lat": latitude, "lon": longitude, "format": "jsonv2", "zoom": 16},
             headers=headers,
-            timeout=5.5,
+            timeout=3.4,
         )
         response.raise_for_status()
         item = response.json()
@@ -121,7 +121,7 @@ def reverse_geocode(latitude: float = Query(ge=-90, le=90), longitude: float = Q
             "https://photon.komoot.io/reverse",
             params={"lat": latitude, "lon": longitude},
             headers=headers,
-            timeout=5.5,
+            timeout=3.4,
         )
         response.raise_for_status()
         features = response.json().get("features") or []

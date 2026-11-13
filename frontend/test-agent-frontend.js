@@ -72,7 +72,7 @@ const trafficScene = read('src/pages/authority/TrafficSimulationScene.jsx');
 assert(trafficScene.includes('DETAILED ROAD SIMULATION') && trafficScene.includes('60-MINUTE ROAD NETWORK') && trafficScene.includes('vehicle_positions') && trafficScene.includes('networkGeometry') && trafficScene.includes('signalTimings') && trafficScene.includes('NativeVehicle') && trafficScene.includes('trafficMarkers'), 'Simulation scene must support tracked trajectories and clearly-labelled forecast flow markers');
 const citizenTraffic = read('src/pages/citizen/TrafficConditionsPage.jsx');
 assert(citizenTraffic.includes('getCurrentPosition') && citizenTraffic.includes('Use my location') && citizenTraffic.includes('/traffic/nearby') && citizenTraffic.includes('/traffic/news'), 'Citizen traffic must require explicit location and load nearby roads plus traffic news');
-assert(citizenTraffic.includes('fallbackGraceMs: 6500') && airService.includes('fallbackGraceMs: 7000'), 'Citizen traffic and AQI browser deadlines must allow their bounded backend provider lookups to complete');
+assert(citizenTraffic.includes('timeoutMs: 11500') && citizenTraffic.includes('fallbackGraceMs: 0') && airService.includes('fallbackGraceMs: 7000'), 'Citizen traffic must use one bounded road lookup while AQI keeps its longer cached-provider window');
 const carbonPage = read('src/pages/authority/CarbonImpactPage.jsx');
 assert(!carbonPage.includes('readLocalRecord(\'carbon-last-estimate\')') && carbonPage.includes('setResult(null);'), 'Old carbon results must not appear as initial fallback before the current estimate request');
 const traffic = read('src/pages/citizen/TrafficVisionPage.jsx');
@@ -83,7 +83,7 @@ assert(traffic.includes('saveLatestVisionEvidence'), 'Traffic Lab must hand vehi
 const evidenceStore = read('src/services/visionEvidence.js');
 assert(evidenceStore.includes('airtraffic.latestVisionEvidence') && evidenceStore.includes('LEGACY_STORAGE_KEY'), 'Video evidence storage must use the neutral key and preserve existing saved evidence');
 const sumoPage = read('src/pages/authority/TrafficSimulationPage.jsx');
-assert(sumoPage.includes("api.post('/traffic/sumo/run'") && sumoPage.includes("api.post('/traffic/simulation/model-scenario'") && sumoPage.includes("api.get('/traffic/simulation/capabilities'") && sumoPage.includes('native_simulation_available') && sumoPage.includes('north_south_green_seconds') && sumoPage.includes('east_west_green_seconds') && sumoPage.includes('NETWORK FORECAST'), 'Simulation workbench must probe engine availability and avoid calling an unavailable native engine');
+assert(sumoPage.includes("api.post('/traffic/sumo/run'") && sumoPage.includes("api.post('/traffic/simulation/model-scenario'") && sumoPage.includes("api.get('/traffic/simulation/capabilities'") && sumoPage.includes('native_simulation_available') && sumoPage.includes('north_south_green_seconds') && sumoPage.includes('east_west_green_seconds') && sumoPage.includes('ROAD NETWORK PREVIEW') && sumoPage.includes('60-minute forecast'), 'Simulation workbench must probe engine availability and avoid calling an unavailable native engine');
 assert(sumoPage.includes('Forecast frames update every five minutes') && sumoPage.includes('Detailed vehicle positions, when enabled, are sampled every 30 seconds.'), 'Simulation page must disclose forecast and detailed vehicle sampling intervals');
 assert(app.includes('RouteErrorBoundary') && app.includes('traffic-lab" element={<RouteErrorBoundary'), 'Traffic Lab route must show a recoverable error state instead of going blank on a render exception');
 const routeBoundary = read('src/components/shared/RouteErrorBoundary.jsx');
@@ -121,7 +121,7 @@ assert(publicRouting.includes('api.get') && publicRouting.includes('/routing/geo
 assert(routePlanner.includes("api.post('/routing/plan'") && !routePlanner.includes('findPublicRoadRoutes'), 'Road routing must execute through the configured backend only');
 const cityMap = read('src/components/maps/CityMap.jsx');
 assert(cityMap.includes('routeOptions') && cityMap.includes('Polyline'), 'Map must render road-network route geometries');
-assert(cityMap.includes('tile.openstreetmap.org') && cityMap.includes('basemaps.cartocdn.com') && cityMap.includes('tileerror'), 'Map tiles must avoid rotating OSM subdomains and fall back to CARTO');
+assert(cityMap.includes('tile.openstreetmap.org') && cityMap.includes('tile.openstreetmap.fr/hot') && cityMap.includes('tileerror') && !cityMap.includes('basemaps.cartocdn.com'), 'Map tiles must use keyless OpenStreetMap sources and avoid key-gated basemap fallbacks');
 assert(!read('index.html').includes('fonts.googleapis.com') && !read('src/styles/authority.css').includes('fonts.googleapis.com'), 'UI fonts must not depend on blocked remote Google Fonts requests');
 const apiClient = read('src/services/api/client.js');
 assert(read('../render.yaml').includes('name: urbansarthi') && read('../render.yaml').includes('https://urbansarthi.vercel.app') && !read('../render.yaml').includes('urbansaarthi-api'), 'Render Blueprint must target the existing urbansarthi service and exact Vercel origin');

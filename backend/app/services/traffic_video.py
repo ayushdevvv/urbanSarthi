@@ -18,8 +18,8 @@ from app.services.traffic_detection import _load_model, VEHICLE_ALIASES
 from app.services.traffic_calibration import normalize_rois, point_in_polygon
 
 MAX_VIDEO_SECONDS = 600
-MAX_SAMPLED_FRAMES = 180
-MAX_SIDE = 1280
+MAX_SAMPLED_FRAMES = 24
+MAX_SIDE = 720
 
 
 @lru_cache(maxsize=1)
@@ -97,12 +97,12 @@ def video_status() -> dict[str, Any]:
         "video_analysis_ready": bool(model_status.get("ready") and opencv_available and (opencv_ffmpeg_enabled or ffmpeg_fallback_available)),
         "video_max_seconds": MAX_VIDEO_SECONDS,
         "video_max_sampled_frames": MAX_SAMPLED_FRAMES,
-        "video_sampling_note": "Frames are sampled from the uploaded clip. Results represent the sampled segment, not continuous live CCTV monitoring.",
+        "video_sampling_note": "Frames are sampled at wider intervals to keep analysis responsive. Results represent sampled footage, not continuous live CCTV monitoring.",
         "note": readiness_note,
     }
 
 
-def _open_video_reader(cv2: Any, path: Path):
+def _open_video_reader(cv2: Any, path: Path, *, include_seek: bool = False):
     """Open a clip with OpenCV first, then fall back to bundled FFmpeg decoding.
 
     Some phone-recorded MOV/MP4/WebM clips are accepted by the browser but fail
@@ -125,7 +125,13 @@ def _open_video_reader(cv2: Any, path: Path):
                 return capture.read()
 
             duration = (total_frames / fps) if fps > 0 and total_frames > 0 else 0
-            return read_next, capture.release, fps, total_frames, width, height, duration, "opencv"
+            def seek_frame(frame_number: int):
+                setter = getattr(capture, "set", None)
+                prop = getattr(cv2, "CAP_PROP_POS_FRAMES", None)
+                if callable(setter) and prop is not None:
+                    setter(prop, max(0, int(frame_number)))
+            result = (read_next, capture.release, fps, total_frames, width, height, duration, "opencv")
+            return (*result, seek_frame) if include_seek else result
         capture.release()
 
     # `imageio-ffmpeg` ships a portable FFmpeg executable with its wheel. It is
@@ -154,7 +160,8 @@ def _open_video_reader(cv2: Any, path: Path):
                 return False, None
             return True, frame.reshape((height, width, 3)).copy()
 
-        return read_ffmpeg_frame, reader.close, fps, total_frames, width, height, duration, "ffmpeg_fallback"
+        result = (read_ffmpeg_frame, reader.close, fps, total_frames, width, height, duration, "ffmpeg_fallback")
+        return (*result, None) if include_seek else result
     except Exception as exc:
         raise ValueError(
             "This video could not be decoded by OpenCV. Export it as MP4 (H.264) and retry. "
@@ -179,7 +186,7 @@ def analyze_video(raw: bytes, filename: str, confidence: float = 0.25, sample_ev
     with tempfile.TemporaryDirectory(prefix="urbansarthi-video-") as temp_dir:
         path = Path(temp_dir) / f"upload{suffix}"
         path.write_bytes(raw)
-        read_frame, close_reader, fps, total_frames, width, height, duration, decoder_backend = _open_video_reader(cv2, path)
+        read_frame, close_reader, fps, total_frames, width, height, duration, decoder_backend, seek_frame = _open_video_reader(cv2, path, include_seek=True)
         if duration and duration > MAX_VIDEO_SECONDS:
             close_reader()
             raise ValueError(f"Video is {duration / 60:.1f} minutes long. The current limit is 10 minutes.")
@@ -232,10 +239,10 @@ def analyze_video(raw: bytes, filename: str, confidence: float = 0.25, sample_ev
                 if scale < 1:
                     frame = cv2.resize(frame, (int(frame.shape[1] * scale), int(frame.shape[0] * scale)), interpolation=cv2.INTER_AREA)
                 try:
-                    predicted = model.track(frame, persist=True, tracker="bytetrack.yaml", imgsz=640, conf=confidence, verbose=False)
+                    predicted = model.track(frame, persist=True, tracker="bytetrack.yaml", imgsz=384, conf=confidence, verbose=False)
                 except Exception:
                     # Inference is still real YOLO; this fallback only disables the tracker config if unsupported.
-                    predicted = model.predict(frame, imgsz=640, conf=confidence, verbose=False)
+                    predicted = model.predict(frame, imgsz=384, conf=confidence, verbose=False)
                 if not predicted:
                     frame_index += 1
                     continue
@@ -289,7 +296,12 @@ def analyze_video(raw: bytes, filename: str, confidence: float = 0.25, sample_ev
                     peak_counts_summary = dict(counts)
                     peak_frame = result.plot()  # BGR frame with detector annotations
                     peak_detections = detections[:100]
-            frame_index += 1
+            if decoder_backend == "opencv" and fps > 0 and seek_frame is not None and analyzed_frames < MAX_SAMPLED_FRAMES:
+                next_frame = frame_index + max(1, int(round(effective_interval * fps)))
+                seek_frame(next_frame)
+                frame_index = next_frame
+            else:
+                frame_index += 1
         close_reader()
 
         if analyzed_frames == 0:

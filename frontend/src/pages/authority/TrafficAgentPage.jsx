@@ -61,8 +61,8 @@ export default function TrafficAgentPage() {
   useEffect(() => {
     let alive = true;
     Promise.allSettled([
-      api.get('/traffic/junctions', { timeoutMs: 40000 }),
-      api.get('/traffic-detection/video-status', { timeoutMs: 40000 }),
+      api.get('/traffic/junctions', { timeoutMs: 8000, fallbackGraceMs: 0 }),
+      api.get('/traffic-detection/video-status', { timeoutMs: 8000, fallbackGraceMs: 0 }),
     ]).then(([junctionResult, statusResult]) => {
       if (!alive) return;
       if (junctionResult.status === 'fulfilled') {
@@ -78,7 +78,7 @@ export default function TrafficAgentPage() {
 
   const runWorkflow = useCallback(async ({ automatic = false } = {}) => {
     const source = report;
-    if (!source || !junctionId) return;
+    if (!source) return;
     setLoading(true);
     setError('');
     setDispatchPreview(null);
@@ -88,7 +88,7 @@ export default function TrafficAgentPage() {
     setActiveToolIndex(0);
     try {
       const result = await api.post('/traffic-detection/ops-workflow', {
-        junction_id: Number(junctionId),
+        junction_id: junctionId ? Number(junctionId) : null,
         report: source,
         scenario,
         prompt,
@@ -106,13 +106,13 @@ export default function TrafficAgentPage() {
     }
   }, [report, junctionId, scenario, prompt, cycleSeconds, distanceKm, notify]);
 
-  // With saved camera evidence, the agent starts its workflow automatically once a
-  // registered junction is available. The operator can still change settings and rerun.
+  // Saved camera evidence can start a read-only corridor preview immediately.
+  // A registered junction is only needed to persist a formal reviewable signal plan.
   useEffect(() => {
-    if (!hasEvidence || !junctionId || autoStarted.current) return;
+    if (!hasEvidence || autoStarted.current) return;
     autoStarted.current = true;
     runWorkflow({ automatic: true });
-  }, [hasEvidence, junctionId, runWorkflow]);
+  }, [hasEvidence, runWorkflow]);
 
   // The backend endpoint runs the four analytical tools as one server request.
   // This stage indicator communicates elapsed work; individual tool completion
@@ -212,7 +212,7 @@ export default function TrafficAgentPage() {
         <p>An operations agent that reads traffic evidence, estimates vehicle emissions, drafts safe signal timing and runs a 60-minute forecast. It completes the analysis itself, then hands the decision to an operator.</p>
         <div className="ta-hero-actions">
           <Link to="/authority/traffic-lab" className="ta-secondary-action">Open Traffic Lab <ArrowRight size={15}/></Link>
-          <button type="button" className="ta-primary-action" onClick={() => runWorkflow()} disabled={!hasEvidence || !junctionId || loading}>
+          <button type="button" className="ta-primary-action" onClick={() => runWorkflow()} disabled={!hasEvidence || loading}>
             {loading ? <LoaderCircle className="ta-spin" size={16}/> : <RefreshCw size={15}/>} Run agent again
           </button>
         </div>
@@ -232,7 +232,7 @@ export default function TrafficAgentPage() {
           <div className="ta-source-metrics"><div><small>Vehicles</small><b>{Number(totalVehicles).toLocaleString()}</b></div><div><small>Scene density</small><b>{report.congestion_estimate || '—'}</b></div><div><small>Confidence</small><b>{Math.round(Number(report.confidence_threshold || 0.3) * 100)}%</b></div></div>
         </> : <div className="ta-no-evidence"><div><Gauge size={22}/></div><b>No saved vehicle report yet</b><p>Run a real upload in Traffic Lab or load a recent edge-camera sample below. The agent will start when measured evidence is available.</p><Link to="/authority/traffic-lab" className="ta-inline-link">Create traffic evidence <ArrowRight size={14}/></Link></div>}
         <div className="ta-control-grid">
-          <label><span>Junction</span><select value={junctionId} onChange={(event) => setJunctionId(event.target.value)}><option value="">Choose junction</option>{junctions.map((item) => <option key={item.id} value={item.id}>{item.name} · #{item.id}</option>)}</select></label>
+          <label><span>Junction</span><select value={junctionId} onChange={(event) => setJunctionId(event.target.value)}><option value="">Choose junction (optional)</option>{junctions.map((item) => <option key={item.id} value={item.id}>{item.name} · #{item.id}</option>)}</select></label>
           <label><span>Forecast scenario</span><select value={scenario} onChange={(event) => setScenario(event.target.value)}><option value="baseline">Baseline</option><option value="signal_priority">Signal priority sensitivity</option><option value="demand_surge">Demand surge sensitivity</option></select></label>
           <label><span>Signal cycle</span><select value={cycleSeconds} onChange={(event) => setCycleSeconds(event.target.value)}><option value="60">60 seconds</option><option value="75">75 seconds</option><option value="90">90 seconds</option><option value="105">105 seconds</option><option value="120">120 seconds</option></select></label>
           <label><span>Corridor distance (km)</span><input type="number" min="0.001" max="100" step="0.1" value={distanceKm} onChange={(event) => setDistanceKm(event.target.value)}/></label>
@@ -242,7 +242,7 @@ export default function TrafficAgentPage() {
           <button type="button" className="ta-secondary-action" onClick={loadLatestCameraEvidence} disabled={!junctionId || cameraLoading || loading}>{cameraLoading ? <LoaderCircle className="ta-spin" size={15}/> : <RefreshCw size={15}/>} Load live sample</button>
         </div>
         <label className="ta-prompt-field"><span>Operator instruction</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={700} rows={3}/></label>
-        {junctions.length === 0 && <div className="ta-inline-note"><Clock3 size={15}/><span>No monitored junctions are registered yet. Add a real junction in Traffic Lab to connect camera evidence and unlock the full operations workflow.</span><Link to="/authority/traffic-lab" className="ta-inline-link">Set up a junction <ArrowRight size={13}/></Link></div>}
+        {junctions.length === 0 && <div className="ta-inline-note"><Clock3 size={15}/><span>No junction is registered yet. You can still run a read-only corridor assessment from your saved camera report. Register a junction later to save a formal signal plan.</span><Link to="/authority/traffic-lab" className="ta-inline-link">Set up a junction <ArrowRight size={13}/></Link></div>}
       </div>
 
       <div className="ta-panel ta-execution-panel">
@@ -263,7 +263,7 @@ export default function TrafficAgentPage() {
         {loading && <div className="ta-running-callout"><span className="ta-running-orb"><Bot size={18}/></span><div><b>TrafficSaarthi is working through the evidence</b><p>The operations workflow is running as one job. Results and the executed-tool trace appear when the backend returns.</p></div><span className="ta-elapsed"><Timer size={13}/> {waitSeconds}s</span></div>}
         {error && <div className="ta-error-note"><XCircle size={15}/><span>{error}</span></div>}
         {preview && <div className="ta-preview-disclosure"><Sparkles size={15}/><span><b>Illustrative preview</b> · locally calculated from the saved report (or an example scenario). It is not a live backend result and cannot be approved or dispatched.</span></div>}
-        {!workflow && !loading && <div className="ta-waiting-state"><span><Bot size={24}/></span><b>Waiting for an evidence-backed run</b><small>When a saved vehicle report and registered junction are available, the agent starts automatically.</small></div>}
+        {!workflow && !loading && <div className="ta-waiting-state"><span><Bot size={24}/></span><b>Waiting for an evidence-backed run</b><small>A saved camera report can be analysed immediately. Without a registered junction, the result is a read-only corridor preview.</small></div>}
       </div>
     </section>
 
@@ -286,7 +286,7 @@ export default function TrafficAgentPage() {
         </article>
 
         <article className="ta-panel ta-forecast-panel">
-          <div className="ta-panel-heading"><div><span>02 / SCENARIO FORECAST</span><h2>Next 60 minutes</h2></div><span className="ta-forecast-engine">{workflow.simulation?.engine_label || workflow.simulation?.engine || 'Forecast'}</span></div>
+          <div className="ta-panel-heading"><div><span>02 / SCENARIO FORECAST</span><h2>Next 60 minutes</h2></div><span className="ta-forecast-engine">{workflow.simulation?.mode === 'native_sumo_simulation' ? 'Detailed simulation' : '60-minute network forecast'}</span></div>
           <div className="ta-forecast-kpis"><div><small>Road network</small><b>{summary.road_count ?? workflow.simulation?.training_data?.road_edges ?? '—'}</b></div><div><small>Heavy roads · start</small><b>{summary.heavy_roads_start ?? '—'}</b></div><div><small>Heavy roads · +60m</small><b>{summary.heavy_roads_end ?? '—'}</b></div></div>
           <MiniTimeline points={timeline}/>
           <div className="ta-forecast-footnote">{workflow.simulation?.engine_fallback_note || workflow.simulation?.evidence_linkage_note || workflow.simulation?.caveats?.[0] || 'Forecast output is separate from current live traffic observations.'}</div>

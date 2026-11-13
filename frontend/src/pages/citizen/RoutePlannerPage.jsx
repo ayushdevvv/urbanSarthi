@@ -6,7 +6,7 @@ import CityMap, { getLocationCoordinates } from '../../components/maps/CityMap.j
 import { EmptyState, ErrorNotice } from '../../components/shared/Toast.jsx';
 import { api } from '../../services/api/client.js';
 import { useApp } from '../../context/AppContext.jsx';
-import { estimateRouteOnly, searchPublicPlaces } from '../../services/publicRouting.js';
+import { estimateRouteOnly } from '../../services/publicRouting.js';
 
 const formatDuration = (seconds) => seconds == null ? '—' : seconds >= 3600 ? `${Math.floor(seconds / 3600)} hr ${Math.round((seconds % 3600) / 60)} min` : `${Math.max(1, Math.round(seconds / 60))} min`;
 const formatDistance = (meters) => meters == null ? '—' : meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
@@ -82,8 +82,9 @@ function initialPoint(label = '') { const clean = String(label || '').trim(); co
 async function resolveMappedPlace(query) {
   const clean = String(query || '').trim();
   if (!clean) throw new Error('Enter a starting point and destination.');
-  const results = await searchPublicPlaces(clean, 5);
-  if (!results.length) throw new Error(`No mapped location matched “${clean}”. Try a nearby landmark or full address.`);
+  const response = await api.get(`/routing/geocode?q=${encodeURIComponent(clean)}&limit=5`, { timeoutMs: 8500, fallbackGraceMs: 0 });
+  const results = Array.isArray(response?.results) ? response.results : [];
+  if (!results.length) throw new Error(response?.message || `No mapped location matched “${clean}”. Try a nearby landmark or full address.`);
   const selected = results.find((item) => String(item.label || '').toLowerCase() === clean.toLowerCase()) || results[0];
   const latitude = Number(selected.latitude), longitude = Number(selected.longitude);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) throw new Error(`The location “${clean}” did not return valid map coordinates.`);

@@ -95,22 +95,30 @@ def _cached_road_geometry(latitude: float, longitude: float, radius_m: int) -> t
         if cached:
             _NEARBY_ROAD_CACHE.pop(key, None)
 
-    # Overpass endpoints are tried sequentially with hard, short timeouts.
+    # Query independent public Overpass mirrors concurrently. This avoids a
+    # serial timeout chain when one mirror is degraded, while still returning
+    # only provider-supplied OSM geometry (never fabricated road lines).
     query = (f'[out:json][timeout:5];way(around:{radius_m},{latitude},{longitude})'
              f'["highway"~"^({ROAD_HIGHWAYS})$"];out center geom;')
-    elements: list[dict] = []
-    provider_note = None
-    for endpoint, timeout in (("https://overpass-api.de/api/interpreter", 3.5),
-                              ("https://overpass.kumi.systems/api/interpreter", 2.5)):
+    endpoints = (
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter",
+    )
+    def fetch_roads(endpoint: str):
         try:
             response = httpx.post(endpoint, data={"data": query},
-                                  headers={"User-Agent": "UrbanSaarthi/1.0 (nearby road discovery)"}, timeout=timeout)
+                                  headers={"User-Agent": "UrbanSaarthi/1.0 (nearby road discovery)"}, timeout=3.8)
             response.raise_for_status()
-            elements = response.json().get("elements", [])
-            if elements:
-                break
+            payload = response.json()
+            found = payload.get("elements", []) if isinstance(payload, dict) else []
+            return found if isinstance(found, list) else []
         except (httpx.HTTPError, ValueError, TypeError):
-            provider_note = "OpenStreetMap road discovery could not be reached."
+            return []
+    with ThreadPoolExecutor(max_workers=len(endpoints)) as pool:
+        results = list(pool.map(fetch_roads, endpoints))
+    elements = next((batch for batch in results if batch), [])
+    provider_note = None if elements else "Mapped road geometry is temporarily unavailable from the public map providers. Try refreshing in a moment."
 
     roads = []
     for element in elements:
@@ -294,7 +302,7 @@ def simulation_capabilities():
         "forecast_available": forecast_ready,
         "reference_network_available": NETWORK.is_file(),
         "recommended_mode": "microscopic" if native_ready else "forecast" if forecast_ready else "unavailable",
-        "message": None if native_ready else "A 60-minute network forecast is available; detailed vehicle tracking is not enabled on this worker." if forecast_ready else "No traffic simulation engine is ready on this worker.",
+        "message": None if native_ready else "A 60-minute network forecast is available; detailed vehicle movement is not enabled on this service." if forecast_ready else "Traffic simulation is not ready on this service.",
     }
 
 
@@ -306,7 +314,7 @@ def run_sumo_signal_experiment(payload: NativeSumoRunIn, _user=Depends(require_r
     but the bundled grid is not a mapped or calibrated city network.
     """
     if not sumo_binary():
-        raise HTTPException(status_code=424, detail="SUMO CLI is not installed or SUMO_BINARY is not configured. Install SUMO on the API worker to run this experiment; the XGBoost forecast is not substituted.")
+        raise HTTPException(status_code=424, detail="Detailed vehicle simulation is not available on this service. Run the 60-minute network forecast instead.")
     phases = [
         {"green_seconds": payload.north_south_green_seconds, "yellow_seconds": payload.yellow_seconds, "all_red_seconds": payload.all_red_seconds},
         {"green_seconds": payload.east_west_green_seconds, "yellow_seconds": payload.yellow_seconds, "all_red_seconds": payload.all_red_seconds},
@@ -315,9 +323,9 @@ def run_sumo_signal_experiment(payload: NativeSumoRunIn, _user=Depends(require_r
     try:
         result = run_native_sumo_simulation("baseline", report=report, proposed_phases=phases)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"SUMO execution failed ({type(exc).__name__}). Check SUMO installation and the bundled network files.") from exc
+        raise HTTPException(status_code=503, detail="Detailed vehicle simulation could not complete. The 60-minute network forecast remains available.") from exc
     if result is None:
-        raise HTTPException(status_code=424, detail="Native SUMO could not be started. Check SUMO_BINARY and the bundled grid network.")
+        raise HTTPException(status_code=424, detail="Detailed vehicle simulation could not start. Run the 60-minute network forecast instead.")
     result["experiment"] = {
         "name": payload.name,
         "signal_timings": {
@@ -334,11 +342,10 @@ def run_sumo_signal_experiment(payload: NativeSumoRunIn, _user=Depends(require_r
 
 @router.post("/simulation/model-scenario")
 def run_xgboost_signal_experiment(payload: NativeSumoRunIn, _user=Depends(require_roles("operator", "admin"))):
-    """Run the trained network forecast with a clearly-labelled signal sensitivity overlay.
+    """Run the network forecast with a clearly-labelled signal sensitivity overlay.
 
-    This is an XGBoost forecast, not a microscopic vehicle simulation and not SUMO.
-    The signal/demand overlay is an explicit what-if assumption because these model
-    artifacts were trained on queue features, not signal timing control experiments.
+    The signal/demand overlay is an explicit what-if assumption because the underlying
+    forecast is based on historical queue patterns, not dedicated signal-control trials.
     """
     try:
         return get_xgboost_signal_scenario(
@@ -355,7 +362,7 @@ def run_xgboost_signal_experiment(payload: NativeSumoRunIn, _user=Depends(requir
 
 @router.get("/simulation")
 def traffic_simulation():
-    """Forecast 30 minutes using the supplied SUMO dataset and trained model."""
+    """Return the current 30-minute reference-network forecast."""
     return get_simulation_snapshot()
 
 

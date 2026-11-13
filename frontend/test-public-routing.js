@@ -11,6 +11,6 @@ assert(publicRouting.includes('/routing/geocode'), 'Place search must call the b
 assert(!publicRouting.includes('fetch('), 'The browser must not call Nominatim, Photon, OSRM or Valhalla directly.');
 assert(publicRouting.includes("data_quality: 'estimated'") && publicRouting.includes('coordinates: []'), 'Fallback estimates must not draw fabricated route geometry.');
 assert(routePlanner.includes("api.post('/routing/plan'") && !routePlanner.includes('findPublicRoadRoutes'), 'Road route geometry must come from the configured backend.');
-assert(traffic.includes('searchPublicPlaces') && aqi.includes('searchPublicPlaces'), 'Citizen search pages must share the proxied geocoder.');
+assert(traffic.includes('/routing/geocode') && !traffic.includes('searchPublicPlaces') && routePlanner.includes('/routing/geocode') && !routePlanner.includes('searchPublicPlaces') && aqi.includes('searchPublicPlaces'), 'Citizen route and traffic searches must use the proxied geocoder without browser-side third-party requests.');
 
 console.log('✓ Geocoding and road routing use the configured UrbanSaarthi API; browser-side third-party CORS requests are removed.');

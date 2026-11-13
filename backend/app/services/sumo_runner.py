@@ -536,8 +536,8 @@ def run_native_sumo_simulation(scenario: str, report: dict[str, Any] | None = No
             "models": {"engine": "native SUMO execution", "simulated_seconds": DURATION_SECONDS, "seed": 42,
                        "vehicle_position_source": "SUMO Floating Car Data", "vehicle_position_sample_seconds": 30},
             "notes": [
-                "This is a real 3,600-second SUMO execution on the bundled synthetic grid network with generated vehicle routes.",
-                "Vehicle positions are sampled from SUMO Floating Car Data at 30-second intervals; at most 240 are rendered per frame, while aggregate counts include all vehicles.",
+                "This is a completed one-hour detailed simulation on the supplied reference road network with generated vehicle demand.",
+                "Vehicle locations are sampled at 30-second intervals; at most 240 are rendered per frame, while aggregate counts include all vehicles.",
                 "Baseline and candidate runs use identical generated demand and a fixed seed. The bundled network is synthetic and is not a mapped Kanpur junction.",
                 "Video detections inform vehicle-class proportions and demand scaling; footage is not geospatially map-matched to the network.",
                 "Emissions use trip routeLength and indicative vehicle-class factors. SUMO does not model speed/load-specific engine emissions in this prototype; fuel-use assumptions are not local fleet measurements.",

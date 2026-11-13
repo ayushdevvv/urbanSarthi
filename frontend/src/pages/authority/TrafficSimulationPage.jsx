@@ -109,7 +109,7 @@ export default function TrafficSimulationPage() {
       }
       if (!response) {
         if (activeCapabilities?.forecast_available === false) {
-          throw new Error('Traffic simulation is not ready on the server yet. Check the Render deployment and model files.');
+          throw new Error('The 60-minute road forecast is temporarily unavailable. Please try again shortly.');
         }
         response = await api.post('/traffic/simulation/model-scenario', form, { timeoutMs: 45000, fallbackGraceMs: 0 });
         if (nativeError) response.engine_fallback_note = 'Detailed vehicle simulation could not start, so this run uses the available 60-minute network forecast.';
@@ -122,19 +122,19 @@ export default function TrafficSimulationPage() {
       setPlaying(true);
     } catch (err) {
       const detail = err?.payload?.detail || err?.message || 'The simulation could not complete.';
-      setError(typeof detail === 'string' ? detail : 'The simulation could not complete. Check API worker logs and ML dependencies.');
+      setError(typeof detail === 'string' ? detail : 'The simulation could not complete. Please retry shortly or contact the workspace administrator.');
     } finally { setBusy(false); }
   }
 
   function reset() { setForm(DEFAULTS); setResult(null); setError(''); setMinuteIndex(0); setPlaying(false); }
 
   return <div className="sumo-page">
-    <PageIntro eyebrow="TRAFFIC OPERATIONS / DIGITAL TWIN" title="Traffic simulation" description="Explore a 60-minute road network, tune signal timings and watch traffic conditions change through the playback." action={<span className="sumo-engine-chip"><span/>{result ? (result.mode === 'native_sumo_simulation' ? 'Detailed simulation' : 'Network forecast') : capabilities?.native_simulation_available ? 'Simulation ready' : capabilities?.forecast_available ? 'Forecast ready' : 'Checking availability'}</span>} />
+    <PageIntro eyebrow="TRAFFIC OPERATIONS / DIGITAL TWIN" title="Traffic simulation" description="Explore a 60-minute road network, tune signal timings and watch traffic conditions change through the playback." action={<span className="sumo-engine-chip"><span/>{result ? (result.mode === 'native_sumo_simulation' ? 'Detailed simulation' : '60-minute forecast') : capabilities?.native_simulation_available ? 'Simulation ready' : capabilities?.forecast_available ? 'Forecast ready' : 'Checking availability'}</span>} />
 
     <section className="sumo-intro-strip">
       <div className="sumo-intro-icon"><Route size={20}/></div>
       <div><b>Baseline vs. proposed signal plan</b><p>Compare the current timing with your proposed cycle. Road conditions, vehicle flow indicators, queues and signal phases update as the 60-minute timeline plays.</p></div>
-      <span className="sumo-network-tag">REFERENCE ROAD NETWORK</span>
+      <span className="sumo-network-tag">ROAD NETWORK PREVIEW</span>
     </section>
 
     <div className="sumo-workspace">
@@ -175,7 +175,7 @@ export default function TrafficSimulationPage() {
     </div>
 
     {result && <>
-      <div className="sumo-results-head"><div><span>EXPERIMENT RESULTS</span><h2>{result.experiment?.name || 'Signal timing experiment'}</h2><small>Completed {runAt || (result.generated_at ? new Date(result.generated_at).toLocaleString() : '—')} · {result.mode === 'native_sumo_simulation' ? 'Detailed road simulation' : 'Modelled network forecast'}</small></div><span className="sumo-complete-chip"><i/> {result.mode === 'native_sumo_simulation' ? 'DETAILED SIMULATION' : 'NETWORK FORECAST'}</span></div>
+      <div className="sumo-results-head"><div><span>EXPERIMENT RESULTS</span><h2>{result.experiment?.name || 'Signal timing experiment'}</h2><small>Completed {runAt || (result.generated_at ? new Date(result.generated_at).toLocaleString() : '—')} · {result.mode === 'native_sumo_simulation' ? 'Detailed road simulation' : '60-minute network forecast'}</small></div><span className="sumo-complete-chip"><i/> {result.mode === 'native_sumo_simulation' ? 'DETAILED SIMULATION' : '60-MINUTE FORECAST'}</span></div>
       <div className="sumo-metrics-grid">
         {result.mode === 'native_sumo_simulation' ? <>
           <Metric icon={CarFront} label="Vehicles completed" value={number(summary.vehicles_completed)} hint="Candidate run" delta={comparison.vehicles_completed?.change_percent} goodDirection={1}/>
