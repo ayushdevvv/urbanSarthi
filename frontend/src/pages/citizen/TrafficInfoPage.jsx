@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, AlertTriangle, CarFront, Clock3, Gauge, LocateFixed, MapPin, Pause, Play, RefreshCw, Route, Search, ShieldCheck, TrendingUp } from 'lucide-react';
 import PageIntro from '../../components/shared/PageIntro.jsx';
 import TrafficSimulationScene from '../authority/TrafficSimulationScene.jsx';
+import trafficSimulationSeed from '../../data/trafficSimulationSeed.json';
 import CityMap from '../../components/maps/CityMap.jsx';
 import { api } from '../../services/api/client.js';
 import { readApiSnapshot, saveLocalRecord, readLocalRecord, publishDataStatus, createDataStatusContext } from '../../services/apiSnapshot.js';
@@ -24,11 +25,80 @@ function pickPlace(response, query) {
   return results.find((item) => String(item.label).toLowerCase() === query.trim().toLowerCase()) || results[0];
 }
 
+function queueLevel(value) {
+  return value < 3 ? 'Free' : value < 10 ? 'Moderate' : 'Heavy';
+}
+
+// This bundled reference is a display-safe fallback only. Its source file contains
+// a 30-minute network snapshot; minutes 30–60 hold the reference horizon rather
+// than claiming an unavailable second model prediction.
+function buildReferenceScenario(seed = trafficSimulationSeed, selectedScenario = 'baseline') {
+  const baseRoads = Array.isArray(seed?.roads) ? seed.roads : [];
+  const duration = 60;
+  const step = 5;
+  const startQueue = Number(seed?.queue_now) || 0;
+  const horizonQueue = Number(seed?.predicted_queue_30min) || startQueue;
+  const heavyStart = Number(seed?.heavy_roads_now) || 0;
+  const heavyHorizon = Number(seed?.heavy_roads_30min) || heavyStart;
+  const scenarioFactor = (minute) => {
+    const progress = minute / duration;
+    if (selectedScenario === 'demand_surge') return 1 + 0.22 * progress;
+    if (selectedScenario === 'signal_priority') return Math.max(0.76, 1 - 0.14 * progress);
+    return 1;
+  };
+  const timeline = [];
+  for (let minute = 0; minute <= duration; minute += step) {
+    const horizonProgress = Math.min(1, minute / 30);
+    const factor = scenarioFactor(minute);
+    const roads = baseRoads.map((road) => {
+      const initial = Number(road.queue_now) || 0;
+      const target = Number(road.predicted_queue_30min ?? initial) || 0;
+      const queue = Math.max(0, (initial + (target - initial) * horizonProgress) * factor);
+      return { road: road.road, queue: Number(queue.toFixed(1)), level: queueLevel(queue), vehicles: null };
+    }).sort((a, b) => b.queue - a.queue);
+    const networkQueue = Math.max(0, (startQueue + (horizonQueue - startQueue) * horizonProgress) * factor);
+    const heavyRoads = Math.max(0, Math.min(Number(seed?.road_count) || 80, Math.round(heavyStart + (heavyHorizon - heavyStart) * horizonProgress)));
+    timeline.push({
+      minute,
+      queue_total: Math.round(networkQueue),
+      vehicles: minute === 0 ? Number(seed?.vehicles_now) || null : null,
+      heavy_roads: heavyRoads,
+      moderate_roads: null,
+      free_roads: null,
+      roads,
+    });
+  }
+  const initial = timeline[0];
+  const final = timeline[timeline.length - 1];
+  return {
+    mode: 'reference',
+    scenario: selectedScenario,
+    duration_minutes: duration,
+    step_minutes: step,
+    generated_at: null,
+    summary: {
+      queue_start: initial.queue_total,
+      queue_end: final.queue_total,
+      queue_change_percent: Number(((final.queue_total - initial.queue_total) / Math.max(initial.queue_total, 1) * 100).toFixed(1)),
+      road_count: Number(seed?.road_count) || 80,
+      heavy_roads_start: initial.heavy_roads,
+      heavy_roads_end: final.heavy_roads,
+    },
+    timeline,
+    notes: [
+      seed?.note || 'Bundled reference traffic snapshot.',
+      'Fallback preview only: this is not a live feed or a fresh model inference.',
+      'The bundled seed provides a 30-minute horizon. From minute 30 onward, the sample holds that reference level; a live 60-minute model response replaces it when available.',
+      ...(selectedScenario === 'demand_surge' ? ['The demand-surge variation is a visible illustrative sensitivity overlay, not a separately trained forecast.'] : selectedScenario === 'signal_priority' ? ['The signal-priority variation is an illustrative sensitivity overlay, not a measured signal-control outcome.'] : []),
+    ],
+  };
+}
+
 export default function TrafficInfoPage({ adminMode = false }) {
   const [point, setPoint] = useState(DEFAULT_POINT);
   const [provider, setProvider] = useState(null);
-  const [scenarioData, setScenarioData] = useState(null);
   const [scenario, setScenario] = useState(savedScenario);
+  const [scenarioData, setScenarioData] = useState(() => buildReferenceScenario(trafficSimulationSeed, savedScenario()));
   const [loading, setLoading] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [frameIndex, setFrameIndex] = useState(0);
@@ -76,9 +146,8 @@ export default function TrafficInfoPage({ adminMode = false }) {
     if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
       setError('Enter a valid location or choose one from the suggestions.'); return;
     }
-    // Do not leave a previous scenario on screen while a fresh server request
-    // is pending. The API client restores it only after a confirmed request error.
-    setScenarioData(null); setProvider(null); setLastUpdated(null);
+    // Keep the last usable scenario visible while the live request is pending.
+    // This avoids blanking the workspace during a cold start or provider outage.
     setFrameIndex(0); setPlaying(false);
     setLoading(true); setError('');
     const params = new URLSearchParams({ minutes: '60', step_minutes: '5', scenario: overrideScenario });
@@ -88,6 +157,9 @@ export default function TrafficInfoPage({ adminMode = false }) {
         api.get(`/traffic/current?latitude=${latitude}&longitude=${longitude}`).catch(() => null),
         api.get(scenarioPath),
       ]);
+      if (!Array.isArray(timeline?.timeline) || timeline.timeline.length < 2 || !timeline.summary) {
+        throw new Error('The simulation service returned an incomplete timeline.');
+      }
       const snapshot = readApiSnapshot(scenarioPath);
       setProvider(current?.flow ? current : null);
       setScenarioData(timeline); setFrameIndex(0); setPlaying(false); setLastUpdated(new Date(snapshot?.savedAt || Date.now()).toISOString());
@@ -102,8 +174,9 @@ export default function TrafficInfoPage({ adminMode = false }) {
         setLastUpdated(new Date(saved.savedAt).toISOString());
         publishDataStatus({ type: 'snapshot', path: `traffic-simulation:${overrideScenario}`, cachedAt: saved.savedAt, reason: 'Restored the last successful scenario saved in this browser.' }, createDataStatusContext(statusRoutePath));
       } else {
-        setScenarioData(null);
-        setError(`${err?.message || 'The simulation service is unavailable.'} No saved scenario is available for these inputs yet. Reconnect to refresh this view.`);
+        setScenarioData(buildReferenceScenario(trafficSimulationSeed, overrideScenario));
+        setLastUpdated(null);
+        setError(`${err?.message || 'The simulation service is unavailable.'} Showing the bundled reference scenario instead.`);
       }
     } finally { setLoading(false); }
   }, [point, scenario]);
@@ -271,15 +344,16 @@ export default function TrafficInfoPage({ adminMode = false }) {
     {scenarioData && frame && <>
       {!adminMode && <section className="panel traffic-map-panel"><div className="panel-head"><div><div className="eyebrow">MAPPED AREA / ROUTE</div><h3>{mappedRoute ? `${originQuery} to ${destinationQuery}` : point.label}</h3></div><span className="status-pill">{mappedRoute ? 'Route search' : 'Location search'}</span></div><div className="traffic-map-toggles"><label><input type="checkbox" checked={showRouteAlternatives} onChange={(e) => setShowRouteAlternatives(e.target.checked)}/> Show route alternatives</label><label><input type="checkbox" checked={showTrafficCrowd} onChange={(e) => setShowTrafficCrowd(e.target.checked)}/> Show traffic crowd layer</label></div><CityMap markers={[...mapMarkers, ...(showTrafficCrowd ? roadFlowPoints : [])]} route={mapRoute} routeOptions={showRouteAlternatives ? routeAlternatives.map((route, index) => ({ id: route.id ?? `${route.mode}-${route.label}-${index}`, color: ['#26764f', '#8b9f4e', '#b17b3d', '#497d78', '#806c98'][index % 5], selected: (route.id ?? `${route.mode}-${route.label}-${index}`) === selectedTrafficRouteId, coordinates: route.geometry?.coordinates?.map?.(([lon, lat]) => ({ lat, lng: lon })) || [] })) : []} zoom={13} className="traffic-user-map"/><div className="map-foot"><span><MapPin size={13}/> Selected place and route alternatives</span><small>Map tiles © OpenStreetMap</small></div>{showTrafficCrowd && <div className="traffic-crowd-legend"><span><i className="crowd-heavy"/> Heavy</span><span><i className="crowd-slow"/> Slow</span><span><i className="crowd-moving"/> Moving</span><small>{roadFlowPoints.length ? `${roadFlowPoints.length} provider readings on map` : 'No provider readings returned for this area'}</small></div>}{mappedRoute && <div className="traffic-map-route-summary"><b>{mappedRoute.label}</b><span>{mappedRoute.distance == null ? 'Distance unavailable' : `${(mappedRoute.distance / 1000).toFixed(1)} km`}</span><span>{mappedRoute.duration == null ? 'Duration unavailable' : `${Math.round(mappedRoute.duration / 60)} min estimated`}</span><small>{mappedRoute.provider || 'Routing service'}</small>{selectedGoogleMapsUrl && <a href={selectedGoogleMapsUrl} target="_blank" rel="noreferrer" className="traffic-google-maps-link">Open selected route in Google Maps ↗</a>}</div>}{routeAlternatives.length > 1 && <div className="traffic-route-options">{routeAlternatives.slice(0, 5).map((route, index) => { const id = route.id ?? `${route.mode}-${route.label}-${index}`; const grams = Number.isFinite(Number(route.estimated_co2_grams)) ? Number(route.estimated_co2_grams) : null; const low = Math.min(...routeAlternatives.map((item) => Number(item.estimated_co2_grams)).filter(Number.isFinite)); const downside = grams == null || !Number.isFinite(low) ? null : Math.max(0, grams - low); return <button type="button" className={id === selectedTrafficRouteId ? 'selected' : ''} key={id} onClick={() => selectTrafficRoute(route, index)}><span><b>{route.label || `Route ${index + 1}`}</b><small>{route.provider || 'Routing provider'} · {route.data_quality || 'mapped route'}</small><small className="traffic-route-co2">{grams == null ? 'CO₂ estimate unavailable' : `Est. CO₂ ${grams >= 1000 ? `${(grams / 1000).toFixed(2)} kg` : `${Math.round(grams)} g`}${downside != null && downside > 0.5 ? ` · +${Math.round(downside)} g vs lowest` : ' · lowest footprint'}`}</small></span><strong>{route.duration_seconds == null ? '—' : `${Math.max(1, Math.round(route.duration_seconds / 60))} min`}</strong><em>{route.distance_meters == null ? '—' : `${(route.distance_meters / 1000).toFixed(1)} km`}</em></button>; })}</div>}{searchMode === 'route' && showTrafficCrowd && !roadFlowPoints.length && <div className="traffic-layer-empty">No road-speed readings were returned along this route. Route geometry is available; the crowd layer appears when a traffic-flow provider returns readings.</div>}</section>}
 
-      {adminMode ? <><section className="traffic-scenario-hero panel"><div className="traffic-scenario-hero-top"><div><span className="traffic-live-label"><i/>{scenarioLabel.toUpperCase()}</span><h2>60-minute traffic simulation</h2><p>{point.label || locationQuery} · playback advances through the selected scenario.</p></div><span className="traffic-trained-label"><ShieldCheck size={13}/> {playing ? 'Simulation running' : 'Ready to play'}</span></div>
-        <div className="traffic-scenario-kpis"><div><small>Simulated time</small><strong>{frame.minute}<em> / 60 min</em></strong></div><div><small>Total queued vehicles</small><strong>{int(frame.queue_total)}</strong><span>{previousFrame && frame.queue_total !== previousFrame.queue_total ? `${frame.queue_total > previousFrame.queue_total ? '+' : ''}${int(frame.queue_total - previousFrame.queue_total)} since last step` : 'Starting snapshot'}</span></div><div><small>Heavy roads</small><strong>{frame.heavy_roads}<em> / {scenarioData.summary.road_count}</em></strong><span>{fmt((frame.heavy_roads / Math.max(frame.roads.length, 1)) * 100, '%')} of road segments in heavy flow</span></div><div><small>Network queue change</small><strong>{fmt((frame.queue_total - timeline[0].queue_total) / Math.max(timeline[0].queue_total, 1) * 100, '%')}</strong><span>vs. minute 0</span></div></div>
+      {adminMode ? <><section className="traffic-scenario-hero panel"><div className="traffic-scenario-hero-top"><div><span className="traffic-live-label"><i/>{scenarioLabel.toUpperCase()}</span><h2>60-minute traffic simulation</h2><p>{scenarioData.mode === 'reference' ? 'Bundled SUMO reference network · not a location-specific forecast.' : 'Network model scenario · any location-specific speed reading is shown separately.'}</p></div><span className="traffic-trained-label"><ShieldCheck size={13}/> {scenarioData.mode === 'reference' ? 'Seeded reference' : playing ? 'Model playback running' : 'Model scenario ready'}</span></div>
+        <div className="traffic-scenario-kpis"><div><small>Simulated time</small><strong>{frame.minute}<em> / 60 min</em></strong></div><div><small>Total queued vehicles</small><strong>{int(frame.queue_total)}</strong><span>{previousFrame && frame.queue_total !== previousFrame.queue_total ? `${frame.queue_total > previousFrame.queue_total ? '+' : ''}${int(frame.queue_total - previousFrame.queue_total)} since last step` : 'Starting snapshot'}</span></div><div><small>Heavy roads</small><strong>{frame.heavy_roads}<em> / {scenarioData.summary.road_count}</em></strong><span>{fmt((frame.heavy_roads / Math.max(scenarioData.summary.road_count || frame.roads.length, 1)) * 100, '%')} of road segments in heavy flow</span></div><div><small>Network queue change</small><strong>{fmt((frame.queue_total - timeline[0].queue_total) / Math.max(timeline[0].queue_total, 1) * 100, '%')}</strong><span>vs. minute 0</span></div></div>
+        {scenarioData.mode === 'reference' && <p className="api-note traffic-reference-note">Bundled reference preview · not live traffic or fresh model inference. The included sample contains a 30-minute horizon; the remaining playback holds that reference level until a live 60-minute response is available.</p>}
         <div className="traffic-playback"><div className="traffic-playback-actions"><button type="button" className="primary" onClick={playing ? () => setPlaying(false) : startPlayback}>{playing ? <><Pause size={15}/>Pause playback</> : <><Play size={15}/>{frameIndex >= timeline.length - 1 ? 'Replay 60 minutes' : frameIndex > 0 ? 'Resume playback' : 'Play 60-minute forecast'}</>}</button><button type="button" className="utility" onClick={() => { setPlaying(false); setFrameIndex(0); }}><RefreshCw size={14}/>Reset</button><span>Selected time: {Math.min(60, frame.minute)} simulated minutes</span></div><input className="traffic-time-slider" type="range" min="0" max={timeline.length - 1} value={frameIndex} onChange={(e) => { setPlaying(false); setFrameIndex(Number(e.target.value)); }} aria-label="Forecast time"/><div className="traffic-time-labels"><span>Now</span><span>15 min</span><span>30 min</span><span>45 min</span><span>60 min</span></div><div className="traffic-forecast-chart"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Queue trend throughout the forecast"><polyline points={chartPoints || '0,70 100,70'} fill="none" stroke="currentColor" strokeWidth="2.4" vectorEffect="non-scaling-stroke"/></svg>{timeline.map((item, index) => <button key={item.minute} type="button" title={`${item.minute} min · ${item.queue_total} queued`} className={index === frameIndex ? 'active' : ''} style={{ left: `${index / Math.max(timeline.length - 1, 1) * 100}%` }} onClick={() => { setPlaying(false); setFrameIndex(index); }}><span>{item.minute}m</span></button>)}</div></div>
       </section>
-      <TrafficSimulationScene roads={roads} frame={frame} scenario={scenario} playing={playing} areaName={point.label || locationQuery}/>
+      <TrafficSimulationScene roads={roads} frame={frame} scenario={scenario} playing={playing} areaName={scenarioData.mode === 'reference' ? 'Bundled SUMO sample' : 'Network model scenario'}/>
       </> : <section className="panel traffic-scenario-hero traffic-user-summary"><div className="traffic-scenario-hero-top"><div><span className="traffic-live-label"><i/>{scenarioLabel.toUpperCase()}</span><h2>Road activity forecast</h2><p>Current snapshot from the authority-selected 60-minute scenario.</p></div><span className="traffic-trained-label"><Clock3 size={13}/> Minute {frame.minute}</span></div><div className="traffic-scenario-kpis"><div><small>Queued vehicles</small><strong>{int(frame.queue_total)}</strong></div><div><small>Heavy roads</small><strong>{frame.heavy_roads}<em> / {scenarioData.summary.road_count}</em></strong></div><div><small>Highest queue</small><strong>{fmt(Math.max(0, ...roads.map((road) => Number(road.queue || 0))))}</strong><span>vehicles on one road segment</span></div><div><small>Scenario time</small><strong>{frame.minute}<em> / 60 min</em></strong></div></div><p className="api-note">{scenarioData.mode === 'reference' ? 'Reference activity is displayed because the simulation service is unavailable. It is illustrative, not live or a model prediction.' : 'This is a network-level scenario. A live, location-specific road segment feed is shown separately when the provider supports it.'}</p></section>}
 
-      <section className="panel traffic-road-list"><div className="traffic-info-heading"><span className="traffic-info-icon"><Route size={18}/></span><div><h3>{adminMode ? `Road activity · minute ${frame.minute}` : 'Most congested road segments'}</h3><p>{adminMode ? 'Vehicle queues and movement update as playback advances.' : 'Ranked by scenario queue size.'}</p></div><span className="status-pill">{roads.length} segments</span></div><div className="traffic-road-table"><div className="traffic-road-row traffic-road-header"><span>Road segment</span><span>Vehicle count</span><span>Queued vehicles</span><span>Congestion</span></div>{roads.slice(0, 18).map((road) => <div className="traffic-road-row" key={road.road}><b>{road.road}</b><span>{road.vehicles}</span><span>{fmt(road.queue)}</span><span className={`road-level ${String(road.level).toLowerCase()}`}>{road.level}</span></div>)}</div>{!adminMode && <p className="traffic-model-footnote">{(scenarioData.notes || []).join(' ')}</p>}</section>
-      {!adminMode && <section className="panel traffic-data-note"><h3>Data source status</h3><p>{provider?.flow ? `A provider road-flow snapshot is available from ${provider.provider} at your selected point. Scenario road activity is shown separately.` : scenarioData.mode === 'reference' ? 'Live road-speed readings and the simulation service are unavailable. Reference road activity remains visible with an explicit label.' : 'No location-specific live road-flow reading is available for this point. The road table represents the selected network scenario, not live camera observations on your street.'}</p><small>View updated {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'just now'} · Selected scenario: {scenarioLabel}</small></section>}
+      <section className="panel traffic-road-list"><div className="traffic-info-heading"><span className="traffic-info-icon"><Route size={18}/></span><div><h3>{adminMode ? `Road activity · minute ${frame.minute}` : 'Most congested road segments'}</h3><p>{adminMode ? 'Vehicle queues and movement update as playback advances.' : 'Ranked by scenario queue size.'}</p></div><span className="status-pill">{roads.length} segments</span></div><div className="traffic-road-table"><div className="traffic-road-row traffic-road-header"><span>Road segment</span><span>Vehicle count</span><span>Queued vehicles</span><span>Congestion</span></div>{roads.slice(0, 18).map((road) => <div className="traffic-road-row" key={road.road}><b>{road.road}</b><span>{road.vehicles == null ? '—' : int(road.vehicles)}</span><span>{fmt(road.queue)}</span><span className={`road-level ${String(road.level).toLowerCase()}`}>{road.level}</span></div>)}</div>{!adminMode && <p className="traffic-model-footnote">{(scenarioData.notes || []).join(' ')}</p>}</section>
+      {!adminMode && <section className="panel traffic-data-note"><h3>Data source status</h3><p>{provider?.flow ? `A provider road-flow snapshot is available from ${provider.provider} at your selected point. Scenario road activity is shown separately.` : scenarioData.mode === 'reference' ? 'Live road-speed readings and the simulation service are unavailable. Reference road activity remains visible with an explicit label.' : 'No location-specific live road-flow reading is available for this point. The road table represents the selected network scenario, not live camera observations on your street.'}</p><small>View updated {scenarioData.mode === 'reference' ? 'bundled reference sample' : lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'recently'} · Selected scenario: {scenarioLabel}</small></section>}
     </>}
   </div>;
 }

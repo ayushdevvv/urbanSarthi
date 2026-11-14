@@ -14,6 +14,7 @@ import DataSourcesPage from './pages/authority/DataSourcesPage.jsx';
 import SettingsPage from './pages/authority/SettingsPage.jsx';
 import TrafficVisionPage from './pages/citizen/TrafficVisionPage.jsx';
 import TrafficAgentPage from './pages/authority/TrafficAgentPage.jsx';
+import SignalPlansPage from './pages/authority/SignalPlansPage.jsx';
 import CitizenHomePage from './pages/citizen/CitizenHomePage.jsx';
 import RoutePlannerPage from './pages/citizen/RoutePlannerPage.jsx';
 import AirQualityPage from './pages/citizen/AirQualityPage.jsx';
@@ -46,14 +47,15 @@ export default function App() {
         <Route path="air-intelligence" element={<AirQualityOverviewPage />} />
         <Route path="aqi-forecast" element={<AirQualityOverviewPage forecastFocus />} />
         <Route path="traffic-simulation" element={<TrafficInfoPage adminMode />} />
+        <Route path="digital-twin" element={<SignalPlansPage />} />
         <Route path="carbon" element={<CarbonImpactPage />} />
         <Route path="traffic" element={<Navigate to="/authority/traffic-lab" replace />} />
-        <Route path="traffic-model" element={<Navigate to="/authority/traffic-simulation" replace />} />
+        <Route path="traffic-model" element={<Navigate to="/authority/traffic-lab" replace />} />
         <Route path="traffic-analysis" element={<Navigate to="/authority/traffic-lab" replace />} />
-        <Route path="signal-plans" element={<Navigate to="/authority/traffic-agent" replace />} />
-        <Route path="aqi-prediction" element={<Navigate to="/authority/air-intelligence" replace />} />
-        <Route path="signals" element={<Navigate to="/authority/traffic-agent" replace />} />
-        <Route path="traffic-lab" element={<TrafficVisionPage authorityLab />} />
+        <Route path="signal-plans" element={<Navigate to="/authority/digital-twin" replace />} />
+        <Route path="aqi-prediction" element={<Navigate to="/authority/aqi-forecast" replace />} />
+        <Route path="signals" element={<Navigate to="/authority/digital-twin" replace />} />
+        <Route path="traffic-lab" element={<TrafficVisionPage />} />
         <Route path="traffic-agent" element={<TrafficAgentPage />} />
         <Route path="iot" element={<IotNetworkPage />} />
         <Route path="aqi" element={<Navigate to="/authority/air-intelligence" replace />} />

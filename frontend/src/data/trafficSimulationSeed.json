@@ -1,0 +1,105 @@
+{
+  "mode": "sumo_model",
+  "source": "Supplied SUMO generated dataset and trained XGBoost model",
+  "run_id": 35,
+  "simulation_minute": 180,
+  "road_count": 80,
+  "vehicles_now": 1408,
+  "queue_now": 1350,
+  "predicted_queue_30min": 1475,
+  "queue_change_percent": 9.3,
+  "heavy_roads_now": 60,
+  "heavy_roads_30min": 63,
+  "model_metrics": {
+    "level_accuracy_percent": 83.4,
+    "mae_vehicles": 1.84,
+    "r2": 0.718
+  },
+  "roads": [
+    {
+      "road": "left0A0",
+      "queue_now": 26,
+      "predicted_queue_30min": 24.5,
+      "level_now": "Heavy",
+      "level_30min": "Heavy"
+    },
+    {
+      "road": "bottom0A0",
+      "queue_now": 26,
+      "predicted_queue_30min": 24.4,
+      "level_now": "Heavy",
+      "level_30min": "Heavy"
+    },
+    {
+      "road": "top3D3",
+      "queue_now": 18,
+      "predicted_queue_30min": 24.1,
+      "level_now": "Heavy",
+      "level_30min": "Heavy"
+    },
+    {
+      "road": "left2A2",
+      "queue_now": 20,
+      "predicted_queue_30min": 24.0,
+      "level_now": "Heavy",
+      "level_30min": "Heavy"
+    },
+    {
+      "road": "C2D2",
+      "queue_now": 17,
+      "predicted_queue_30min": 23.9,
+      "level_now": "Heavy",
+      "level_30min": "Heavy"
+    },
+    {
+      "road": "right0D0",
+      "queue_now": 25,
+      "predicted_queue_30min": 23.8,
+      "level_now": "Heavy",
+      "level_30min": "Heavy"
+    },
+    {
+      "road": "C0B0",
+      "queue_now": 15,
+      "predicted_queue_30min": 23.8,
+      "level_now": "Heavy",
+      "level_30min": "Heavy"
+    },
+    {
+      "road": "A0A1",
+      "queue_now": 25,
+      "predicted_queue_30min": 23.8,
+      "level_now": "Heavy",
+      "level_30min": "Heavy"
+    },
+    {
+      "road": "C2C1",
+      "queue_now": 25,
+      "predicted_queue_30min": 23.7,
+      "level_now": "Heavy",
+      "level_30min": "Heavy"
+    },
+    {
+      "road": "C3B3",
+      "queue_now": 19,
+      "predicted_queue_30min": 23.7,
+      "level_now": "Heavy",
+      "level_30min": "Heavy"
+    },
+    {
+      "road": "A2A3",
+      "queue_now": 24,
+      "predicted_queue_30min": 23.7,
+      "level_now": "Heavy",
+      "level_30min": "Heavy"
+    },
+    {
+      "road": "A2A1",
+      "queue_now": 24,
+      "predicted_queue_30min": 23.7,
+      "level_now": "Heavy",
+      "level_30min": "Heavy"
+    }
+  ],
+  "note": "Forecast is generated from the supplied SUMO simulation dataset. It is a model scenario, not a live road sensor feed."
+}

@@ -1,4 +1,4 @@
-// Source-level smoke tests for the AQI-first air and traffic workspace.
+// Source-level smoke tests for the traffic-first UrbanSaarthi authority workspace.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,21 +15,26 @@ const assert = (condition, message) => {
 console.log('--- RUNNING URBANSARTHI WORKSPACE SMOKE TESTS ---');
 const app = read('src/App.jsx');
 for (const [route, component] of [
-  ['air-intelligence', 'AirQualityOverviewPage'], ['carbon', 'CarbonImpactPage'],
-  ['iot', 'IotNetworkPage'], ['traffic', 'TrafficInfoPage'],
+  ['traffic-lab', 'TrafficVisionPage'], ['traffic-simulation', 'TrafficInfoPage'],
+  ['digital-twin', 'SignalPlansPage'], ['aqi-forecast', 'AirQualityOverviewPage'],
+  ['carbon', 'CarbonImpactPage'], ['iot', 'IotNetworkPage'],
 ]) assert(app.includes(`path="${route}"`) && app.includes(`<${component}`), `${route} page must be registered`);
 assert(app.includes('Navigate to="control"'), 'Authority workspace must open on City overview');
-console.log('✓ Air-first route structure verified');
+assert(app.includes('path="traffic-model" element={<Navigate to="/authority/traffic-lab" replace />}'), 'Legacy traffic-model URL must open the OpenCV/YOLO Traffic Lab');
+assert(app.includes('path="signal-plans" element={<Navigate to="/authority/digital-twin" replace />}'), 'Legacy signal-plan URL must open Digital Twin');
+console.log('✓ Traffic-first route structure and legacy route repairs verified');
 
 const layout = read('src/components/layout/AuthorityLayout.jsx');
-for (const target of ['/authority/control', '/authority/air-intelligence', '/authority/iot', '/authority/traffic-lab', '/authority/traffic-agent', '/authority/traffic-simulation']) {
+for (const target of ['/authority/control', '/authority/traffic-lab', '/authority/traffic-simulation', '/authority/digital-twin', '/authority/aqi-forecast', '/authority/carbon', '/authority/iot']) {
   assert(layout.includes(target), `Navigation must include ${target}`);
 }
-assert(layout.includes('OVERVIEW') && layout.includes('AIR QUALITY') && layout.includes('FIELD NETWORK') && layout.includes('TRAFFIC'), 'Navigation must group overview, AQI, IoT and traffic');
-assert(layout.indexOf("to: '/authority/control'") < layout.indexOf("to: '/authority/air-intelligence'") && layout.indexOf("to: '/authority/air-intelligence'") < layout.indexOf("to: '/authority/iot'") && layout.indexOf("to: '/authority/iot'") < layout.indexOf("to: '/authority/traffic-lab'") && layout.indexOf("to: '/authority/traffic-lab'") < layout.indexOf("to: '/authority/traffic-agent'") && layout.indexOf("to: '/authority/traffic-agent'") < layout.indexOf("to: '/authority/traffic-simulation'"), 'Admin navigation order must be Overview → AQI → IoT → Traffic');
-assert(!layout.includes("to: '/authority/signals'") && !layout.includes("to: '/authority/analytics'") && !layout.includes("to: '/authority/traffic-analysis'"), 'Removed standalone Signal Plans and Traffic Analysis must not appear in navigation');
+assert(layout.includes('OVERVIEW') && layout.includes('AIR QUALITY') && layout.includes('FIELD NETWORK') && layout.includes('TRAFFIC'), 'Navigation must group traffic, AQI, overview and field network');
+const navPositions = ['/authority/traffic-lab', '/authority/traffic-simulation', '/authority/digital-twin', '/authority/aqi-forecast', '/authority/carbon'];
+assert(navPositions.every((target, index) => index === 0 || layout.indexOf(navPositions[index - 1]) < layout.indexOf(target)), 'Sidebar order must be Traffic Lab → Traffic Simulation → Digital Twin → AQI Forecast → CO₂ Emissions');
+assert(layout.indexOf("label: 'TRAFFIC'") < layout.indexOf("label: 'AIR QUALITY'"), 'Traffic section must appear before Air Quality');
+assert(!layout.includes("to: '/authority/traffic-agent'") && !layout.includes("to: '/authority/signals'") && !layout.includes("to: '/authority/analytics'") && !layout.includes("to: '/authority/traffic-analysis'"), 'Secondary routes must stay out of the primary workspace navigation');
 assert(!layout.includes('API configuration'), 'Technical API configuration label must not be shown in the main navigation');
-console.log('✓ Section navigation and user-facing labels verified');
+console.log('✓ Traffic-first sidebar order and user-facing labels verified');
 const shellCss = read('src/styles/app-shell-refinement.css');
 assert(shellCss.includes('.authority-app .sidebar') && shellCss.includes('.citizen-app .citizen-header') && shellCss.includes('.citizen-app .citizen-nav-item.active'), 'Shared authority sidebar and citizen navigation must receive the app-wide responsive theme');
 assert(layout.includes('aria-expanded={mobileOpen}') && layout.includes('aria-controls=\"authority-sidebar\"') && layout.includes('useEffect(() => { setMobileOpen(false); }, [location.pathname])'), 'Authority mobile navigation must be accessible and close after route navigation');
@@ -47,6 +52,7 @@ assert(app.includes('path="aqi-forecast" element={<AirQualityOverviewPage foreca
 const airService = read('src/services/airQuality.js');
 assert(airService.includes('hasUsAqiForecast') && airService.includes('forecast_provider') && airService.includes('fetchOpenMeteoAirQuality') && airService.includes("forecast_hours: '24'"), 'AQI service must supplement a non-US-AQI forecast with a comparable 24-hour US AQI timeline when available');
 assert(aqi.includes('US AQI · 0–500') && aqi.includes('OpenWeather AQI · 1–5') && aqi.includes('matchingCurrentValue'), 'AQI forecast must keep provider index scales separate');
+assert(aqi.includes('makeSeedAirReport') && aqi.includes('makeSeedStations') && aqi.includes('makeSeedHotspots') && aqi.includes('Sample data is active'), 'AQI forecast must keep clearly labelled AQI, station and hotspot samples available during outages');
 console.log('✓ AQI-centred overview and visualisations verified');
 
 const carbon = read('src/pages/authority/CarbonImpactPage.jsx');
@@ -64,9 +70,12 @@ console.log('✓ IoT observation ingestion and device registry verified');
 
 
 const trafficInfo = read('src/pages/citizen/TrafficInfoPage.jsx');
-assert(trafficInfo.includes('setScenarioData(null); setProvider(null); setLastUpdated(null);') && trafficInfo.includes('const isServiceFailure = !err?.status || err.status >= 500'), 'Old traffic scenario data is hidden during live refresh and local recovery is reserved for service failures');
+assert(trafficInfo.includes('buildReferenceScenario') && trafficInfo.includes('trafficSimulationSeed') && trafficInfo.includes('setScenarioData(buildReferenceScenario(trafficSimulationSeed, overrideScenario))'), 'Traffic Simulation must render the bundled SUMO reference scenario when its API and saved response are unavailable');
+assert(trafficInfo.includes('Keep the last usable scenario visible while the live request is pending.') && trafficInfo.includes('traffic-reference-note'), 'Traffic Simulation must preserve the last scenario while refreshing and identify sample playback clearly');
+assert(trafficInfo.includes('moderate_roads: null') && trafficInfo.includes('free_roads: null'), 'Traffic fallback must not invent unprovided road-category counts');
 const carbonPage = read('src/pages/authority/CarbonImpactPage.jsx');
-assert(!carbonPage.includes('readLocalRecord(\'carbon-last-estimate\')') && carbonPage.includes('setResult(null);'), 'Old carbon results must not appear as initial fallback before the current estimate request');
+assert(!carbonPage.includes('readLocalRecord(\'carbon-last-estimate\')') && carbonPage.includes('SAMPLE_VEHICLE_COUNTS') && carbonPage.includes('Illustrative sample calculation') && carbonPage.includes('seeded_preview'), 'CO2 workspace must open with a clearly marked sample calculation and avoid stale saved estimates');
+assert(carbonPage.includes('offline_fallback: true') && carbonPage.includes('Local fallback calculation'), 'CO2 workspace must calculate locally when the platform estimator is unavailable');
 const traffic = read('src/pages/citizen/TrafficVisionPage.jsx');
 assert(traffic.includes('/traffic-detection/analyze-video'), 'Traffic Lab must call the video-analysis API');
 assert(traffic.includes('/authority/traffic-agent') && !traffic.includes('/traffic-detection/ops-workflow'), 'Traffic Lab must hand the workflow to a separate Traffic Agent page');
@@ -118,8 +127,9 @@ assert(trafficAgent.includes('40000') && trafficAgent.includes('makeLocalPreview
 assert(trafficAgent.includes('activeToolIndex') && trafficAgent.includes('tools list') && trafficAgent.includes('IN PROGRESS'), 'Traffic Agent must show an active workflow progress indicator without claiming individual tools completed before response');
 assert(trafficAgent.includes('Approve draft') && trafficAgent.includes('physical_dispatch_enabled'), 'Agent must retain operator approval and no physical dispatch safeguards');
 assert(trafficAgent.includes('not inferred from this progress animation'), 'Agent must distinguish real tool results from the visual progress indicator');
-assert(traffic.includes('setTimeout') && traffic.includes('40000') && traffic.includes('makeIllustrativeTrafficReport') && traffic.includes('preview_only: true') && traffic.includes('not sent to the Traffic Agent'), 'Traffic Lab must reveal a 40-second illustrative scene without treating it as YOLO evidence');
+assert(traffic.includes('makeIllustrativeTrafficReport') && traffic.includes('preview_only: true') && traffic.includes('not sent to the Traffic Agent'), 'Traffic Lab must show a seeded illustrative scene without treating it as YOLO evidence');
 assert(traffic.includes("previewReport ? 'Illustrative traffic scenario'"), 'Traffic Lab must identify the local example as an illustrative scenario, not a completed YOLO inference');
+assert(traffic.includes('setPreviewReport((current) => current || makeIllustrativeTrafficReport(mode, confidence))'), 'Traffic Lab must keep a usable preview visible if the detector request fails');
 const trafficAgentCss = read('src/pages/authority/traffic-agent.css');
 assert(trafficAgentCss.includes('.ta-hero') && trafficAgentCss.includes('#2f6a49') && trafficAgentCss.includes('@media(max-width:560px)') && trafficAgentCss.includes('.ta-workstream-note'), 'Traffic Agent must have a responsive premium green theme and readable execution note');
 console.log('✓ PNG favicon, multi-route map, Google Maps, carbon cards and outage recovery verified');
@@ -130,7 +140,7 @@ const airQualityService = read('src/services/airQuality.js');
 assert(airQualityService.includes('readApiSnapshot(apiPath)') && airQualityService.includes('savedApiSnapshot?.savedAt'), 'AQI fallback must preserve the original data timestamp');
 assert(traffic.includes('compactReport(analyzedReport)') && traffic.includes('Last successful analysis') && traffic.includes('reportRestored'), 'Traffic Lab must persist compact historical evidence and clearly label restored reports');
 assert(!traffic.includes("setReport(null); setWorkflow(null);"), 'Failed re-analysis must not erase the previous successful traffic report');
-assert(!layout.includes("to: '/authority/aqi-forecast'"), 'Authority forecast should stay integrated in the single AQI overview');
+assert(layout.includes("to: '/authority/aqi-forecast'"), 'Authority sidebar must expose the AQI Forecast page');
 const airQualityPage = read('src/pages/citizen/AirQualityPage.jsx');
 assert(airQualityPage.includes('air-aqi-outlook') && airQualityPage.includes('AirQualityTrend'), 'Citizen AQI page must combine current readings and the 24-hour outlook');
 assert(citizenLayout.includes("to: '/citizen/aqi-forecast'") && citizenLayout.includes("label: 'AQI forecast'"), 'Citizen navigation must expose a dedicated AQI forecast destination');
@@ -140,7 +150,7 @@ assert(airQualityPage.includes('forecastAverage') && airQualityPage.includes('fo
 const signalUi = read('src/pages/authority/SignalPlansPage.jsx');
 const signalApi = fs.readFileSync(path.join(root, '../backend/app/api/signals.py'), 'utf8');
 const signalService = fs.readFileSync(path.join(root, '../backend/app/services/signal_planning.py'), 'utf8');
-assert(signalUi.includes('Signal plans') && signalApi.includes('/signals/plans') && signalService.includes('generate_recommendation'), 'Signal plan UI, API routes and planning service must remain in the release');
+assert(signalUi.includes('AVAILABLE PLANS') && signalUi.includes('simulateSelected') && signalApi.includes('/signals/plans') && signalService.includes('generate_recommendation'), 'Digital Twin signal-plan UI, API routes and planning service must remain in the release');
 console.log('✓ Signal planning source files retained');
 console.log('✓ Live-first loading, error-only fallback, route sorting, AQI provenance and workflow navigation verified');
 

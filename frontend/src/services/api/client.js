@@ -7,7 +7,9 @@ const ATTEMPT_TIMEOUT_MS = 9_000;
 
 async function waitForFallbackGrace(startedAt, graceMs = FALLBACK_GRACE_MS) {
   const remaining = graceMs - (Date.now() - startedAt);
-  if (remaining > 0) await new Promise((resolve) => globalThis.setTimeout(resolve, remaining));
+  // Add a small clock-resolution margin so integer-millisecond Date.now()
+  // rounding cannot release a cached response just before the full grace window.
+  if (remaining > 0) await new Promise((resolve) => globalThis.setTimeout(resolve, remaining + 2));
 }
 
 export const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || DEFAULT_API_URL).replace(/\/$/, '');

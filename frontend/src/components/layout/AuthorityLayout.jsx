@@ -1,34 +1,37 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Activity, Bell, Bot, Camera, ChevronRight, House, Menu, Moon, RadioTower, Sun, Wind, Route } from 'lucide-react';
+import { Activity, Bell, Camera, ChevronRight, House, Leaf, Menu, Moon, RadioTower, Sun, Wind, Network } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 import FloatingAgentWidget from '../shared/FloatingAgentWidget.jsx';
 import DataStatusBanner from '../shared/DataStatusBanner.jsx';
 
 const navGroups = [
-  { label: 'OVERVIEW', items: [
-    { label: 'City overview', to: '/authority/control', icon: Activity },
+  { label: 'TRAFFIC', items: [
+    { label: 'Traffic Lab', to: '/authority/traffic-lab', icon: Camera },
+    { label: 'Traffic Simulation', to: '/authority/traffic-simulation', icon: Activity },
+    { label: 'Digital Twin', to: '/authority/digital-twin', icon: Network },
   ]},
   { label: 'AIR QUALITY', items: [
-    { label: 'AQI overview', to: '/authority/air-intelligence', icon: Wind },
+    { label: 'AQI Forecast', to: '/authority/aqi-forecast', icon: Wind },
+    { label: 'CO₂ Emissions', to: '/authority/carbon', icon: Leaf },
+  ]},
+  { label: 'OVERVIEW', items: [
+    { label: 'City overview', to: '/authority/control', icon: Activity },
   ]},
   { label: 'FIELD NETWORK', items: [
     { label: 'IoT sensor network', to: '/authority/iot', icon: RadioTower },
   ]},
-  { label: 'TRAFFIC', items: [
-    { label: 'Camera system', to: '/authority/traffic-lab', icon: Camera },
-    { label: 'Traffic agent', to: '/authority/traffic-agent', icon: Bot },
-    { label: 'Traffic simulation', to: '/authority/traffic-simulation', icon: Route },
-  ]},
 ];
 const meta = {
   '/authority/control': ['Overview', 'City overview'],
-  '/authority/traffic-lab': ['Traffic', 'Camera system'],
+  '/authority/traffic-lab': ['Traffic', 'Traffic Lab'],
   '/authority/traffic-agent': ['Traffic', 'Traffic agent'],
+  '/authority/digital-twin': ['Traffic', 'Digital Twin'],
   '/authority/air-intelligence': ['Air quality', 'AQI overview'],
-  '/authority/aqi-forecast': ['Air quality', 'AQI forecasting'],
-  '/authority/traffic-simulation': ['Traffic', '60-minute traffic simulation'],
+  '/authority/aqi-forecast': ['Air quality', 'AQI Forecast'],
+  '/authority/traffic-simulation': ['Traffic', 'Traffic Simulation'],
+  '/authority/carbon': ['Air quality', 'CO₂ Emissions'],
   '/authority/iot': ['Field network', 'IoT sensor network'],
   '/authority/analytics': ['Insights', 'City analytics'],
   '/authority/sources': ['Manage', 'Data sources'],
@@ -51,7 +54,7 @@ export default function AuthorityLayout() {
           <Icon size={17} strokeWidth={1.8} /><span>{label}</span>
         </NavLink>)}
       </section>)}</nav>
-      <div className="sidebar-monitor-note"><span className="sidebar-monitor-icon"><Wind size={16}/></span><div><b>City monitoring</b><small>Air quality · field network · traffic</small></div></div>
+      <div className="sidebar-monitor-note"><span className="sidebar-monitor-icon"><Wind size={16}/></span><div><b>City monitoring</b><small>Traffic · air quality · field network</small></div></div>
       <div className="profile"><div className="avatar">US</div><div><b>UrbanSaarthi</b><small>Air quality & traffic operations</small></div><ChevronRight size={17}/></div>
       <button className="switch" onClick={() => navigate('/')}>← Switch portal</button>
     </aside>

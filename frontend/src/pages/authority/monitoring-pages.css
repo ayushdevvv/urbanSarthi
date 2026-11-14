@@ -73,3 +73,50 @@
 @media(max-width:800px){.aqi-forecast-summary{padding:11px 13px 3px}.aqi-forecast-chart{padding:10px 13px}.aqi-forecast-footnote{padding:0 13px 12px}.aqi-forecast-chart svg{height:160px}}
 @media(max-width:560px){.aqi-forecast-panel .monitor-panel-heading{flex-direction:column}.forecast-panel-actions{width:100%;justify-content:space-between}.aqi-forecast-summary{grid-template-columns:1fr 1fr;gap:7px}.aqi-forecast-summary article:last-child{grid-column:1/-1}.aqi-forecast-summary article>strong{font-size:20px}.aqi-forecast-chart-meta{align-items:flex-start;flex-direction:column}.aqi-forecast-chart svg{height:145px}.air-overview-page .monitor-panel-heading h3{font-size:15px}}
 .aqi-forecast-summary .forecast-direction.unavailable>strong{color:#849184}
+
+/* Premium operational finish: retain the existing forest / sage palette. */
+.monitor-page .monitor-panel,
+.monitor-page .monitor-kpi,
+.monitor-page .aqi-command-hero,
+.monitor-page .carbon-hero {
+  box-shadow: 0 12px 32px rgba(25, 61, 48, .055);
+}
+.monitor-page .monitor-panel { border-radius: 16px; border-color: #e2e9df; }
+.monitor-page .monitor-panel-heading { padding: 17px 19px; }
+.monitor-page .monitor-panel-heading h3 { letter-spacing: -.35px; }
+.monitor-page .monitor-kpi { border-radius: 15px; transition: transform .18s ease, box-shadow .18s ease; }
+.monitor-page .monitor-kpi:hover { transform: translateY(-2px); box-shadow: 0 15px 30px rgba(25, 61, 48, .085); }
+.monitor-page .monitor-seed-notice,
+.monitor-page .carbon-seed-note {
+  display: flex; align-items: flex-start; gap: 10px; padding: 12px 15px; margin: 0 0 14px;
+  border: 1px solid #dce7ce; border-radius: 12px; background: linear-gradient(110deg, #f3f8eb, #fbfcf8);
+  color: #506747; font-size: 11px; line-height: 1.6;
+}
+.monitor-page .monitor-seed-notice svg,
+.monitor-page .carbon-seed-note svg { flex: 0 0 auto; margin-top: 1px; color: #6c9149; }
+.monitor-page .carbon-seed-note { margin: 0 13px 12px; border-radius: 10px; padding: 10px 12px; }
+.monitor-page .carbon-calculation-source { padding: 11px 15px; margin-bottom: 0; }
+.monitor-page .aqi-forecast-panel .aqi-forecast-chart { border-radius: 12px; }
+.monitor-page .station-row,
+.monitor-page .hotspot-row { transition: background .16s ease; }
+.monitor-page .station-row:hover,
+.monitor-page .hotspot-row:hover { background: #f7faf4; }
+.monitor-page .area-select-wrap:focus-within { outline: 3px solid rgba(126, 171, 82, .22); outline-offset: 2px; }
+.digital-twin-page .signals-grid { align-items: stretch; gap: 16px; }
+.digital-twin-page .plan-list,
+.digital-twin-page .preview { border-radius: 16px; border-color: #e1e8de; box-shadow: 0 12px 30px rgba(25, 61, 48, .055); }
+.digital-twin-page .plan { min-height: 74px; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+.digital-twin-page .plan:hover { transform: translateY(-1px); }
+.digital-twin-page .plan.selected { border-color: #8eaf6d; box-shadow: inset 3px 0 #77a34e; }
+.digital-twin-page .scenario-notice { line-height: 1.55; border-color: #dce7ce; background: #f4f8ee; color: #536b48; }
+.digital-twin-page .plan-source-note,
+.digital-twin-page .api-note { line-height: 1.6; }
+@media (max-width: 700px) {
+  .digital-twin-page .signals-grid { grid-template-columns: minmax(0, 1fr); }
+  .digital-twin-page .plan-list,
+  .digital-twin-page .preview { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .monitor-page .monitor-kpi,
+  .digital-twin-page .plan { transition: none; }
+}

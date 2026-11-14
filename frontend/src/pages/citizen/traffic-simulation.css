@@ -68,3 +68,15 @@
 .traffic-crowd-legend .crowd-heavy{background:#dc514d}.traffic-crowd-legend .crowd-slow{background:#e5a13a}.traffic-crowd-legend .crowd-moving{background:#46a878}.traffic-crowd-legend small{margin-left:auto}
 .traffic-scenario-page .traffic-info-heading p{line-height:1.5}
 @media(max-width:560px){.traffic-crowd-legend{gap:9px;padding:10px 12px}.traffic-crowd-legend small{flex-basis:100%;margin-left:0}}
+
+/* Authority simulation refinement, sharing the workspace's premium sage/forest finish. */
+.traffic-admin-location-panel,
+.traffic-scenario-page .traffic-scenario-hero,
+.traffic-scenario-page .traffic-road-list,
+.traffic-scenario-page .traffic-sim-scene { border-radius: 17px; box-shadow: 0 12px 32px rgba(25, 61, 48, .055); }
+.traffic-scenario-page .traffic-scenario-hero { border-color: #dfe8d9; }
+.traffic-scenario-page .traffic-trained-label { border: 1px solid #dce8d1; border-radius: 999px; padding: 8px 11px; }
+.traffic-scenario-page .traffic-reference-note { border: 1px solid #dce7ce; background: #f3f8eb; color: #566d4b; border-radius: 11px; padding: 11px 13px; line-height: 1.65; }
+.traffic-scenario-page .traffic-playback { border-top: 1px solid var(--border,#e1e7db); padding-top: 15px; }
+.traffic-scenario-page .traffic-scenario-kpis>div { border: 1px solid var(--border,#e1e7db); border-radius: 12px; background: rgba(255,255,255,.5); }
+@media(max-width:580px){.traffic-scenario-page .traffic-scenario-kpis>div{background:var(--surface,#fff)}}

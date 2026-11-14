@@ -1,41 +1,11 @@
-# UrbanSaarthi API — preserve the existing native Python Render service.
-# This Blueprint targets the existing service by name; it does not create a second API.
 services:
   - type: web
-    name: urbansarthi
+    name: urbansaarthi-api
     runtime: python
-    rootDir: ./backend
+    rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: "sh scripts/start.sh"
+    startCommand: sh scripts/start.sh
     healthCheckPath: /healthz
     envVars:
-      - key: APP_ENV
-        value: production
       - key: PYTHON_VERSION
-        value: "3.12.16"
-      - key: DATABASE_URL
-        sync: false
-      - key: CORS_ORIGINS
-        value: https://urbansarthi.vercel.app
-      - key: INGESTION_API_KEY
-        sync: false
-      - key: TOMTOM_API_KEY
-        sync: false
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GOOGLE_AI_PRIMARY_MODEL
-        value: gemini-3.8-flash
-      - key: GOOGLE_AI_FALLBACK_MODEL
-        value: gemma-4-26b-a4b-it
-      - key: GOOGLE_AI_TIMEOUT_SECONDS
-        value: "16"
-      - key: OPENAQ_API_KEY
-        sync: false
-      - key: WEATHER_API_KEY
-        sync: false
-      - key: OSRM_BASE_URL
-        sync: false
-      - key: MODEL_PATH
-        sync: false
-      - key: TRAFFIC_MODEL_PATH
-        sync: false
+        value: 3.12.10

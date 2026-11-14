@@ -20,11 +20,11 @@ function makeIllustrativeTrafficReport(mode = 'video', confidence = 0.3) {
     model: 'Illustrative traffic scenario',
     preview_only: true,
     source_filename: 'Example junction scenario',
-    video: { sampled_frames: 12, duration_seconds: 45, sampling_interval_seconds: 4 },
+    video: mode === 'video' ? { sampled_frames: 12, duration_seconds: 45, sampling_interval_seconds: 4 } : { sampled_frames: 1, duration_seconds: 0, sampling_interval_seconds: 1 },
     counts: { car: 26, bus: 3, motorbike: 18, bicycle: 2, truck: 4 },
     total_vehicles: 53,
-    peak_vehicles_in_frame: 53,
-    mean_vehicles_per_sampled_frame: 4.4,
+    peak_vehicles_in_frame: mode === 'video' ? 14 : 53,
+    mean_vehicles_per_sampled_frame: mode === 'video' ? 4.4 : 53,
     congestion_estimate: 'Moderate',
     congestion_score_heuristic: 58,
     tracking_ids_available: false,
@@ -72,9 +72,8 @@ export default function TrafficVisionPage() {
   const [reportRestored, setReportRestored] = useState(Boolean(initialReportSnapshot?.value));
   const [reportSavedAt, setReportSavedAt] = useState(initialReportSnapshot?.savedAt || null);
   const [systemStatus, setSystemStatus] = useState(null);
-  const [previewReport, setPreviewReport] = useState(null);
-  const [previewFallbackStartedAt, setPreviewFallbackStartedAt] = useState(Date.now());
   const [confidence, setConfidence] = useState(0.3);
+  const [previewReport, setPreviewReport] = useState(() => initialReportSnapshot?.value ? null : makeIllustrativeTrafficReport(mode, 0.3));
   const [sampleEvery, setSampleEvery] = useState('1');
   const [segmentDistanceKm, setSegmentDistanceKm] = useState('0.5');
   const [approachRoisJson, setApproachRoisJson] = useState('');
@@ -94,16 +93,6 @@ export default function TrafficVisionPage() {
 
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
-  // Keep the scene report area populated after the 40-second service grace period.
-  // This local example is never persisted or handed to the Traffic Agent.
-  useEffect(() => {
-    if (report || previewReport) return undefined;
-    const timeout = globalThis.setTimeout(() => {
-      setPreviewReport((current) => current || makeIllustrativeTrafficReport(mode, confidence));
-    }, 40000);
-    return () => globalThis.clearTimeout(timeout);
-  }, [report, previewReport, mode, confidence, previewFallbackStartedAt]);
-
   const visibleReport = report || previewReport;
   const vehicleTotal = visibleReport?.tracking_ids_available ? (visibleReport?.total_vehicles ?? 0) : (visibleReport?.peak_vehicles_in_frame ?? visibleReport?.total_vehicles ?? 0);
   const countEntries = Object.entries(CLASS_LABELS).filter(([key]) => visibleReport?.counts && key in visibleReport.counts);
@@ -119,8 +108,7 @@ export default function TrafficVisionPage() {
     if (nextFile.size > maxSize) { setError(`This file exceeds the ${mode === 'video' ? '150 MB' : '8 MB'} upload limit.`); return; }
     setFile(nextFile);
     setPreviewUrl(URL.createObjectURL(nextFile));
-    setPreviewReport(null);
-    setPreviewFallbackStartedAt(Date.now());
+    setPreviewReport(makeIllustrativeTrafficReport(mode, confidence));
     if (report) setReportRestored(true);
     setError('');
   }
@@ -128,8 +116,7 @@ export default function TrafficVisionPage() {
   function switchMode(nextMode) {
     setMode(nextMode);
     setFile(null);
-    setPreviewReport(null);
-    setPreviewFallbackStartedAt(Date.now());
+    setPreviewReport(makeIllustrativeTrafficReport(nextMode, confidence));
     if (report) setReportRestored(true);
     setError('');
     setPreviewUrl((old) => { if (old) URL.revokeObjectURL(old); return ''; });
@@ -137,7 +124,8 @@ export default function TrafficVisionPage() {
 
   async function analyzeScene() {
     if (!file) { setError(`Upload a ${mode === 'video' ? 'traffic video' : 'road image'} first.`); return; }
-    setBusy(true); setError(''); setPreviewReport(null); setPreviewFallbackStartedAt(Date.now());
+    setBusy(true); setError('');
+    if (!report) setPreviewReport(makeIllustrativeTrafficReport(mode, confidence));
     try {
       const body = new FormData();
       body.append('file', file);
@@ -155,6 +143,7 @@ export default function TrafficVisionPage() {
       const data = await api.postForm(endpoint, body, { timeoutMs: 40000 });
       const analyzedReport = { ...data, mode, source_filename: file.name, segment_distance_km: Number(segmentDistanceKm) || 0.5, saved_at: new Date().toISOString() };
       setReport(analyzedReport);
+      setPreviewReport(null);
       setReportRestored(false);
       setReportSavedAt(Date.now());
       // Keep compact evidence in browser storage; annotated base64 frames can be several MB.
@@ -173,8 +162,9 @@ export default function TrafficVisionPage() {
     } catch (e) {
       if (report) setReportRestored(true);
       const availabilityFailure = e?.status === 0 || e?.status >= 500 || /timed out|could not be reached|refresh/i.test(e?.message || '');
-      // The 40-second page-level grace period will reveal a local illustrative
-      // scenario when no prior YOLO report exists. Never present it as a detection.
+      // Keep the clearly labelled local example visible when no real detection
+      // report exists. It is never persisted or passed to the Traffic Agent.
+      if (!report) setPreviewReport((current) => current || makeIllustrativeTrafficReport(mode, confidence));
       setError(e.message || (availabilityFailure ? 'The vision service is taking longer than expected.' : 'The vision pipeline failed. Check the API and model status.'));
     } finally { setBusy(false); }
   }

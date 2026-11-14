@@ -114,12 +114,12 @@ export default function TrafficSimulationScene({ roads = [], frame, scenario = '
           const groups = [[346,143],[620,143],[347,378],[624,378]]; const group = groups[i % groups.length]; const local = Math.floor(i / groups.length);
           return <Person key={`person-${i}`} x={group[0] + (local % 4) * 10} y={group[1] + Math.floor(local / 4) * 11} scale={.78}/>;
         })}
-        <g><rect x="22" y="458" width="210" height="35" rx="9" fill="#f8fbf5" stroke="#bdcbb9"/><text x="35" y="472" fontSize="9" fill="#5a6d61">PEDESTRIANS WAITING</text><text x="35" y="486" fontSize="14" fontWeight="900" fill="#243e32">{pedestrianCount} people</text></g>
+        <g><rect x="22" y="458" width="210" height="35" rx="9" fill="#f8fbf5" stroke="#bdcbb9"/><text x="35" y="472" fontSize="9" fill="#5a6d61">PEDESTRIAN MARKERS</text><text x="35" y="486" fontSize="14" fontWeight="900" fill="#243e32">{pedestrianCount} visual markers</text></g>
         <g><rect x="745" y="458" width="210" height="35" rx="9" fill="#f8fbf5" stroke="#bdcbb9"/><text x="758" y="472" fontSize="9" fill="#5a6d61">QUEUED VEHICLES</text><text x="758" y="486" fontSize="14" fontWeight="900" fill="#243e32">{Number(frame?.queue_total || 0).toLocaleString('en-IN')}</text></g>
       </svg>
     </div>
     <div className="traffic-sim-scene-footer">
-      <div className="traffic-sim-signal-summary"><span className={active === 'NS' ? 'go' : 'stop'}><i/>{active === 'NS' ? 'N/S GREEN' : 'N/S RED'}</span><span className={active === 'EW' ? 'go' : 'stop'}><i/>{active === 'EW' ? 'E/W GREEN' : 'E/W RED'}</span><small>Illustrative signal phase</small></div>
+      <div className="traffic-sim-signal-summary"><span className={active === 'NS' ? 'go' : 'stop'}><i/>{active === 'NS' ? 'N/S GREEN' : 'N/S RED'}</span><span className={active === 'EW' ? 'go' : 'stop'}><i/>{active === 'EW' ? 'E/W GREEN' : 'E/W RED'}</span><small>Vehicle and pedestrian marks are visual proxies, not detections</small></div>
       <div className="traffic-sim-road-key"><span><i className="light-road"/> Road network</span><span><i className="light-car"/> Vehicles</span><span><i className="light-person"/> Pedestrian zones</span></div>
     </div>
   </section>;
