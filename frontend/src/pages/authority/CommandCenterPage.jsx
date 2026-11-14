@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Activity, AirVent, AlertTriangle, Cloud, MapPin, Navigation, RefreshCw } from 'lucide-react';
 import PageIntro from '../../components/shared/PageIntro.jsx';
+import WorkspaceDataState from '../../components/shared/WorkspaceDataState.jsx';
 import { EmptyState } from '../../components/shared/Toast.jsx';
 import CityMap from '../../components/maps/CityMap.jsx';
 import useApiResource from '../../hooks/useApiResource.js';
@@ -49,6 +50,7 @@ export default function CommandCenterPage() {
 
   return <>
     <PageIntro eyebrow="INTEGRATED COMMAND & CONTROL CENTRE" title="Authority operations" description="Your integrated command centre for traffic, air quality, junctions and citywide mobility." action={<button className="live-pill" onClick={reload}><i/>{loading ? 'Refreshing…' : 'Refresh overview'} <RefreshCw size={13}/></button>} />
+    <WorkspaceDataState loading={loading && !fallbackReady} fallback={previewMode} title="Loading city overview" detail="Checking the latest traffic, junction and air-quality information." fallbackTitle="City overview sample is active" fallbackDetail="Illustrative reference values are shown while live city data is unavailable. A successful response will replace them automatically."/>
     {!overview ? <section className="panel us-connection-card" aria-live="polite">
       <div className="us-connection-icon"><Activity size={22}/></div>
       <h3>{loading ? 'Connecting to city services' : 'City overview is temporarily unavailable'}</h3>

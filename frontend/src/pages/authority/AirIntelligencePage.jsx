@@ -358,7 +358,7 @@ export default function AirIntelligencePage() {
         <div className="ai-plan-head"><div><span className="ai-kicker">CANDIDATE PLAN #{plan.id}</span><h4>{plan.cycle_seconds}s adaptive cycle</h4></div><span className={`ai-status-pill ${plan.projected_outcomes?.optimized ? 'optimized' : 'fallback'}`}>{plan.projected_outcomes?.optimized ? 'EMISSIONS-AWARE DRAFT' : 'EQUAL-SPLIT FALLBACK'}</span></div>
         <p>{plan.rationale}</p>
         <div className="ai-phase-bars">{plan.phases?.map((phase) => <div key={phase.movement || phase.name}><div><b>{MOVEMENT_LABELS[phase.movement] || phase.name}</b><span>{phase.green_seconds}s green</span></div><div className="ai-phase-track"><i style={{ width: `${Math.min(100, phase.green_seconds / Math.max(1, plan.cycle_seconds) * 100)}%` }}/></div><small>{phase.yellow_seconds}s yellow · {phase.all_red_seconds}s all-red</small></div>)}</div>
-        <div className="ai-plan-actions"><span><ShieldCheck size={15}/> Draft saved. Review and approve it in Signal Plans.</span><button className="ai-primary-button" onClick={comparePlan} disabled={compareBusy}>{compareBusy ? <><LoaderCircle size={15} className="ai-spin"/> Running SUMO…</> : <><Activity size={15}/> Compare baseline vs intervention</>}</button></div>
+        <div className="ai-plan-actions"><span><ShieldCheck size={15}/> Draft saved. Review and approve it in Digital Twin.</span><button className="ai-primary-button" onClick={comparePlan} disabled={compareBusy}>{compareBusy ? <><LoaderCircle size={15} className="ai-spin"/> Running SUMO…</> : <><Activity size={15}/> Compare baseline vs intervention</>}</button></div>
       </div>}
       {message && <div className="ai-inline-error"><AlertTriangle size={15}/>{message}</div>}
     </section>

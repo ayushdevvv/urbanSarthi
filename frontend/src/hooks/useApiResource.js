@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const PREVIEW_DELAY_MS = 40_000;
-const isAvailabilityFailure = (error) => !error?.status || error.status >= 500 || error.status === 408 || error.status === 429;
+const PREVIEW_DELAY_MS = 5_000;
 
 /**
- * Race-safe resource loader shared by dashboard pages.
- * Live responses always win. A page may opt into an illustrative local preview
- * only after an availability failure has persisted for the 40-second grace period.
+ * Live-first resource loader with a five-second seeded-preview handoff.
+ * If the API is still pending or fails, the caller can show its local sample.
+ * A later successful response always replaces that sample automatically.
  */
 export default function useApiResource(loader, dependencies = []) {
   const [data, setData] = useState(null);
@@ -15,8 +14,6 @@ export default function useApiResource(loader, dependencies = []) {
   const [fallbackReady, setFallbackReady] = useState(false);
   const requestId = useRef(0);
   const fallbackTimer = useRef(null);
-  const requestStartedAt = useRef(0);
-  const fallbackEligible = useRef(false);
 
   const clearFallbackTimer = () => {
     if (fallbackTimer.current) window.clearTimeout(fallbackTimer.current);
@@ -25,11 +22,9 @@ export default function useApiResource(loader, dependencies = []) {
 
   const armFallbackTimer = (id) => {
     clearFallbackTimer();
-    requestStartedAt.current = Date.now();
-    fallbackEligible.current = false;
     setFallbackReady(false);
     fallbackTimer.current = window.setTimeout(() => {
-      if (requestId.current === id && fallbackEligible.current) setFallbackReady(true);
+      if (requestId.current === id) setFallbackReady(true);
     }, PREVIEW_DELAY_MS);
   };
 
@@ -43,16 +38,13 @@ export default function useApiResource(loader, dependencies = []) {
       if (requestId.current === currentId) {
         setData(value);
         setFallbackReady(false);
-        fallbackEligible.current = false;
         clearFallbackTimer();
       }
       return value;
     } catch (err) {
-      if (requestId.current === currentId) {
-        setError(err?.message || 'Unable to load data');
-        fallbackEligible.current = isAvailabilityFailure(err);
-        if (fallbackEligible.current && Date.now() - requestStartedAt.current >= PREVIEW_DELAY_MS) setFallbackReady(true);
-      }
+      if (requestId.current === currentId) setError(err?.message || 'Unable to load data');
+      // Keep the five-second timer armed. The local preview remains available
+      // even if the request is still pending or has already failed.
       return null;
     } finally {
       if (requestId.current === currentId) setLoading(false);
@@ -72,16 +64,11 @@ export default function useApiResource(loader, dependencies = []) {
         if (active && requestId.current === currentId) {
           setData(value);
           setFallbackReady(false);
-          fallbackEligible.current = false;
           clearFallbackTimer();
         }
       })
       .catch((err) => {
-        if (active && requestId.current === currentId) {
-          setError(err?.message || 'Unable to load data');
-          fallbackEligible.current = isAvailabilityFailure(err);
-          if (fallbackEligible.current && Date.now() - requestStartedAt.current >= PREVIEW_DELAY_MS) setFallbackReady(true);
-        }
+        if (active && requestId.current === currentId) setError(err?.message || 'Unable to load data');
       })
       .finally(() => {
         if (active && requestId.current === currentId) setLoading(false);

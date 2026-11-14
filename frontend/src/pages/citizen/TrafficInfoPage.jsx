@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, AlertTriangle, CarFront, Clock3, Gauge, LocateFixed, MapPin, Pause, Play, RefreshCw, Route, Search, ShieldCheck, TrendingUp } from 'lucide-react';
 import PageIntro from '../../components/shared/PageIntro.jsx';
+import WorkspaceDataState from '../../components/shared/WorkspaceDataState.jsx';
 import TrafficSimulationScene from '../authority/TrafficSimulationScene.jsx';
 import trafficSimulationSeed from '../../data/trafficSimulationSeed.json';
 import CityMap from '../../components/maps/CityMap.jsx';
@@ -99,7 +100,8 @@ export default function TrafficInfoPage({ adminMode = false }) {
   const [provider, setProvider] = useState(null);
   const [scenario, setScenario] = useState(savedScenario);
   const [scenarioData, setScenarioData] = useState(() => buildReferenceScenario(trafficSimulationSeed, savedScenario()));
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [fallbackReady, setFallbackReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [frameIndex, setFrameIndex] = useState(0);
   const [error, setError] = useState('');
@@ -120,6 +122,7 @@ export default function TrafficInfoPage({ adminMode = false }) {
   const [searchBusy, setSearchBusy] = useState(false);
   const timerRef = useRef(null);
   const suggestTimer = useRef(null);
+  const fallbackTimer = useRef(null);
 
   const publishScenario = useCallback((next) => {
     setScenario(next);
@@ -150,6 +153,9 @@ export default function TrafficInfoPage({ adminMode = false }) {
     // This avoids blanking the workspace during a cold start or provider outage.
     setFrameIndex(0); setPlaying(false);
     setLoading(true); setError('');
+    setFallbackReady(false);
+    if (fallbackTimer.current) window.clearTimeout(fallbackTimer.current);
+    fallbackTimer.current = window.setTimeout(() => setFallbackReady(true), 5000);
     const params = new URLSearchParams({ minutes: '60', step_minutes: '5', scenario: overrideScenario });
     const scenarioPath = `/traffic/simulation/scenario?${params.toString()}`;
     try {
@@ -162,7 +168,9 @@ export default function TrafficInfoPage({ adminMode = false }) {
       }
       const snapshot = readApiSnapshot(scenarioPath);
       setProvider(current?.flow ? current : null);
-      setScenarioData(timeline); setFrameIndex(0); setPlaying(false); setLastUpdated(new Date(snapshot?.savedAt || Date.now()).toISOString());
+      setScenarioData(timeline); setFallbackReady(false);
+      if (fallbackTimer.current) window.clearTimeout(fallbackTimer.current);
+      setFrameIndex(0); setPlaying(false); setLastUpdated(new Date(snapshot?.savedAt || Date.now()).toISOString());
       if (snapshot) saveLocalRecord(`traffic-simulation:${overrideScenario}`, timeline, snapshot.savedAt);
       if (current?.flow == null) setError('No location-specific live speed feed is configured for this point. The network scenario is shown separately.');
     } catch (err) {
@@ -170,11 +178,14 @@ export default function TrafficInfoPage({ adminMode = false }) {
       const isServiceFailure = !err?.status || err.status >= 500 || err.status === 408 || err.status === 429;
       const saved = isServiceFailure ? readLocalRecord(`traffic-simulation:${overrideScenario}`) : null;
       if (saved?.value?.timeline?.length) {
-        setScenarioData(saved.value); setFrameIndex(0); setPlaying(false);
+        setScenarioData(saved.value); setFallbackReady(true);
+        if (fallbackTimer.current) window.clearTimeout(fallbackTimer.current); setFrameIndex(0); setPlaying(false);
         setLastUpdated(new Date(saved.savedAt).toISOString());
         publishDataStatus({ type: 'snapshot', path: `traffic-simulation:${overrideScenario}`, cachedAt: saved.savedAt, reason: 'Restored the last successful scenario saved in this browser.' }, createDataStatusContext(statusRoutePath));
       } else {
         setScenarioData(buildReferenceScenario(trafficSimulationSeed, overrideScenario));
+        setFallbackReady(true);
+        if (fallbackTimer.current) window.clearTimeout(fallbackTimer.current);
         setLastUpdated(null);
         setError(`${err?.message || 'The simulation service is unavailable.'} Showing the bundled reference scenario instead.`);
       }
@@ -196,7 +207,7 @@ export default function TrafficInfoPage({ adminMode = false }) {
     return () => window.clearInterval(timerRef.current);
   }, [playing, adminMode, scenarioData]);
 
-  useEffect(() => () => { window.clearTimeout(suggestTimer.current); window.clearInterval(timerRef.current); }, []);
+  useEffect(() => () => { window.clearTimeout(suggestTimer.current); window.clearInterval(timerRef.current); if (fallbackTimer.current) window.clearTimeout(fallbackTimer.current); }, []);
 
   const requestSuggestions = (field, query) => {
     window.clearTimeout(suggestTimer.current);
@@ -324,6 +335,7 @@ export default function TrafficInfoPage({ adminMode = false }) {
 
   return <div className="traffic-info-page traffic-scenario-page">
     <PageIntro eyebrow={adminMode ? 'NETWORK OPERATIONS' : 'YOUR LOCAL ROAD CONDITIONS'} title={adminMode ? 'Traffic Simulation' : 'Traffic & road conditions'} description={adminMode ? 'Choose an area, set a signal scenario, and play through a 60-minute traffic simulation.' : 'Search a location or journey to compare route options and inspect available traffic-flow readings along the way.'} action={<button className="utility" onClick={() => refresh()} disabled={loading}><RefreshCw size={14}/>{loading ? 'Updating…' : 'Refresh outlook'}</button>} />
+    <WorkspaceDataState loading={loading && !fallbackReady} fallback={fallbackReady && scenarioData?.mode === 'reference'} title="Preparing traffic simulation" detail="Loading the latest road activity. The bundled scenario remains available while this connects." fallbackTitle="Traffic simulation sample is active" fallbackDetail="The reference scenario is ready to explore. The latest available network response will replace it automatically."/>
 
     {adminMode ? <section className="panel traffic-location-panel traffic-admin-location-panel"><div className="traffic-info-heading"><span className="traffic-info-icon"><Activity size={18}/></span><div><h3>Simulation area</h3><p>Enter a place or use your current location, then run the 60-minute playback.</p></div></div>
       <form className="traffic-coordinate-form traffic-place-form traffic-admin-place-form" onSubmit={searchRoadActivity}><label>Enter a location<input list="traffic-admin-location-suggestions" value={locationQuery} onChange={(e) => { setLocationQuery(e.target.value); requestSuggestions('location', e.target.value); }} placeholder="City, neighbourhood, road, or junction" autoComplete="off"/><datalist id="traffic-admin-location-suggestions">{suggestions.location.map((place) => <option key={place.place_id || place.label} value={place.label}/>)}</datalist></label><button className="secondary" type="button" onClick={useCurrentLocation} disabled={searchBusy}><LocateFixed size={15}/>{searchBusy ? 'Finding…' : 'Use my location'}</button><label>Traffic scenario<select value={scenario} onChange={(e) => publishScenario(e.target.value)}><option value="baseline">Balanced flow</option><option value="demand_surge">High demand</option><option value="signal_priority">Signal priority</option></select></label><button className="primary" type="submit" disabled={loading || searchBusy}><Activity size={15}/>{loading || searchBusy ? 'Preparing…' : 'Run 60-minute simulation'}</button></form>

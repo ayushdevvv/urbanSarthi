@@ -1,0 +1,297 @@
+/* Shared polish: type, cards and clear data states follow the existing theme tokens. */
+.workspace-data-state {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 76px;
+  margin: 0 0 16px;
+  padding: 14px 17px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: linear-gradient(112deg, var(--surface), var(--surface2));
+  color: var(--text);
+  box-shadow: 0 8px 26px rgba(18, 54, 42, .055);
+}
+.workspace-data-state-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  color: #5d8b48;
+  background: var(--surface2);
+}
+.workspace-data-state.is-loading .workspace-data-state-icon svg { animation: workspace-spin 1.15s linear infinite; }
+.workspace-data-state-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
+.workspace-data-state-copy b { font-size: 14px; line-height: 1.35; font-weight: 750; color: var(--text); }
+.workspace-data-state-copy small { font-size: 12px; line-height: 1.55; color: var(--muted); }
+.workspace-data-state-pulse { display: inline-flex; align-items: center; gap: 4px; padding: 0 3px; }
+.workspace-data-state-pulse i { width: 5px; height: 5px; border-radius: 50%; background: #83a95a; animation: workspace-pulse 1s ease-in-out infinite; }
+.workspace-data-state-pulse i:nth-child(2) { animation-delay: .16s; }
+.workspace-data-state-pulse i:nth-child(3) { animation-delay: .32s; }
+.workspace-data-state-tag { flex: 0 0 auto; border: 1px solid var(--border); border-radius: 999px; padding: 6px 9px; color: var(--muted); background: var(--surface); font-size: 9px; font-weight: 800; letter-spacing: .8px; }
+@keyframes workspace-spin { to { transform: rotate(360deg); } }
+@keyframes workspace-pulse { 0%, 80%, 100% { opacity: .35; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-4px); } }
+
+.workspace-error-fallback {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 8px 0 20px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 12px 34px rgba(15, 49, 38, .07);
+}
+.workspace-error-icon { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 42px; border-radius: 13px; background: var(--surface2); color: #b47c42; }
+.workspace-error-fallback>div { flex: 1; min-width: 0; }
+.workspace-error-fallback b { font-size: 15px; }
+.workspace-error-fallback p { margin: 5px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.workspace-error-fallback button { display: inline-flex; align-items: center; gap: 7px; padding: 10px 13px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface2); color: var(--text); font-size: 12px; font-weight: 750; }
+
+/* Larger, calmer typography and card rhythm for the authority workspaces. */
+.authority-app .content { font-size: 14px; }
+.authority-app .content .intro h2,
+.authority-app .content .page-intro h2 { font-size: clamp(26px, 2.4vw, 34px); letter-spacing: -.8px; }
+.authority-app .content .intro p,
+.authority-app .content .page-intro p { font-size: 14px; line-height: 1.65; }
+.authority-app .content .monitor-panel,
+.authority-app .content .panel,
+.authority-app .content .traffic-scenario-hero,
+.authority-app .content .carbon-hero,
+.authority-app .content .pollutant-card {
+  border-radius: 17px;
+  box-shadow: 0 8px 28px rgba(16, 49, 37, .045);
+}
+.authority-app .content .monitor-panel-heading h3,
+.authority-app .content .panel-head h3,
+.authority-app .content .traffic-info-heading h3 { font-size: 18px; }
+.authority-app .content .monitor-panel-heading p,
+.authority-app .content .panel-head p,
+.authority-app .content .traffic-info-heading p { font-size: 13px; line-height: 1.55; }
+.authority-app .content .monitor-kpi strong,
+.authority-app .content .metric-card>b { font-size: 25px; letter-spacing: -.7px; }
+.authority-app .content .metric-card,
+.authority-app .content .monitor-panel { padding: 18px; }
+.authority-app .content .page-intro,
+.authority-app .content .intro { margin-bottom: 18px; }
+.authority-app .content .monitor-kicker,
+.authority-app .content .eyebrow { letter-spacing: 1px; }
+.authority-app .content .traffic-scenario-kpis strong { font-size: 27px; }
+.authority-app .content .traffic-road-row { font-size: 13px; }
+
+/* Traffic Lab is a full custom surface; make its palette follow the active app theme. */
+.authority-app.dark .main:has(.ul-lab),
+.authority-app.dark .main:has(.ul-lab) .content { background: var(--bg); color: var(--text); }
+.authority-app.dark .main:has(.ul-lab) .topbar { background: var(--surface); border-color: var(--border); color: var(--text); }
+.authority-app.dark .main:has(.ul-lab) .crumb h1,
+.authority-app.dark .main:has(.ul-lab) .topbar .utility,
+.authority-app.dark .main:has(.ul-lab) .topbar .icon-btn { color: var(--text); }
+.authority-app.dark .main:has(.ul-lab) .crumb small { color: var(--muted); }
+.authority-app.dark .ul-lab {
+  color-scheme: dark;
+  --ul-bg: #071d19;
+  --ul-panel: #102d26;
+  --ul-panel2: #173b32;
+  --ul-border: #24483e;
+  --ul-text: #e6efe7;
+  --ul-muted: #a6b9af;
+  --ul-dim: #91a79c;
+  --ul-blue: #c5ef70;
+  --ul-green: #c5ef70;
+  --ul-red: #ff9a90;
+  background: transparent;
+  color: var(--ul-text);
+}
+.authority-app.dark .ul-lab .ul-page-head { border-color: var(--ul-border); }
+.authority-app.dark .ul-lab .ul-page-head h1,
+.authority-app.dark .ul-lab .ul-section-heading h2,
+.authority-app.dark .ul-lab .ul-panel-head h3,
+.authority-app.dark .ul-lab .ul-head-status b,
+.authority-app.dark .ul-lab .ul-status-item b,
+.authority-app.dark .ul-lab .ul-empty-evidence>b,
+.authority-app.dark .ul-lab .ul-metric-card strong { color: var(--ul-text); }
+.authority-app.dark .ul-lab .ul-page-head h1 em,
+.authority-app.dark .ul-lab .ul-section-heading>div>span { color: var(--ul-green); }
+.authority-app.dark .ul-lab .ul-page-head p,
+.authority-app.dark .ul-lab .ul-section-heading p,
+.authority-app.dark .ul-lab .ul-head-status small,
+.authority-app.dark .ul-lab .ul-status-item small,
+.authority-app.dark .ul-lab .ul-control small,
+.authority-app.dark .ul-lab .ul-setup-hint,
+.authority-app.dark .ul-lab .ul-empty-evidence>p,
+.authority-app.dark .ul-lab .ul-report-status small,
+.authority-app.dark .ul-lab .ul-lab-footer { color: var(--ul-muted); }
+.authority-app.dark .ul-lab .ul-head-status,
+.authority-app.dark .ul-lab .ul-status-item,
+.authority-app.dark .ul-lab .ul-panel,
+.authority-app.dark .ul-lab .ul-metric-card,
+.authority-app.dark .ul-lab .ul-agent-handoff { background: var(--ul-panel); border-color: var(--ul-border); box-shadow: 0 8px 28px rgba(0,0,0,.16); }
+.authority-app.dark .ul-lab .ul-tabs { background: #0b241e; border-color: var(--ul-border); }
+.authority-app.dark .ul-lab .ul-tabs button { color: var(--ul-muted); }
+.authority-app.dark .ul-lab .ul-tabs button.active { background: #24483e; border-color: #3a6254; color: var(--ul-text); }
+.authority-app.dark .ul-lab .ul-dropzone { background: linear-gradient(145deg,#14382e,#0b241e); border-color: #42695a; }
+.authority-app.dark .ul-lab .ul-dropzone>b { color: var(--ul-text); }
+.authority-app.dark .ul-lab .ul-dropzone>p { color: var(--ul-muted); }
+.authority-app.dark .ul-lab .ul-upload-icon,
+.authority-app.dark .ul-lab .ul-status-item>span,
+.authority-app.dark .ul-lab .ul-report-status>span { background: #24483e; border-color: #42695a; color: var(--ul-green); }
+.authority-app.dark .ul-lab .ul-secondary-button,
+.authority-app.dark .ul-lab .ul-text-button,
+.authority-app.dark .ul-lab .ul-control select,
+.authority-app.dark .ul-lab .ul-control textarea,
+.authority-app.dark .ul-lab .ul-calibration-details,
+.authority-app.dark .ul-lab .ul-image-note { background: #0b241e; border-color: var(--ul-border); color: var(--ul-text); }
+.authority-app.dark .ul-lab .ul-control>span { color: #d8e7df; }
+.authority-app.dark .ul-lab .ul-control>span b { color: var(--ul-green); }
+.authority-app.dark .ul-lab .ul-primary-button { background: #c5ef70; border-color: #c5ef70; color: #163529; }
+.authority-app.dark .ul-lab .ul-primary-button:hover:not(:disabled) { background: #d5f78c; }
+.authority-app.dark .ul-lab .ul-file-meta,
+.authority-app.dark .ul-lab .ul-report-status,
+.authority-app.dark .ul-lab .ul-disclaimer,
+.authority-app.dark .ul-lab .ul-setup-hint,
+.authority-app.dark .ul-lab .ul-saved-report-note,
+.authority-app.dark .ul-lab .ul-preview-report-note,
+.authority-app.dark .ul-lab .ul-agent-response,
+.authority-app.dark .ul-lab .ul-forecast-summary>div,
+.authority-app.dark .ul-lab .ul-chart-wrap { background: #0b241e; border-color: var(--ul-border); color: var(--ul-muted); }
+.authority-app.dark .ul-lab .ul-report-status b,
+.authority-app.dark .ul-lab .ul-agent-handoff h2 { color: var(--ul-text); }
+.authority-app.dark .ul-lab .ul-agent-handoff p { color: var(--ul-muted); }
+.authority-app.dark .ul-lab .ul-handoff-points span { background: #173b32; border-color: var(--ul-border); color: #d6e7da; }
+.authority-app.dark .ul-lab .ul-scan-illustration { background: linear-gradient(#14382e,#0b241e); border-color: var(--ul-border); }
+.authority-app.dark .ul-lab .ul-scan-illustration:before,
+.authority-app.dark .ul-lab .ul-scan-illustration:after { background: #315c4e; }
+.authority-app.dark .ul-lab .ul-class-track { background: #173b32; }
+.authority-app.dark .ul-lab .ul-report-foot { border-color: var(--ul-border); color: var(--ul-muted); }
+.authority-app.dark .ul-lab .ul-lab-footer { border-color: var(--ul-border); }
+.authority-app.dark .ul-lab .ul-agent-handoff-button { background: #c5ef70; color: #163529; }
+
+@media (max-width: 680px) {
+  .workspace-data-state { align-items: flex-start; gap: 10px; padding: 12px; }
+  .workspace-data-state-tag { display: none; }
+  .workspace-error-fallback { align-items: flex-start; flex-wrap: wrap; }
+  .workspace-error-fallback button { margin-left: 56px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-data-state.is-loading .workspace-data-state-icon svg,
+  .workspace-data-state-pulse i { animation: none; }
+}
+
+/* Preserve contrast in pages with bespoke light-mode card treatments. */
+.authority-app.dark .aqi-forecast-panel {
+  background: linear-gradient(180deg, #102d26 0%, #0d2822 100%);
+  border-color: var(--border);
+  box-shadow: 0 14px 34px rgba(0,0,0,.18);
+}
+.authority-app.dark .aqi-forecast-summary article {
+  background: #173b32;
+  border-color: #24483e;
+}
+.authority-app.dark .aqi-forecast-summary article>span,
+.authority-app.dark .aqi-forecast-summary article>small,
+.authority-app.dark .aqi-forecast-chart-meta,
+.authority-app.dark .aqi-forecast-chart-meta>small,
+.authority-app.dark .aqi-forecast-footnote { color: #a8beb2; }
+.authority-app.dark .aqi-forecast-summary article>strong { color: #e6efe7; }
+.authority-app.dark .aqi-forecast-summary .forecast-direction.rising>strong { color: #e4a276; }
+.authority-app.dark .aqi-forecast-summary .forecast-direction.easing>strong { color: #8ac69a; }
+.authority-app.dark .aqi-forecast-summary .forecast-direction.steady>strong,
+.authority-app.dark .aqi-forecast-summary .forecast-direction.unavailable>strong { color: #b3c2b8; }
+.authority-app.dark .aqi-forecast-window-pill,
+.authority-app.dark .forecast-window-pill { background: #24483e; color: #c5e7a2; }
+.authority-app.dark .monitor-soft-notice,
+.authority-app.dark .aqi-forecast-source { background: #173b32; border-color: var(--border); color: var(--muted); }
+.authority-app.dark .monitor-soft-notice svg,
+.authority-app.dark .aqi-forecast-source svg { color: #c5ef70; }
+.authority-app.dark .aqi-forecast-source b { color: var(--text); }
+.authority-app.dark .monitor-page .station-row:hover,
+.authority-app.dark .monitor-page .hotspot-row:hover { background: #173b32; }
+.authority-app.dark .digital-twin-page .plan-list,
+.authority-app.dark .digital-twin-page .preview { border-color: var(--border); box-shadow: 0 12px 30px rgba(0,0,0,.17); }
+.authority-app.dark .digital-twin-page .plan.selected { background: #173b32; border-color: #6d9655; box-shadow: inset 3px 0 #c5ef70; }
+.authority-app.dark .digital-twin-page .scenario-notice { border-color: #315747; background: #173b32; color: #c6d8cb; }
+.authority-app.dark .digital-twin-page .plan-source-note { color: var(--muted); background: #173b32; border-color: var(--border); }
+.authority-app.dark .digital-twin-page .api-note { color: var(--muted); }
+.authority-app.dark .carbon-seed-note { background: #173b32; border-color: var(--border); color: #c5d7ca; }
+.authority-app.dark .carbon-calculation-source { color: var(--muted); }
+.authority-app.dark .carbon-caveats { background: #173b32; border-color: var(--border); }
+.authority-app.dark .carbon-class-breakdown { border-color: var(--border); }
+.authority-app.dark .carbon-class-breakdown b { color: var(--text); }
+
+
+/* Compact workflow cards for the Traffic Lab. Theme tokens keep both appearances aligned. */
+.ul-process-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 24px;
+}
+.ul-process-strip > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 70px;
+  padding: 13px 15px;
+  border: 1px solid var(--ul-border);
+  border-radius: 14px;
+  background: var(--ul-panel);
+  box-shadow: 0 7px 20px rgba(20, 60, 40, .04);
+}
+.ul-process-strip > div > span {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  border-radius: 10px;
+  background: var(--ul-panel2);
+  color: var(--ul-green);
+  font-size: 11px;
+  font-weight: 800;
+}
+.ul-process-strip section { min-width: 0; }
+.ul-process-strip b,
+.ul-process-strip small { display: block; }
+.ul-process-strip b { color: var(--ul-text); font-size: 13px; }
+.ul-process-strip small { color: var(--ul-muted); font-size: 11px; line-height: 1.45; margin-top: 3px; }
+.authority-app .content .metric-card,
+.authority-app .content .monitor-kpi {
+  border-radius: 16px;
+  box-shadow: 0 8px 26px rgba(16, 49, 37, .055);
+}
+@media (max-width: 760px) {
+  .ul-process-strip { grid-template-columns: 1fr; }
+}
+
+
+/* Restore the light appearance at the Traffic Lab root as well as on its legacy cards. */
+.authority-app:not(.dark) .ul-lab {
+  color-scheme: light;
+  --ul-bg: #f4f7f0;
+  --ul-panel: #ffffff;
+  --ul-panel2: #edf4e8;
+  --ul-border: #dce6d5;
+  --ul-text: #193b2f;
+  --ul-muted: #718476;
+  --ul-dim: #718476;
+  --ul-blue: #527a45;
+  --ul-green: #527a45;
+  --ul-red: #b74e4b;
+  color: var(--ul-text);
+}
+.authority-app:not(.dark) .ul-lab .ul-process-strip > div {
+  background: #ffffff;
+  border-color: #dce6d5;
+  box-shadow: 0 7px 20px rgba(20, 60, 40, .055);
+}
+.authority-app:not(.dark) .ul-lab .ul-process-strip > div > span {
+  background: #edf4e8;
+  color: #527a45;
+}
+.authority-app:not(.dark) .ul-lab .ul-process-strip b { color: #193b2f; }
+.authority-app:not(.dark) .ul-lab .ul-process-strip small { color: #718476; }

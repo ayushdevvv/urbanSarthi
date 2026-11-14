@@ -28,13 +28,31 @@ const layout = read('src/components/layout/AuthorityLayout.jsx');
 for (const target of ['/authority/control', '/authority/traffic-lab', '/authority/traffic-simulation', '/authority/digital-twin', '/authority/aqi-forecast', '/authority/carbon', '/authority/iot']) {
   assert(layout.includes(target), `Navigation must include ${target}`);
 }
-assert(layout.includes('OVERVIEW') && layout.includes('AIR QUALITY') && layout.includes('FIELD NETWORK') && layout.includes('TRAFFIC'), 'Navigation must group traffic, AQI, overview and field network');
+assert(layout.includes("label: 'Overview'") && layout.includes('OVERVIEW') && layout.includes('AIR QUALITY') && layout.includes('FIELD NETWORK') && layout.includes('TRAFFIC'), 'Navigation must group traffic, AQI, overview and field network');
 const navPositions = ['/authority/traffic-lab', '/authority/traffic-simulation', '/authority/digital-twin', '/authority/aqi-forecast', '/authority/carbon'];
 assert(navPositions.every((target, index) => index === 0 || layout.indexOf(navPositions[index - 1]) < layout.indexOf(target)), 'Sidebar order must be Traffic Lab → Traffic Simulation → Digital Twin → AQI Forecast → CO₂ Emissions');
 assert(layout.indexOf("label: 'TRAFFIC'") < layout.indexOf("label: 'AIR QUALITY'"), 'Traffic section must appear before Air Quality');
 assert(!layout.includes("to: '/authority/traffic-agent'") && !layout.includes("to: '/authority/signals'") && !layout.includes("to: '/authority/analytics'") && !layout.includes("to: '/authority/traffic-analysis'"), 'Secondary routes must stay out of the primary workspace navigation');
 assert(!layout.includes('API configuration'), 'Technical API configuration label must not be shown in the main navigation');
 console.log('✓ Traffic-first sidebar order and user-facing labels verified');
+const trafficLabPage = read('src/pages/citizen/TrafficVisionPage.jsx');
+assert(trafficLabPage.includes('WorkspaceDataState') && trafficLabPage.includes('Analyze footage'), 'Traffic Lab must render its data state and upload workflow');
+assert(!/<(Activity|Bot)\b/.test(trafficLabPage), 'Traffic Lab must not reference the missing Activity/Bot icons that previously crashed its render');
+const firstNavGroup = layout.indexOf("label: 'OVERVIEW'");
+const trafficNavGroup = layout.indexOf("label: 'TRAFFIC'");
+const airNavGroup = layout.indexOf("label: 'AIR QUALITY'");
+assert(firstNavGroup >= 0 && firstNavGroup < trafficNavGroup && trafficNavGroup < airNavGroup, 'Sidebar order must be Overview → Traffic → Air Quality');
+const resourceHook = read('src/hooks/useApiResource.js');
+assert(resourceHook.includes('PREVIEW_DELAY_MS = 5_000') && resourceHook.includes('setFallbackReady(true)'), 'Shared API data must release a seeded preview after five seconds even while a request is pending');
+const errorBoundary = read('src/components/shared/WorkspaceErrorBoundary.jsx');
+assert(layout.includes('WorkspaceErrorBoundary') && errorBoundary.includes('componentDidCatch') && errorBoundary.includes('Try again'), 'A route render error must show a recoverable workspace screen instead of a blank page');
+const trafficSimulationPage = read('src/pages/citizen/TrafficInfoPage.jsx');
+assert(trafficSimulationPage.includes('WorkspaceDataState') && trafficSimulationPage.includes('setTimeout(() => setFallbackReady(true), 5000)'), 'Traffic Simulation must show a premium loading state and release its seeded scenario after five seconds');
+const carbonEntryPage = read('src/pages/authority/CarbonImpactPage.jsx');
+assert(carbonEntryPage.includes('void estimate({ silent: true })') && carbonEntryPage.includes('setFallbackReady(true)') && !carbonEntryPage.includes('setResult(null)'), 'CO2 must check for a live estimate on entry and keep a calculated local preview visible');
+const polishCss = read('src/styles/workspace-polish.css');
+assert(polishCss.includes('.authority-app.dark .ul-lab') && polishCss.includes('.authority-app:not(.dark) .ul-lab') && polishCss.includes('.authority-app.dark .aqi-forecast-panel') && polishCss.includes('.authority-app.dark .digital-twin-page'), 'Traffic Lab, AQI Forecast and Digital Twin must have explicit dark-mode treatments');
+
 const shellCss = read('src/styles/app-shell-refinement.css');
 assert(shellCss.includes('.authority-app .sidebar') && shellCss.includes('.citizen-app .citizen-header') && shellCss.includes('.citizen-app .citizen-nav-item.active'), 'Shared authority sidebar and citizen navigation must receive the app-wide responsive theme');
 assert(layout.includes('aria-expanded={mobileOpen}') && layout.includes('aria-controls=\"authority-sidebar\"') && layout.includes('useEffect(() => { setMobileOpen(false); }, [location.pathname])'), 'Authority mobile navigation must be accessible and close after route navigation');
@@ -150,9 +168,9 @@ assert(airQualityPage.includes('forecastAverage') && airQualityPage.includes('fo
 const signalUi = read('src/pages/authority/SignalPlansPage.jsx');
 const signalApi = fs.readFileSync(path.join(root, '../backend/app/api/signals.py'), 'utf8');
 const signalService = fs.readFileSync(path.join(root, '../backend/app/services/signal_planning.py'), 'utf8');
-assert(signalUi.includes('AVAILABLE PLANS') && signalUi.includes('simulateSelected') && signalApi.includes('/signals/plans') && signalService.includes('generate_recommendation'), 'Digital Twin signal-plan UI, API routes and planning service must remain in the release');
+assert(signalUi.includes('AVAILABLE SCENARIOS') && signalUi.includes('simulateSelected') && signalApi.includes('/signals/plans') && signalService.includes('generate_recommendation'), 'Digital Twin signal-plan UI, API routes and planning service must remain in the release');
 console.log('✓ Signal planning source files retained');
-console.log('✓ Live-first loading, error-only fallback, route sorting, AQI provenance and workflow navigation verified');
+console.log('✓ Live-first loading, five-second seeded fallback, route sorting, AQI provenance and workflow navigation verified');
 
 
 // Runtime check: the live server response must win even when a local snapshot exists.

@@ -5,8 +5,12 @@ import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 import FloatingAgentWidget from '../shared/FloatingAgentWidget.jsx';
 import DataStatusBanner from '../shared/DataStatusBanner.jsx';
+import WorkspaceErrorBoundary from '../shared/WorkspaceErrorBoundary.jsx';
 
 const navGroups = [
+  { label: 'OVERVIEW', items: [
+    { label: 'Overview', to: '/authority/control', icon: Activity },
+  ]},
   { label: 'TRAFFIC', items: [
     { label: 'Traffic Lab', to: '/authority/traffic-lab', icon: Camera },
     { label: 'Traffic Simulation', to: '/authority/traffic-simulation', icon: Activity },
@@ -16,15 +20,12 @@ const navGroups = [
     { label: 'AQI Forecast', to: '/authority/aqi-forecast', icon: Wind },
     { label: 'CO₂ Emissions', to: '/authority/carbon', icon: Leaf },
   ]},
-  { label: 'OVERVIEW', items: [
-    { label: 'City overview', to: '/authority/control', icon: Activity },
-  ]},
   { label: 'FIELD NETWORK', items: [
     { label: 'IoT sensor network', to: '/authority/iot', icon: RadioTower },
   ]},
 ];
 const meta = {
-  '/authority/control': ['Overview', 'City overview'],
+  '/authority/control': ['Overview', 'Overview'],
   '/authority/traffic-lab': ['Traffic', 'Traffic Lab'],
   '/authority/traffic-agent': ['Traffic', 'Traffic agent'],
   '/authority/digital-twin': ['Traffic', 'Digital Twin'],
@@ -67,7 +68,7 @@ export default function AuthorityLayout() {
         <button className="utility" aria-label="Switch to main portal" onClick={() => navigate('/')}><House size={15}/> Main portal</button>
         <button className="icon-btn" aria-label="Alerts" onClick={() => navigate('/authority/air-intelligence')}><Bell size={18}/></button>
       </div>
-    </header><div className="content"><DataStatusBanner/><Outlet /></div></main>
+    </header><div className="content"><DataStatusBanner/><WorkspaceErrorBoundary key={location.pathname}><Outlet /></WorkspaceErrorBoundary></div></main>
     <FloatingAgentWidget mode="authority" />
   </div>;
 }

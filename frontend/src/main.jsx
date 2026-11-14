@@ -10,6 +10,7 @@ import './styles/global.css';
 import './styles/premium-ui.css';
 import './styles/polish.css';
 import './styles/app-shell-refinement.css';
+import './styles/workspace-polish.css';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>

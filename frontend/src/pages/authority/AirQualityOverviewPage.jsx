@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../services/api/client.js';
 import { loadLocationAirQuality } from '../../services/airQuality.js';
 import PageIntro from '../../components/shared/PageIntro.jsx';
+import WorkspaceDataState from '../../components/shared/WorkspaceDataState.jsx';
 import './monitoring-pages.css';
 
 const AREAS = {
@@ -134,13 +135,18 @@ export default function AirQualityOverviewPage({ forecastFocus = false }) {
   const [report, setReport] = useState(() => makeSeedAirReport('Lucknow'));
   const [nearby, setNearby] = useState(() => makeSeedStations('Lucknow'));
   const [hotspots, setHotspots] = useState(() => makeSeedHotspots('Lucknow'));
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [sampleReady, setSampleReady] = useState(false);
+  const sampleTimer = useRef(null);
   const [error, setError] = useState('');
   const requestSequence = useRef(0);
   const area = AREAS[areaKey];
   const refresh = useCallback(async () => {
     const requestId = ++requestSequence.current;
     setLoading(true); setError('');
+    setSampleReady(false);
+    if (sampleTimer.current) window.clearTimeout(sampleTimer.current);
+    sampleTimer.current = window.setTimeout(() => setSampleReady(true), 5000);
     // Switch the fallback immediately when the area changes; do not flash an empty dashboard.
     setReport((current) => current?._areaKey === areaKey ? current : makeSeedAirReport(areaKey));
     setNearby((current) => current?._areaKey === areaKey ? current : makeSeedStations(areaKey));
@@ -175,7 +181,7 @@ export default function AirQualityOverviewPage({ forecastFocus = false }) {
     setHotspots(Array.isArray(hotspotData?.items) && hotspotData.items.length ? { ...hotspotData, _areaKey: areaKey } : makeSeedHotspots(areaKey));
     setLoading(false);
   }, [area.lat, area.lon, areaKey]);
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { refresh(); return () => { if (sampleTimer.current) window.clearTimeout(sampleTimer.current); }; }, [refresh]);
 
   const visibleReport = report?._areaKey === areaKey ? report : makeSeedAirReport(areaKey);
   const nearbyData = nearby?._areaKey === areaKey ? nearby : makeSeedStations(areaKey);
@@ -213,6 +219,7 @@ export default function AirQualityOverviewPage({ forecastFocus = false }) {
   const peakBand = peakForecast ? bandFor(Number(peakForecast[forecastField]), forecastScaleMax).label : 'No peak available';
   return <main className={`monitor-page air-overview-page ${forecastFocus ? 'forecast-focus' : ''}`}>
     <PageIntro eyebrow={forecastFocus ? 'AIR QUALITY / FORECAST' : 'AIR QUALITY'} title={forecastFocus ? 'AQI forecasting' : 'Air quality overview'} description={forecastFocus ? 'Review the next 24 hours of modelled air-quality conditions for the selected city.' : 'Air-quality conditions, hourly forecasts, pollutant levels and locations that need attention.'} action={<><label className="area-select-wrap"><MapPin size={15}/><select value={areaKey} onChange={(event) => setAreaKey(event.target.value)}>{Object.entries(AREAS).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label><button className="monitor-button" onClick={refresh} disabled={loading}><RefreshCw size={14} className={loading ? 'monitor-spin' : ''}/>{loading ? 'Updating' : 'Refresh'}</button></>} />
+    <WorkspaceDataState loading={loading && !sampleReady} fallback={sampleFallbackActive && sampleReady} title="Checking the latest air-quality outlook" detail="Refreshing the AQI forecast, nearby stations and priority locations." fallbackTitle="AQI sample outlook is active" fallbackDetail="Illustrative values keep the forecast visible. Live provider and station data will replace each sample section as soon as it arrives."/>
     {error && <div className="monitor-soft-notice" role="status"><AlertTriangle size={15}/><span>{error} Sample sections remain available while the provider reconnects.</span></div>}
     {sampleFallbackActive && <div className="monitor-seed-notice" role="note"><Activity size={15}/><span><b>Sample data is active.</b> Any unavailable AQI, station, or hotspot section uses an illustrative reference dataset. It is not a live sensor reading, verified location measurement, or official air-quality report.</span></div>}
 

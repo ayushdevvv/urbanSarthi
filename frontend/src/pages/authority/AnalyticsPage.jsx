@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Activity, Cloud, Download, Leaf, RefreshCw, Route, TrendingDown } from 'lucide-react';
 import PageIntro, { MetricCard } from '../../components/shared/PageIntro.jsx';
+import WorkspaceDataState from '../../components/shared/WorkspaceDataState.jsx';
 import { EmptyState } from '../../components/shared/Toast.jsx';
 import useApiResource from '../../hooks/useApiResource.js';
 import { api, endpoints } from '../../services/api/client.js';
@@ -28,6 +29,7 @@ export default function AnalyticsPage() {
 
   return <>
     <PageIntro eyebrow="INTEGRATED COMMAND CENTRE" title="City analytics" description="Review mobility activity, trip outcomes and citywide performance." action={<><select className="select" value={range} onChange={(e) => setRange(Number(e.target.value))}><option value={1}>24 hours</option><option value={7}>Last 7 days</option><option value={30}>30 days</option><option value={90}>Quarter</option></select><button className="primary" onClick={exportReport} disabled={!shown}><Download size={15}/> Export report</button><button className="utility" onClick={reload} disabled={loading}><RefreshCw size={14}/> {loading ? 'Refreshing…' : 'Refresh'}</button></>} />
+    <WorkspaceDataState loading={loading && !fallbackReady} fallback={previewMode} title="Loading city analytics" detail="Preparing the selected reporting period." fallbackTitle="Sample analytics are active" fallbackDetail="These reference totals keep the dashboard available until current records arrive."/>
     <div className="range-tabs">{[[1, '24 hours'], [7, '7 days'], [30, '30 days'], [90, 'Quarter']].map(([days, label]) => <button className={range === days ? 'active' : ''} onClick={() => setRange(Number(days))} key={days}>{label}</button>)}</div>
     {!shown ? <section className="panel us-connection-card" aria-live="polite"><div className="us-connection-icon"><Activity size={22}/></div><h3>{loading ? 'Loading city analytics' : 'City analytics are being prepared'}</h3><p>{loading ? 'Loading the selected reporting period.' : 'The selected reporting period could not be refreshed. Retry to check for the latest records.'}</p><button className="primary" onClick={reload} disabled={loading}><RefreshCw size={15}/>Retry live data</button></section> : <>
       <div className={`notice scenario-notice ${previewMode ? 'notice-preview' : ''}`}><Activity size={14}/>{previewMode ? 'Illustrative analytics preview · reference values only' : 'City analytics · live data'}</div>
