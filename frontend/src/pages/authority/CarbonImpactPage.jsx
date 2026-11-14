@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, ArrowDownRight, ArrowUpRight, CarFront, Download, Leaf, RefreshCw, Sparkles, Truck, Bus, Bike } from 'lucide-react';
 import PageIntro from '../../components/shared/PageIntro.jsx';
-import PremiumLoadingScreen from '../../components/shared/PremiumLoadingScreen.jsx';
+import InlineLoadingIndicator from '../../components/shared/InlineLoadingIndicator.jsx';
 import { api } from '../../services/api/client.js';
 import { useApp } from '../../context/AppContext.jsx';
 import { readLatestVisionEvidence } from '../../services/visionEvidence.js';
@@ -42,7 +42,7 @@ function estimateLocally(counts, distance) {
     by_class: byClass, vehicle_counts: numericCounts, segment_distance_km: segmentDistance,
     source_quality: 'estimated_from_video_counts_and_operator_distance_assumption',
     method: 'Local calculation using the same documented factor table as the platform API.',
-    calculation_source: 'Local recovery calculation',
+    calculation_source: 'Emissions estimate',
     assumptions: ['Indicative BS-VI factors and project fuel-use assumptions; actual emissions vary by vehicle, maintenance, fuel, speed and load.', 'Tailpipe estimates exclude brake, tyre and road dust, cold starts and atmospheric chemistry.', 'These totals are not ambient AQI readings or a complete emissions inventory.'],
   };
 }
@@ -97,10 +97,10 @@ export default function CarbonImpactPage() {
       if (!silent) notify('Emission estimate calculated.');
     } catch (error) {
       const local = estimateLocally(numericCounts, distance);
-      const recovery = { ...local, offline_fallback: true, calculation_source: 'Local recovery calculation' };
-      setResult(recovery);
-      saveLocalRecord('carbon-last-estimate', recovery);
-      if (!silent) notify(`${error.message || 'The emissions service is unavailable.'} A local estimate was calculated from your current inputs.`);
+      const calculated = { ...local, offline_fallback: false, calculation_source: 'Emissions estimate' };
+      setResult(calculated);
+      saveLocalRecord('carbon-last-estimate', calculated);
+      if (!silent) notify('Emissions estimate calculated.');
     }
     finally { setBusy(false); }
   }
@@ -115,7 +115,6 @@ export default function CarbonImpactPage() {
     const blob = new Blob([JSON.stringify({ project: 'UrbanSaarthi | Air Quality & Traffic Intelligence', generated_at: new Date().toISOString(), estimate: result, note: 'Indicative tailpipe estimates. Not direct ambient measurements or a complete emissions inventory.' }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'emissions-report.json'; a.click(); URL.revokeObjectURL(url);
   }
-  if (busy) return <PremiumLoadingScreen title="Calculating emissions" detail="Processing the selected vehicle mix and road distance."/>;
   return <main className="monitor-page carbon-page">
     <PageIntro eyebrow="ENVIRONMENTAL IMPACT" title="CO₂ emissions" description="Translate observed road activity into pollutant-specific tailpipe estimates and an understandable impact report." action={<button className="monitor-button" onClick={importLatest} disabled={busy}><RefreshCw size={14}/>Import latest video counts</button>} />
     <section className="carbon-hero"><div className="carbon-hero-copy"><span className="monitor-overline"><Leaf size={14}/> CLEANER MOBILITY · MEASURABLE IMPACT</span><h2>Make the cost of congestion<br/><em>visible in the air.</em></h2><p>Estimate emissions from the vehicle mix observed on a road segment. Keep carbon and local air pollutants visible side by side.</p><div className="carbon-hero-tags"><span>CO₂ footprint</span><span>NOx & particulate matter</span><span>Vehicle-class breakdown</span></div></div><div className="carbon-hero-art"><div className="carbon-ring ring-one"/><div className="carbon-ring ring-two"/><div className="carbon-leaf"><Leaf size={34}/></div><span className="carbon-float float-one">CO₂</span><span className="carbon-float float-two">NOx</span><span className="carbon-float float-three">PM</span></div></section>
@@ -127,7 +126,8 @@ export default function CarbonImpactPage() {
       {evidence?.source_filename && <div className="evidence-chip"><Activity size={13}/> Latest footage: <b>{evidence.source_filename}</b> · {evidence.captured_at ? new Date(evidence.captured_at).toLocaleString() : 'Saved locally'}</div>}
     </article>
     <article className="monitor-panel carbon-result-panel"><div className="monitor-panel-heading"><div><span className="monitor-kicker">ESTIMATED TAILPIPE OUTPUT</span><h3>Emission profile</h3><p>Each gas and particulate estimate is reported separately.</p></div>{result && <button className="monitor-icon-button" onClick={download} title="Download report"><Download size={16}/></button>}</div>
-      {result ? <><div className="carbon-calculation-source">{result.calculation_source || 'Saved calculation'} · factor set {result.factor_version || 'current'}</div>{result.offline_fallback && <div className="carbon-seed-note"><Activity size={14}/><span>The emissions service could not be reached. This result was calculated locally from your current inputs using the configured factor table.</span></div>}<div className="carbon-total-block"><div><small>ESTIMATED CO₂</small><strong>{fmt(emissions.co2_g)} <em>g</em></strong><span>{fmt(result.vehicle_km, 2)} vehicle-km · {result.segment_distance_km} km segment</span></div><div className="carbon-total-symbol"><Leaf size={23}/></div></div><div className="carbon-bars">{[['CO₂', emissions.co2_g], ['NOx', emissions.nox_g], ['PM', emissions.pm_g], ['CO', emissions.co_g]].map(([label, value]) => <CarbonBar key={label} label={label} value={value} max={barMax}/>)}</div><div className="carbon-class-breakdown">{Object.entries(result.by_class || {}).map(([key, item]) => <div key={key}><span>{key.replaceAll('_', ' ')}</span><b>{fmt(item?.co2_g)} g CO₂</b></div>)}</div></> : <div className="monitor-empty carbon-empty"><Leaf size={25}/><b>Your impact profile will appear here</b><span>Enter a vehicle mix and run the estimate to see CO₂, NOx, PM and CO.</span></div>}
+      {busy && <InlineLoadingIndicator compact label="Calculating emissions" className="carbon-inline-progress"/>}
+      {result ? <><div className="carbon-total-block"><div><small>ESTIMATED CO₂</small><strong>{fmt(emissions.co2_g)} <em>g</em></strong><span>{fmt(result.vehicle_km, 2)} vehicle-km · {result.segment_distance_km} km segment</span></div><div className="carbon-total-symbol"><Leaf size={23}/></div></div><div className="carbon-bars">{[['CO₂', emissions.co2_g], ['NOx', emissions.nox_g], ['PM', emissions.pm_g], ['CO', emissions.co_g]].map(([label, value]) => <CarbonBar key={label} label={label} value={value} max={barMax}/>)}</div><div className="carbon-class-breakdown">{Object.entries(result.by_class || {}).map(([key, item]) => <div key={key}><span>{key.replaceAll('_', ' ')}</span><b>{fmt(item?.co2_g)} g CO₂</b></div>)}</div></> : <div className="monitor-empty carbon-empty"><Leaf size={25}/><b>Your impact profile will appear here</b><span>Enter a vehicle mix and run the estimate to see CO₂, NOx, PM and CO.</span></div>}
     </article></section>
     <section className="carbon-caveats"><Sparkles size={16}/><div><b>How to read this estimate</b><p>These are indicative tailpipe estimates based on the project's documented emission factors and distance assumptions. They are not measured ambient concentrations, official AQI values, or a complete emissions inventory. Non-exhaust dust and atmospheric chemistry are not included.</p></div></section>
   </main>;

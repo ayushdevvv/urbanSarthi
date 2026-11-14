@@ -4,7 +4,6 @@ import { Activity, Bell, Bot, Camera, ChevronRight, House, Leaf, Menu, Moon, Rad
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 import FloatingAgentWidget from '../shared/FloatingAgentWidget.jsx';
-import DataStatusBanner from '../shared/DataStatusBanner.jsx';
 import WorkspaceErrorBoundary from '../shared/WorkspaceErrorBoundary.jsx';
 
 const navGroups = [
@@ -69,7 +68,7 @@ export default function AuthorityLayout() {
         <button className="utility" aria-label="Switch to main portal" onClick={() => navigate('/')}><House size={15}/> Main portal</button>
         <button className="icon-btn" aria-label="Alerts" onClick={() => navigate('/authority/air-intelligence')}><Bell size={18}/></button>
       </div>
-    </header><div className="content"><DataStatusBanner/><WorkspaceErrorBoundary key={location.pathname}><Outlet /></WorkspaceErrorBoundary></div></main>
+    </header><div className="content"><WorkspaceErrorBoundary key={location.pathname}><Outlet /></WorkspaceErrorBoundary></div></main>
     <FloatingAgentWidget mode="authority" />
   </div>;
 }

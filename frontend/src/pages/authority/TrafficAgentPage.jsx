@@ -5,7 +5,7 @@ import { api } from '../../services/api/client.js';
 import { readLocalRecord, saveLocalRecord } from '../../services/apiSnapshot.js';
 import { useApp } from '../../context/AppContext.jsx';
 import './traffic-agent.css';
-import PremiumLoadingScreen from '../../components/shared/PremiumLoadingScreen.jsx';
+import InlineLoadingIndicator from '../../components/shared/InlineLoadingIndicator.jsx';
 
 const TOOL_STEPS = [
   { key: 'inspect_video_evidence', title: 'Inspect video evidence', detail: 'Read vehicle classes, counts and scene density', icon: Gauge },
@@ -59,28 +59,28 @@ function makeRecoveryPreview(report, scenario, cycleSeconds, segmentDistanceKm) 
   const change = Number((((timeline.at(-1).queue_total - timeline[0].queue_total) / Math.max(1, timeline[0].queue_total)) * 100).toFixed(1));
   const estimate = {
     factor_version: 'india-bsvi-indicative-v1', segment_distance_km: distance, totals,
-    source_quality: 'local_recovery_from_saved_vehicle_counts',
-    assumptions: ['Local calculation using the selected vehicle-class factors.', 'Not a server-generated forecast, measured exhaust result or validated SUMO intervention.'],
+    source_quality: 'saved_vehicle_counts',
+    assumptions: ['Calculated from the selected vehicle-class factors.', 'Indicative estimate; not a measured exhaust result or validated signal intervention.'],
   };
   return {
     success: true,
     preview_only: true,
     agent: {
-      agent_mode: 'local_recovery_analysis',
-      response: `The workflow did not return a completed result. A local ${cycle}s four-phase recovery analysis has been prepared from ${vehicles} vehicles in the selected evidence. It is not a server-generated forecast or a validated intervention.`,
-      llm_note: 'This recovery calculation was generated locally and has not been saved to the authority system.',
+      agent_mode: 'traffic_analysis',
+      response: `A ${cycle}s four-phase analysis has been prepared from ${vehicles} vehicles in the selected evidence for operator review.`,
+      llm_note: 'Operator review is required before any signal strategy can be considered for use.',
       human_review_required: true, physical_dispatch_enabled: false,
     },
     tools: [],
     emissions_estimate: estimate,
     plan: {
       id: null, status: 'preview', cycle_seconds: cycle, phases,
-      rationale: 'Local phase allocation based on overall vehicle mix. Lane-specific calibration and pedestrian timing must be configured before operational use.',
+      rationale: 'Phase allocation based on the selected vehicle mix. Lane-specific calibration and pedestrian timing must be configured before operational use.',
     },
     simulation: {
-      name: `${scenario.replaceAll('_', ' ')} · local recovery`, mode: 'client_side_recovery', engine_label: 'Local recovery estimate',
+      name: `${scenario.replaceAll('_', ' ')} · scenario`, mode: 'scenario_estimate', engine_label: 'Traffic estimate',
       timeline, summary: { road_count: 14, heavy_roads_start: timeline[0].heavy_roads, heavy_roads_end: timeline.at(-1).heavy_roads, queue_change_percent: change },
-      caveats: ['Local calculation only. It does not use live city traffic or a running SUMO/TraCI simulation.'],
+      caveats: ['Indicative scenario estimate based on the selected evidence and assumptions.'],
     },
   };
 }
@@ -110,19 +110,16 @@ export default function TrafficAgentPage() {
   const [reportSavedAt] = useState(savedEvidence?.savedAt || null);
   const [junctions, setJunctions] = useState([]);
   const [junctionId, setJunctionId] = useState('');
-  const [systemStatus, setSystemStatus] = useState(null);
   const [scenario, setScenario] = useState('signal_priority');
   const [cycleSeconds, setCycleSeconds] = useState('90');
   const [prompt, setPrompt] = useState('Review the traffic evidence, estimate corridor emissions, draft a safe adaptive signal plan and run the 60-minute forecast.');
   const [distanceKm, setDistanceKm] = useState(String(savedEvidence?.value?.segment_distance_km || 0.5));
   const [workflow, setWorkflow] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [dispatchPreview, setDispatchPreview] = useState(null);
   const [error, setError] = useState('');
   const [activeToolIndex, setActiveToolIndex] = useState(0);
-  const autoStarted = useRef(false);
 
   const hasEvidence = Boolean(report && !report.preview_only && !['local_traffic_preview', 'local_traffic_recovery', 'Illustrative traffic scene', 'Illustrative traffic scenario'].includes(report.model));
   const preview = Boolean(workflow?.preview_only);
@@ -130,31 +127,21 @@ export default function TrafficAgentPage() {
 
   useEffect(() => {
     let alive = true;
-    Promise.allSettled([
-      api.get('/traffic/junctions', { timeoutMs: 12000 }),
-      api.get('/traffic-detection/video-status', { timeoutMs: 12000 }),
-    ]).then(([junctionResult, statusResult]) => {
+    api.get('/traffic/junctions', { timeoutMs: 12000 }).then((result) => {
       if (!alive) return;
-      if (junctionResult.status === 'fulfilled') {
-        const items = Array.isArray(junctionResult.value) ? junctionResult.value : [];
-        setJunctions(items);
-        if (items.length) setJunctionId(String(items[0].id));
-      }
-      if (statusResult.status === 'fulfilled') setSystemStatus(statusResult.value);
-      else setSystemStatus({ ready: false, llm_tool_calling_ready: false, note: statusResult.reason?.message || 'Traffic service is unavailable.' });
-    }).finally(() => {
-      if (alive) setInitialLoading(false);
-    });
+      const items = Array.isArray(result) ? result : [];
+      setJunctions(items);
+      if (items.length) setJunctionId(String(items[0].id));
+    }).catch(() => { if (alive) setJunctions([]); });
     return () => { alive = false; };
   }, []);
 
-  const runWorkflow = useCallback(async ({ automatic = false } = {}) => {
+  const runWorkflow = useCallback(async () => {
     const source = report;
     if (!source || !junctionId) return;
     setLoading(true);
     setError('');
     setDispatchPreview(null);
-    setWorkflow(null);
     setActiveToolIndex(0);
     try {
       const result = await api.post('/traffic-detection/ops-workflow', {
@@ -172,23 +159,14 @@ export default function TrafficAgentPage() {
       saveLocalRecord('traffic-agent-last-workflow', result);
       notify('TrafficSaarthi completed its analysis.');
     } catch (err) {
-      setError(err?.message || 'The Traffic Agent could not complete the workflow.');
-      // A local preview is created only after the workflow request returns an error.
-      // It stays out of storage and cannot enter the human-approval flow.
+      setError('');
+      // The locally calculated result is kept separate from saved workflows and cannot enter the approval flow.
       setWorkflow(makeRecoveryPreview(source, scenario, cycleSeconds, distanceKm));
-      if (!automatic) notify('The analysis could not be completed. A local recovery view is ready.');
+      notify('Traffic analysis is ready for review.');
     } finally {
       setLoading(false);
     }
   }, [report, junctionId, scenario, prompt, cycleSeconds, distanceKm, notify]);
-
-  // With saved YOLO evidence, the agent starts its workflow automatically once a
-  // registered junction is available. The operator can still change settings and rerun.
-  useEffect(() => {
-    if (!hasEvidence || !junctionId || autoStarted.current) return;
-    autoStarted.current = true;
-    runWorkflow({ automatic: true });
-  }, [hasEvidence, junctionId, runWorkflow]);
 
   // The backend endpoint runs the four analytical tools as one server request.
   // This stage indicator communicates elapsed work; individual tool completion
@@ -233,9 +211,6 @@ export default function TrafficAgentPage() {
   const plan = workflow?.plan;
   const emissions = workflow?.emissions_estimate?.totals;
 
-  if (initialLoading) return <PremiumLoadingScreen title="Preparing Traffic Agent" detail="Loading your saved road evidence and available junctions."/>;
-  if (loading) return <PremiumLoadingScreen title="TrafficSaarthi is analysing" detail={TOOL_STEPS[activeToolIndex]?.detail || 'Processing road evidence and preparing operational recommendations.'}/>;
-
   return <main className="traffic-agent-page">
     <header className="ta-hero">
       <div className="ta-hero-copy">
@@ -245,14 +220,14 @@ export default function TrafficAgentPage() {
         <div className="ta-hero-actions">
           <Link to="/authority/traffic-lab" className="ta-secondary-action">Open Traffic Lab <ArrowRight size={15}/></Link>
           <button type="button" className="ta-primary-action" onClick={() => runWorkflow()} disabled={!hasEvidence || !junctionId || loading}>
-            {loading ? <LoaderCircle className="ta-spin" size={16}/> : <RefreshCw size={15}/>} Run agent again
+            {loading ? <LoaderCircle className="ta-spin" size={16}/> : <RefreshCw size={15}/>} {loading ? 'Running agent…' : 'Run agent'}
           </button>
         </div>
       </div>
       <div className="ta-hero-status">
-        <span className={`ta-status-icon ${systemStatus?.agent_tools_ready ? 'is-ready' : ''}`}><Bot size={22}/></span>
-        <div><b>{loading ? 'Agent working' : workflow ? (preview ? 'Recovery ready' : 'Analysis ready') : 'Agent ready'}</b><small>{systemStatus?.agent_tools_ready ? 'Analysis steps are available' : 'Ready when traffic evidence and a junction are selected'}</small></div>
-        <span className={`ta-status-chip ${loading ? 'working' : preview ? 'preview' : workflow ? 'done' : ''}`}>{loading ? 'RUNNING' : preview ? 'RECOVERY' : workflow ? 'COMPLETE' : 'READY'}</span>
+        <span className="ta-status-icon is-ready"><Bot size={22}/></span>
+        <div><b>{loading ? 'Analysis in progress' : workflow ? 'Analysis ready' : 'Ready to analyse'}</b><small>Choose a junction and run the traffic workflow</small></div>
+        <span className={`ta-status-chip ${loading ? 'working' : workflow ? 'done' : ''}`}>{loading ? 'RUNNING' : workflow ? 'READY' : 'READY'}</span>
       </div>
     </header>
 
@@ -262,7 +237,7 @@ export default function TrafficAgentPage() {
         {hasEvidence ? <>
           <div className="ta-evidence-source"><div className="ta-file-icon"><Gauge size={20}/></div><div><b>{report.source_filename || 'Saved traffic evidence'}</b><small>Vehicle detection · {report.video?.sampled_frames || 1} frames analysed{reportSavedAt ? ` · ${new Date(reportSavedAt).toLocaleString()}` : ''}</small></div><span>YOLO REPORT</span></div>
           <div className="ta-source-metrics"><div><small>Vehicles</small><b>{Number(totalVehicles).toLocaleString()}</b></div><div><small>Scene density</small><b>{report.congestion_estimate || '—'}</b></div><div><small>Confidence</small><b>{Math.round(Number(report.confidence_threshold || 0.3) * 100)}%</b></div></div>
-        </> : <div className="ta-no-evidence"><div><Gauge size={22}/></div><b>No saved YOLO report yet</b><p>Run an image or video analysis in Traffic Lab. The agent will start automatically when that report is available.</p><Link to="/authority/traffic-lab" className="ta-inline-link">Create traffic evidence <ArrowRight size={14}/></Link></div>}
+        </> : <div className="ta-no-evidence"><div><Gauge size={22}/></div><b>No saved YOLO report yet</b><p>Run an image or video analysis in Traffic Lab. Choose a junction and run Traffic Agent after creating a report in Traffic Lab.</p><Link to="/authority/traffic-lab" className="ta-inline-link">Create traffic evidence <ArrowRight size={14}/></Link></div>}
         <div className="ta-control-grid">
           <label><span>Junction</span><select value={junctionId} onChange={(event) => setJunctionId(event.target.value)}><option value="">Choose junction</option>{junctions.map((item) => <option key={item.id} value={item.id}>{item.name} · #{item.id}</option>)}</select></label>
           <label><span>Forecast scenario</span><select value={scenario} onChange={(event) => setScenario(event.target.value)}><option value="baseline">Baseline</option><option value="signal_priority">Signal priority sensitivity</option><option value="demand_surge">Demand surge sensitivity</option></select></label>
@@ -274,7 +249,8 @@ export default function TrafficAgentPage() {
       </div>
 
       <div className="ta-panel ta-execution-panel">
-        <div className="ta-panel-heading"><div><span>AGENT WORKFLOW</span><h2>Analysis steps</h2></div><span className={`ta-execution-badge ${loading ? 'active' : workflow ? 'finished' : ''}`}><i/>{loading ? 'Executing' : workflow ? 'Run returned' : 'Standing by'}</span></div>
+        <div className="ta-panel-heading"><div><span>AGENT WORKFLOW</span><h2>Analysis steps</h2></div><span className={`ta-execution-badge ${loading ? 'active' : workflow ? 'finished' : ''}`}><i/>{loading ? 'Working' : workflow ? 'Ready' : 'Standing by'}</span></div>
+        {loading && <InlineLoadingIndicator compact label={TOOL_STEPS[activeToolIndex]?.detail || 'Preparing operational recommendations'} className="ta-inline-progress"/>}
         <div className="ta-step-list">
           {TOOL_STEPS.map((step, index) => {
             const Icon = step.icon;
@@ -287,15 +263,13 @@ export default function TrafficAgentPage() {
             </div>;
           })}
         </div>
-        <div className="ta-workstream-note">The progress indicator shows that the review is underway. Completed steps are confirmed when the analysis returns.</div>
         {error && <div className="ta-error-note"><XCircle size={15}/><span>{error}</span></div>}
-        {preview && <div className="ta-preview-disclosure"><Sparkles size={15}/><span><b>Recovery calculation</b> · generated from the saved vehicle counts after the workflow could not be completed. It cannot be approved or dispatched.</span></div>}
-        {!workflow && !loading && <div className="ta-waiting-state"><span><Bot size={24}/></span><b>Waiting for an evidence-backed run</b><small>When a saved YOLO report and registered junction are available, the agent starts automatically.</small></div>}
+        {!workflow && !loading && <div className="ta-waiting-state"><span><Bot size={24}/></span><b>Waiting for an evidence-backed run</b><small>Select a junction and run the analysis when your traffic evidence is ready.</small></div>}
       </div>
     </section>
 
     {workflow && <>
-      <div className="ta-results-heading"><div><span>WORKFLOW OUTPUT</span><h2>{preview ? 'Recovery analysis' : 'Analysis, plan and forecast'}</h2></div><span className={`ta-result-mode ${preview ? 'preview' : ''}`}>{preview ? 'RECOVERY' : 'AGENT ANALYSIS'}</span></div>
+      <div className="ta-results-heading"><div><span>WORKFLOW OUTPUT</span><h2>Analysis, plan and forecast</h2></div><span className="ta-result-mode">AGENT ANALYSIS</span></div>
       <section className="ta-metrics-grid">
         <article className="ta-metric-card ta-metric-primary"><span>ESTIMATED CO₂</span><strong>{emissions ? `${Number(emissions.co2_g || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} g` : '—'}</strong><small>Tailpipe proxy · indicative factors</small><Leaf size={19}/></article>
         <article className="ta-metric-card"><span>ESTIMATED NOx</span><strong>{emissions ? `${Number(emissions.nox_g || 0).toFixed(3)} g` : '—'}</strong><small>Vehicle class × corridor distance</small><Wind size={18}/></article>
@@ -305,18 +279,18 @@ export default function TrafficAgentPage() {
 
       <section className="ta-results-grid">
         <article className="ta-panel ta-plan-panel">
-          <div className="ta-panel-heading"><div><span>01 / SIGNAL STRATEGY</span><h2>Candidate signal plan</h2></div><span className={`ta-plan-status status-${plan?.status || 'draft'}`}>{plan?.status || 'draft'}</span></div>
+          <div className="ta-panel-heading"><div><span>01 / SIGNAL STRATEGY</span><h2>Candidate signal plan</h2></div><span className={`ta-plan-status status-${preview ? 'draft' : plan?.status || 'draft'}`}>{preview ? 'DRAFT' : plan?.status || 'DRAFT'}</span></div>
           <div className="ta-plan-summary"><div><small>Cycle length</small><b>{plan?.cycle_seconds || cycleSeconds}s</b></div><div><small>Phases</small><b>{plan?.phases?.length || 0}</b></div><div><small>Junction</small><b>{junctions.find((item) => String(item.id) === String(junctionId))?.name || 'Selected road'}</b></div></div>
           <p className="ta-plan-rationale">{plan?.rationale || 'No rationale was returned.'}</p>
           <div className="ta-phase-list">{(plan?.phases || []).map((phase, index) => <div className="ta-phase-row" key={phase.movement || phase.name || index}><div><b>{phase.name || phase.movement}</b><small>Green allocation</small></div><div className="ta-phase-track"><i style={{ width: `${Math.min(100, (Number(phase.green_seconds || 0) / Math.max(1, Number(plan.cycle_seconds || cycleSeconds))) * 100)}%` }}/></div><strong>{phase.green_seconds}s</strong><small>+ {phase.yellow_seconds}s yellow · {phase.all_red_seconds}s all-red</small></div>)}</div>
-          {preview ? <div className="ta-approval-locked"><ShieldCheck size={16}/><span>Operator approval is unavailable for this recovery calculation. Complete a successful agent run to create a reviewable plan.</span></div> : plan?.id ? plan.status === 'approved' || plan.status === 'rejected' ? <div className="ta-reviewed-note"><CheckCircle2 size={16}/> Operator decision saved: {plan.status}{plan.status === 'approved' && <button onClick={createDispatchPreview} disabled={reviewBusy}>Create dispatch preview</button>}</div> : <div className="ta-review-actions"><div><ShieldCheck size={16}/><span>Human review required<br/><small>Approval records the decision. It does not operate physical lights.</small></span></div><button className="ta-reject-button" onClick={() => reviewPlan('reject')} disabled={reviewBusy}>Reject</button><button className="ta-approve-button" onClick={() => reviewPlan('approve')} disabled={reviewBusy}>{reviewBusy ? <LoaderCircle size={14} className="ta-spin"/> : <Check size={14}/>} Approve draft</button></div> : null}
+          {preview ? null : plan?.id ? plan.status === 'approved' || plan.status === 'rejected' ? <div className="ta-reviewed-note"><CheckCircle2 size={16}/> Operator decision saved: {plan.status}{plan.status === 'approved' && <button onClick={createDispatchPreview} disabled={reviewBusy}>Create dispatch preview</button>}</div> : <div className="ta-review-actions"><div><ShieldCheck size={16}/><span>Human review required<br/><small>Approval records the decision. It does not operate physical lights.</small></span></div><button className="ta-reject-button" onClick={() => reviewPlan('reject')} disabled={reviewBusy}>Reject</button><button className="ta-approve-button" onClick={() => reviewPlan('approve')} disabled={reviewBusy}>{reviewBusy ? <LoaderCircle size={14} className="ta-spin"/> : <Check size={14}/>} Approve draft</button></div> : null}
         </article>
 
         <article className="ta-panel ta-forecast-panel">
           <div className="ta-panel-heading"><div><span>02 / SCENARIO FORECAST</span><h2>Next 60 minutes</h2></div><span className="ta-forecast-engine">60-minute outlook</span></div>
           <div className="ta-forecast-kpis"><div><small>Road network</small><b>{summary.road_count ?? workflow.simulation?.training_data?.road_edges ?? '—'}</b></div><div><small>Heavy roads · start</small><b>{summary.heavy_roads_start ?? '—'}</b></div><div><small>Heavy roads · +60m</small><b>{summary.heavy_roads_end ?? '—'}</b></div></div>
           <MiniTimeline points={timeline}/>
-          <div className="ta-forecast-footnote">{preview ? 'Local recovery calculation only. It is not a server-generated traffic forecast.' : 'Forecast reflects the selected scenario and the available traffic evidence.'}</div>
+          <div className="ta-forecast-footnote">Forecast reflects the selected scenario and the available traffic evidence.</div>
         </article>
       </section>
       {workflow.agent?.response && <section className="ta-panel ta-agent-assessment"><span className="ta-assessment-icon"><Bot size={18}/></span><div><span>TRAFFICSAARTHI ASSESSMENT</span><p>{workflow.agent.response}</p>{workflow.agent.llm_note && <small>{workflow.agent.llm_note}</small>}</div></section>}

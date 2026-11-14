@@ -11,6 +11,7 @@ import './styles/premium-ui.css';
 import './styles/polish.css';
 import './styles/app-shell-refinement.css';
 import './styles/workspace-polish.css';
+import './styles/responsive-product.css';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>

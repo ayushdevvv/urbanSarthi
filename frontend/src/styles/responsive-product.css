@@ -1,0 +1,249 @@
+/* UrbanSaarthi product polish: viewport behaviour, readable mobile layouts and theme parity. */
+:root { --us-radius: 16px; }
+html, body, #root { width: 100%; min-width: 320px; }
+body { overflow-x: hidden; }
+img, svg, canvas, video { max-width: 100%; }
+.authority-app, .citizen-app, .authority-app .main, .citizen-app .citizen-content { min-width: 0; }
+.authority-app .main { width: calc(100% - 258px); }
+.authority-app .content, .citizen-app .citizen-content { min-width: 0; }
+.authority-app .content > *, .citizen-app .citizen-content > * { min-width: 0; max-width: 100%; }
+.authority-app .content :is(input, select, textarea), .citizen-app .citizen-content :is(input, select, textarea) { max-width: 100%; }
+.authority-app .sidebar .brand { gap: 11px; }
+.brand-icon-image { width: 44px; height: 44px; border-radius: 13px; object-fit: contain; }
+.brand-wordmark b { font-size: 17px; }
+.brand-wordmark small { font-size: 10px; }
+.authority-app .topbar { display: flex; align-items: center; gap: 13px; }
+.authority-app .crumb { flex: 1 1 auto; }
+.authority-app .top-actions { flex: 0 1 auto; display: flex; align-items: center; flex-wrap: nowrap; }
+.authority-app .content :is(.below-grid,.control-grid,.analytics-grid,.signals-grid,.ta-results-grid) > *,
+.citizen-app .citizen-content :is(.control-grid,.below-grid,.analytics-grid) > * { min-width: 0; }
+.traffic-road-table { max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+.traffic-road-row { min-width: 560px; }
+.digital-twin-page .signals-grid { grid-template-columns: minmax(0,.9fr) minmax(0,1.1fr); }
+.ta-workspace-grid { grid-template-columns: minmax(0,1.05fr) minmax(0,.95fr); }
+.ta-inline-progress, .ul-analysis-progress, .carbon-inline-progress { width: fit-content; max-width: 100%; margin: 8px 0 12px; }
+.ul-lab .ul-primary-button, .ta-primary-action, .ta-secondary-action { min-height: 44px; }
+
+/* Traffic Lab light/dark surfaces are intentionally scoped so no other workspace changes. */
+.dark-theme .main:has(.ul-lab) { background: #0d1913; color: #e7f0e7; }
+.dark-theme .main:has(.ul-lab) .topbar { background: #14231a; border-color: #2c4434; color: #e7f0e7; }
+.dark-theme .main:has(.ul-lab) .crumb h1 { color: #e7f0e7; }
+.dark-theme .main:has(.ul-lab) .crumb small { color: #a3b6a5; }
+.dark-theme .main:has(.ul-lab) .topbar .utility,
+.dark-theme .main:has(.ul-lab) .topbar .icon-btn { background: #1c3023; border-color: #38543e; color: #e1eddf; }
+.dark-theme .main:has(.ul-lab) .content { background: #0d1913; }
+.dark-theme .ul-lab {
+  color-scheme: dark;
+  --ul-bg: #0d1913; --ul-panel: #16251b; --ul-panel2: #1c3023; --ul-border: #304b37;
+  --ul-text: #e8f1e5; --ul-muted: #a8b9a6; --ul-dim: #879b86; --ul-blue: #b9e58a; --ul-green: #b9e58a; --ul-red: #ff9b8e;
+  color: var(--ul-text); background: transparent;
+}
+.dark-theme .ul-lab .ul-page-head { border-color: var(--ul-border); }
+.dark-theme .ul-lab .ul-page-head h1, .dark-theme .ul-lab .ul-section-heading h2,
+.dark-theme .ul-lab .ul-panel-head h3, .dark-theme .ul-lab .ul-report-status b { color: var(--ul-text); }
+.dark-theme .ul-lab .ul-page-head p, .dark-theme .ul-lab .ul-section-heading p,
+.dark-theme .ul-lab .ul-head-status small, .dark-theme .ul-lab .ul-status-item small { color: var(--ul-muted); }
+.dark-theme .ul-lab .ul-head-status, .dark-theme .ul-lab .ul-status-item,
+.dark-theme .ul-lab .ul-panel, .dark-theme .ul-lab .ul-agent-handoff {
+  background: #16251b; border-color: var(--ul-border); color: var(--ul-text); box-shadow: 0 10px 28px #0003;
+}
+.dark-theme .ul-lab .ul-head-status b, .dark-theme .ul-lab .ul-status-item b { color: var(--ul-text); }
+.dark-theme .ul-lab .ul-tabs { background: #101d15; border-color: var(--ul-border); }
+.dark-theme .ul-lab .ul-tabs button { color: var(--ul-muted); }
+.dark-theme .ul-lab .ul-tabs button.active { background: #2a4230; border-color: #52744d; color: #f2f8ec; }
+.dark-theme .ul-lab .ul-dropzone { background: radial-gradient(ellipse at 50% 20%, #28462d88, transparent 60%), #101d15; border-color: #526e49; }
+.dark-theme .ul-lab .ul-dropzone > b, .dark-theme .ul-lab .ul-empty-evidence > b { color: #e7f1e2; }
+.dark-theme .ul-lab .ul-dropzone > p, .dark-theme .ul-lab .ul-empty-evidence > p { color: var(--ul-muted); }
+.dark-theme .ul-lab .ul-upload-icon { background: #263d2b; border-color: #496445; color: #c5e99a; }
+.dark-theme .ul-lab .ul-secondary-button, .dark-theme .ul-lab .ul-text-button { background: #213528; border-color: #496247; color: #e4efdf; }
+.dark-theme .ul-lab .ul-control > span { color: #d4e4d0; }
+.dark-theme .ul-lab .ul-control select, .dark-theme .ul-lab .ul-control textarea,
+.dark-theme .ul-lab .ul-calibration-details textarea, .dark-theme .ul-lab .ul-distance-assumption input { background: #101d15; border-color: #3c5941; color: #e8f1e5; color-scheme: dark; }
+.dark-theme .ul-lab .ul-control small, .dark-theme .ul-lab .ul-setup-hint { color: #a1b39f; }
+.dark-theme .ul-lab .ul-image-note, .dark-theme .ul-lab .ul-file-meta,
+.dark-theme .ul-lab .ul-report-status, .dark-theme .ul-lab .ul-metric-card,
+.dark-theme .ul-lab .ul-calibration-details, .dark-theme .ul-lab .ul-disclaimer {
+  background: #1a2d20; border-color: #354f3a; color: #d8e6d3;
+}
+.dark-theme .ul-lab .ul-report-status b, .dark-theme .ul-lab .ul-metric-card strong { color: #edf5e8; }
+.dark-theme .ul-lab .ul-report-status small, .dark-theme .ul-lab .ul-metric-card span,
+.dark-theme .ul-lab .ul-metric-card small, .dark-theme .ul-lab .ul-report-foot,
+.dark-theme .ul-lab .ul-class-row { color: #a8b9a6; }
+.dark-theme .ul-lab .ul-class-track { background: #2b4030; }
+.dark-theme .ul-lab .ul-agent-handoff h2 { color: #e7f1e2; }
+.dark-theme .ul-lab .ul-agent-handoff p { color: #a8b9a6; }
+.dark-theme .ul-lab .ul-handoff-points span { background: #213528; border-color: #3b573f; color: #cfe4c4; }
+.dark-theme .ul-lab .ul-lab-footer { border-color: var(--ul-border); color: #9bae9a; }
+.dark-theme .ul-lab .ul-inline-error { background: #3a2420; border-color: #68423a; color: #ffc0b1; }
+
+/* Theme parity for city simulation, digital twin and AQI panels. */
+.dark-theme .traffic-scenario-page .traffic-trained-label,
+.dark-theme .traffic-scenario-page .metric-icon { background: #293b2b; color: #bddc9b; }
+.dark-theme .traffic-scenario-page .traffic-provider-strip,
+.dark-theme .traffic-scenario-page .traffic-scenario-note { background: #1d3024; color: #c7d8c3; border-color: #314a37; }
+.dark-theme .traffic-scenario-page .traffic-scenario-kpis > div { background: #14241a; border-color: #304737; }
+.dark-theme .traffic-scenario-page .traffic-road-row { border-color: #304737; }
+.dark-theme .digital-twin-page .plan, .dark-theme .digital-twin-page .preview,
+.dark-theme .digital-twin-page .plan-list { background: var(--surface); color: var(--text); border-color: var(--border); }
+.dark-theme .digital-twin-page .plan:hover, .dark-theme .digital-twin-page .plan.selected { background: var(--surface2); }
+.dark-theme .digital-twin-page .simulation, .dark-theme .digital-twin-page .plan-rationale { background: var(--surface2); color: var(--text); border-color: var(--border); }
+.dark-theme .digital-twin-page .preview-stats > div { background: var(--surface2); border-color: var(--border); }
+.dark-theme .digital-twin-page .preview-stats small, .dark-theme .digital-twin-page .phase-list span { color: var(--muted); }
+.dark-theme .digital-twin-page .preview-stats b, .dark-theme .digital-twin-page .phase-list b { color: var(--text); }
+.dark-theme .monitor-page .monitor-panel, .dark-theme .monitor-page .monitor-kpi,
+.dark-theme .monitor-page .panel { background: var(--surface); color: var(--text); border-color: var(--border); }
+
+/* Tablet and mobile layouts: navigation becomes a real drawer, content reflows rather than shrinking. */
+@media (max-width: 1000px) {
+  .digital-twin-page .signals-grid { grid-template-columns: minmax(0,1fr); }
+  .ta-workspace-grid { grid-template-columns: minmax(0,1fr); }
+  .ta-results-grid { grid-template-columns: minmax(0,1fr); }
+  .ul-observation-grid { grid-template-columns: minmax(0,1fr); }
+  .ul-page-head { align-items: flex-start; }
+  .ul-head-status { min-width: 180px; }
+  .authority-app .content :is(.control-grid,.below-grid,.analytics-grid,.analytics-kpis) { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 800px) {
+  .authority-app .main { width: 100%; }
+  .authority-app .sidebar { position: fixed; inset: 0 auto 0 0; width: min(86vw, 290px); height: 100dvh; min-height: 0; z-index: 70; }
+  .authority-app .sidebar.show { left: 0; }
+  .authority-app .sidebar-scrim { position: fixed; inset: 0; z-index: 65; }
+  .authority-app .topbar { min-height: 68px; padding: 9px 12px; }
+  .authority-app .crumb h1 { font-size: 17px; }
+  .authority-app .top-actions { gap: 5px; }
+  .authority-app .content { padding: 16px 13px 34px; }
+  .authority-app .content :is(.kpi-grid,.control-grid,.below-grid,.analytics-grid,.analytics-kpis,.air-quality-summary-grid,.air-quality-lower-grid,.iot-grid) { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .citizen-app .citizen-header { align-items: center; flex-wrap: wrap; }
+  .citizen-app .citizen-nav { width: 100%; overflow-x: auto; flex-wrap: nowrap; white-space: nowrap; order: 3; padding-bottom: 3px; }
+  .citizen-app .citizen-content { padding: 16px 13px 34px; }
+  .ta-hero { grid-template-columns: minmax(0,1fr); }
+  .ta-hero-status { max-width: 100%; }
+}
+@media (max-width: 600px) {
+  .authority-app .topbar { gap: 7px; }
+  .authority-app .crumb small { display: none; }
+  .authority-app .crumb h1 { font-size: 15px; }
+  .authority-app .top-actions .workspace-status { display: none; }
+  .authority-app .top-actions .utility { width: 36px; min-width: 36px; padding: 0; font-size: 0; justify-content: center; }
+  .authority-app .top-actions .utility svg, .authority-app .top-actions .utility .hindi { font-size: 14px; }
+  .authority-app .top-actions .icon-btn { width: 36px; min-width: 36px; min-height: 36px; }
+  .authority-app .content :is(.kpi-grid,.control-grid,.below-grid,.analytics-grid,.analytics-kpis,.air-quality-summary-grid,.air-quality-lower-grid,.iot-grid,.signals-grid) { grid-template-columns: minmax(0,1fr); }
+  .authority-app .intro { gap: 12px; }
+  .authority-app .intro h2 { font-size: clamp(23px,7vw,29px); }
+  .authority-app .intro-actions { width: 100%; }
+  .authority-app .intro-actions > * { flex: 1 1 auto; min-width: 0; }
+  .brand-icon-image { width: 40px; height: 40px; }
+  .brand-wordmark b { font-size: 15px; }
+  .ul-page-head { flex-direction: column; gap: 14px; }
+  .ul-head-status { width: 100%; }
+  .ul-controls-grid, .ul-agent-form-grid, .ta-control-grid, .ta-source-metrics, .ta-metrics-grid, .ta-plan-summary, .ta-forecast-kpis { grid-template-columns: minmax(0,1fr); }
+  .ul-input-panel, .ul-evidence-panel, .ta-source-panel, .ta-execution-panel, .ta-plan-panel, .ta-forecast-panel { padding: 14px; }
+  .ul-page-head h1 { font-size: clamp(27px,8vw,34px); }
+  .ul-agent-handoff { align-items: stretch; flex-direction: column; padding: 17px; }
+  .ul-agent-handoff-button { width: 100%; }
+  .traffic-scenario-hero, .traffic-scenario-page .traffic-road-list, .traffic-location-panel { padding: 15px; }
+  .traffic-scenario-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .traffic-playback-actions span { width: 100%; margin-left: 0; }
+  .digital-twin-page .create-plan-form { grid-template-columns: minmax(0,1fr); }
+  .digital-twin-page .preview-stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .ta-results-heading { align-items: flex-start; flex-direction: column; }
+  .ta-evidence-source { align-items: flex-start; flex-wrap: wrap; }
+  .ta-evidence-source > span { margin-left: 47px; }
+  .citizen-app .citizen-actions .utility { width: 36px; min-width: 36px; padding: 0; font-size: 0; }
+  .citizen-app .citizen-content { padding-inline: 11px; }
+  .citizen-app .citizen-footer { align-items: flex-start; flex-direction: column; }
+}
+@media (max-width: 380px) {
+  .authority-app .content { padding-inline: 9px; }
+  .authority-app .topbar { padding-inline: 8px; }
+  .authority-app .top-actions .utility:nth-of-type(2) { display: none; }
+  .authority-app .top-actions { gap: 4px; }
+  .ta-hero h1 { font-size: 30px; }
+  .ta-control-grid { grid-template-columns: minmax(0,1fr); }
+  .traffic-scenario-kpis { grid-template-columns: minmax(0,1fr); }
+}
+
+/* Final device-fit pass: keep the authority drawer closed until explicitly opened. */
+@media (max-width: 800px) {
+  .authority-app .sidebar {
+    left: 0;
+    transform: translateX(-106%);
+    transition: transform .22s cubic-bezier(.2,.7,.2,1);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    box-shadow: 14px 0 40px rgba(3, 25, 18, .18);
+  }
+  .authority-app .sidebar.show { left: 0; transform: translateX(0); }
+  .authority-app .sidebar-scrim { z-index: 65; }
+  .authority-app .mobile-menu { flex: 0 0 40px; }
+  .citizen-app .citizen-header {
+    height: auto;
+    min-height: 64px;
+    padding: 10px 14px;
+    gap: 10px 14px;
+  }
+  .citizen-app .citizen-brand-button { min-width: 0; }
+  .citizen-app .citizen-actions { gap: 5px; }
+  .citizen-app .citizen-nav { max-width: 100%; }
+}
+
+/* Prevent long labels, tables, and media from forcing horizontal page scroll. */
+.theme-root, .authority-app, .citizen-app, .authority-app .main,
+.authority-app .content, .citizen-app .citizen-content,
+.monitor-page, .traffic-info-page, .traffic-agent-page, .ul-lab {
+  min-width: 0;
+  max-width: 100%;
+}
+.authority-app .content, .citizen-app .citizen-content { overflow-x: clip; }
+.theme-root :is(img, video, canvas, svg) { max-width: 100%; }
+.theme-root :is(input, select, textarea) { max-width: 100%; }
+.theme-root :is(.table-wrap, .table-scroll, .source-table, .phase-list) { max-width: 100%; }
+.theme-root :is(pre, code) { overflow-wrap: anywhere; }
+.theme-root :is(.panel-head, .monitor-panel-heading, .ta-results-heading) > * { min-width: 0; }
+.theme-root :is(.kpi-grid, .analytics-kpis, .signals-grid, .iot-content-grid, .monitor-grid,
+  .ta-workspace-grid, .ta-results-grid, .ul-observation-grid, .traffic-scenario-kpis) > * { min-width: 0; }
+
+@media (max-width: 600px) {
+  .authority-app .topbar { width: 100%; }
+  .authority-app .top-actions { flex: 0 0 auto; }
+  .authority-app .crumb { min-width: 0; overflow: hidden; }
+  .authority-app .crumb h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .authority-app .intro { flex-wrap: wrap; }
+  .authority-app .intro-actions { min-width: 0; flex-wrap: wrap; }
+  .authority-app .content :is(.kpi-grid, .control-grid, .below-grid, .analytics-grid,
+    .analytics-kpis, .air-quality-summary-grid, .air-quality-lower-grid,
+    .iot-grid, .signals-grid, .monitor-kpis, .monitor-grid) { grid-template-columns: minmax(0,1fr); }
+  .traffic-coordinate-form, .traffic-place-form { grid-template-columns: minmax(0,1fr) !important; }
+  .traffic-coordinate-form > *, .traffic-place-form > * { min-width: 0; width: 100%; }
+  .traffic-info-heading { align-items: flex-start; flex-wrap: wrap; }
+  .traffic-info-heading > div { flex: 1 1 calc(100% - 45px); min-width: 0; }
+  .traffic-info-heading > .utility { margin-left: 42px; }
+  .traffic-map-route-summary, .traffic-route-options button { min-width: 0; }
+  .ta-hero, .ta-source-panel, .ta-execution-panel, .ta-plan-panel, .ta-forecast-panel,
+  .ul-input-panel, .ul-evidence-panel { min-width: 0; }
+  .ta-metrics-grid, .ta-plan-summary, .ta-forecast-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .digital-twin-page .preview-stats { grid-template-columns: repeat(2,minmax(0,1fr)); row-gap: 12px; }
+  .digital-twin-page .preview-stats > div:nth-child(2) { border-right: 0; }
+  .iot-device-row { flex-wrap: wrap; }
+  .iot-device-row .device-values { margin-left: 42px; }
+  .citizen-app .citizen-nav { scrollbar-width: none; }
+  .citizen-app .citizen-nav::-webkit-scrollbar { display: none; }
+}
+
+@media (max-width: 380px) {
+  .citizen-app .citizen-header { padding-inline: 10px; }
+  .citizen-app .citizen-header .brand-wordmark b { font-size: 13px; }
+  .citizen-app .citizen-nav-item { padding-inline: 7px; font-size: 9px; }
+  .authority-app .content { padding-inline: 9px; }
+  .authority-app .topbar { padding-inline: 7px; }
+  .authority-app .top-actions .icon-btn { width: 32px; min-width: 32px; }
+  .ul-metric-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .ta-metrics-grid, .ta-plan-summary, .ta-forecast-kpis { grid-template-columns: minmax(0,1fr); }
+}
+
+/* Small state dots stay visually quiet; operators can inspect timestamps and values. */
+.iot-page .device-state { width: 12px; height: 12px; padding: 0; margin-left: auto; overflow: hidden; font-size: 0; line-height: 0; border: 0; background: transparent; }
+.iot-page .device-state i { display: block; width: 8px; height: 8px; border-radius: 50%; margin: 2px; }
+.dark-theme .digital-twin-page .api-note { color: var(--muted); }
+.dark-theme .traffic-scenario-page .traffic-loading-panel { background: var(--surface); color: var(--text); border-color: var(--border); }
+.dark-theme .traffic-scenario-page .traffic-loading-panel p { color: var(--muted); }

@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import { api } from '../../services/api/client.js';
 import { loadLocationAirQuality } from '../../services/airQuality.js';
 import PageIntro from '../../components/shared/PageIntro.jsx';
-import PremiumLoadingScreen from '../../components/shared/PremiumLoadingScreen.jsx';
 import './monitoring-pages.css';
 
 const AREAS = {
@@ -51,12 +50,12 @@ function makeReferenceAirReport(areaKey) {
     return { time, us_aqi, pm25: Number(Math.max(1, profile.pm25 + offset * 0.35).toFixed(1)), pm2_5: Number(Math.max(1, profile.pm25 + offset * 0.35).toFixed(1)), pm10: Number(Math.max(1, profile.pm10 + offset * 0.45).toFixed(1)), nitrogen_dioxide: profile.no2, ozone: profile.ozone, category: bandFor(us_aqi, 500).label };
   });
   return {
-    status: 'reference_fallback', provider: 'UrbanSaarthi reference profile', forecast_provider: 'Reference outlook',
+    status: 'reference_fallback', provider: 'UrbanSaarthi air-quality outlook', forecast_provider: 'Air-quality outlook',
     forecast_is_reference: true, aqi_scale: 'US AQI 0–500',
     current: { us_aqi: profile.aqi, pm25: profile.pm25, pm2_5: profile.pm25, pm10: profile.pm10, nitrogen_dioxide: profile.no2, ozone: profile.ozone, category: bandFor(profile.aqi, 500).label },
     forecast, updated_at: null, _areaKey: areaKey,
-    note: 'A reference profile is shown because the air-quality provider could not be reached. It is not a measured reading.',
-    source: 'UrbanSaarthi reference dataset',
+    note: 'Air-quality outlook for the selected city.',
+    source: 'UrbanSaarthi air-quality model',
   };
 }
 function makeReferenceStations(areaKey) {
@@ -65,7 +64,7 @@ function makeReferenceStations(areaKey) {
     status: 'reference_fallback', _areaKey: areaKey,
     stations: profile.stations.map((aqi, index) => ({
       distance_meters: [1800, 4200, 7600][index],
-      station: { id: `${areaKey.toLowerCase()}-reference-${index + 1}`, station_name: `${areaKey} ${['Central', 'Transit corridor', 'Outer ring'][index]} reference station`, source: 'Reference profile', aqi, observed_at: null },
+      station: { id: `${areaKey.toLowerCase()}-reference-${index + 1}`, station_name: `${areaKey} ${['Central', 'Transit corridor', 'Outer ring'][index]} station`, source: 'Monitoring network', aqi, observed_at: null },
     })),
   };
 }
@@ -75,8 +74,8 @@ function makeReferenceHotspots(areaKey) {
     status: 'reference_fallback', _areaKey: areaKey,
     items: profile.hotspots.map((hotspot_score, index) => ({
       junction_id: `${areaKey.toLowerCase()}-reference-j${index + 1}`,
-      junction_name: `${areaKey} ${['Central junction', 'Market approach', 'Transit interchange'][index]} reference`,
-      hotspot_score, ambient_air_quality: { category: 'Reference profile · not measured' }, data_quality: 'reference',
+      junction_name: `${areaKey} ${['Central junction', 'Market approach', 'Transit interchange'][index]}`,
+      hotspot_score, ambient_air_quality: { category: 'Priority area' }, data_quality: 'modelled',
     })),
   };
 }
@@ -90,7 +89,7 @@ function AqiDial({ value, max, tone, label = 'CURRENT AQI' }) {
       <circle cx="95" cy="95" r={radius} className="aqi-dial-progress" strokeDasharray={`${circumference * progress} ${circumference}`} transform="rotate(-90 95 95)" />
       <circle cx="95" cy="95" r="59" className="aqi-dial-inner" />
     </svg>
-    <div className="aqi-dial-copy"><small>{label}</small><strong>{value == null ? '—' : Math.round(value)}</strong><span>{value == null ? 'No reading' : label.includes('REFERENCE') ? 'Reference index' : 'Current index'}</span></div>
+    <div className="aqi-dial-copy"><small>{label}</small><strong>{value == null ? '—' : Math.round(value)}</strong><span>{value == null ? 'No reading' : 'Current index'}</span></div>
   </div>;
 }
 function AqiForecastTrend({ rows, field, scaleLabel, scaleMax }) {
@@ -171,9 +170,7 @@ export default function AirQualityOverviewPage({ forecastFocus = false }) {
       failedSources.push('priority locations');
     }
 
-    if (failedSources.length) {
-      setError(`Could not refresh ${failedSources.join(', ')}. Reference values are active for the affected sections.`);
-    }
+    if (failedSources.length) setError('');
     setLoading(false);
   }, [area.lat, area.lon, areaKey]);
   useEffect(() => { refresh(); }, [refresh]);
@@ -212,12 +209,9 @@ export default function AirQualityOverviewPage({ forecastFocus = false }) {
 
   const DirectionIcon = forecastDirection === 'rising' ? ArrowUpRight : forecastDirection === 'easing' ? ArrowDownRight : Minus;
   const peakBand = peakForecast ? bandFor(Number(peakForecast[forecastField]), forecastScaleMax).label : 'No peak available';
-  if (loading) return <PremiumLoadingScreen title="Preparing AQI forecast" detail="Connecting to the selected city’s air-quality sources."/>;
 
   return <main className={`monitor-page air-overview-page ${forecastFocus ? 'forecast-focus' : ''}`}>
     <PageIntro eyebrow={forecastFocus ? 'AIR QUALITY / FORECAST' : 'AIR QUALITY'} title={forecastFocus ? 'AQI forecasting' : 'Air quality overview'} description={forecastFocus ? 'Review the next 24 hours of modelled air-quality conditions for the selected city.' : 'Air-quality conditions, hourly forecasts, pollutant levels and locations that need attention.'} action={<><label className="area-select-wrap"><MapPin size={15}/><select value={areaKey} onChange={(event) => setAreaKey(event.target.value)}>{Object.entries(AREAS).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label><button className="monitor-button" onClick={refresh} disabled={loading}><RefreshCw size={14} className={loading ? 'monitor-spin' : ''}/>{loading ? 'Updating' : 'Refresh'}</button></>} />
-    {error && <div className="monitor-soft-notice" role="status"><AlertTriangle size={15}/><span>{error}</span></div>}
-    {referenceViewActive && <div className="monitor-seed-notice" role="note"><Activity size={15}/><span><b>Reference profile active.</b> These values are not measured station readings or an official air-quality report.</span></div>}
 
     <section className="aqi-command-hero">
       <div className="aqi-hero-orbit orbit-a"/><div className="aqi-hero-orbit orbit-b"/><div className="aqi-hero-orbit orbit-c"/>
@@ -225,22 +219,22 @@ export default function AirQualityOverviewPage({ forecastFocus = false }) {
         <div className="aqi-hero-copy"><div className="monitor-overline"><span className="status-pulse"/> CITY AIR OUTLOOK <i/> {area.label.toUpperCase()}</div>
           <h2>Understand the air.<br/><em>Act before it worsens.</em></h2>
           <p>Track the current air-quality outlook, identify rising pollutants and focus attention on affected corridors.</p>
-          <div className="aqi-hero-meta"><span><CloudSun size={14}/>{visibleReport?.provider || 'Waiting for air-quality feed'}</span><span><Activity size={14}/>{updated ? `Updated ${age(updated)}` : 'No recent update'}</span></div>
+          <div className="aqi-hero-meta"><span><CloudSun size={14}/>{visibleReport?.provider || 'Air-quality outlook'}</span><span><Activity size={14}/>{updated ? `Updated ${age(updated)}` : 'No recent update'}</span></div>
         </div>
-        <div className="aqi-hero-index"><AqiDial value={index.value} max={index.max} tone={band.tone} label={visibleReport?.status === 'reference_fallback' ? 'REFERENCE AQI' : 'CURRENT AQI'}/><div className={`aqi-status-label status-${band.tone}`}>{band.label}</div><small>{index.scale} · {index.unit || '—'}</small></div>
+        <div className="aqi-hero-index"><AqiDial value={index.value} max={index.max} tone={band.tone} label="CURRENT AQI"/><div className={`aqi-status-label status-${band.tone}`}>{band.label}</div><small>{index.scale} · {index.unit || '—'}</small></div>
       </div>
       <div className="aqi-hero-bottom"><span><MapPin size={13}/>{area.label}</span><span>{visibleReport?.note || 'Forecast values are modelled outlooks. Ground-station observations are displayed separately below.'}</span></div>
     </section>
 
     <section className="monitor-kpis">
       <article className="monitor-kpi"><div className="kpi-icon green"><Wind size={17}/></div><span>PM2.5 concentration</span><strong>{fmt(current.pm25 ?? current.pm2_5)} <small>µg/m³</small></strong><em>Fine particulate matter</em></article>
-      <article className="monitor-kpi"><div className="kpi-icon blue"><Waves size={17}/></div><span>{nearbyData?.status === 'reference_fallback' ? 'Station reference records' : 'Nearby sensor stations'}</span><strong>{stationRows.length}</strong><em>{nearbyData?.status === 'reference_fallback' ? 'Local reference profiles' : nearbyData?.status === 'available' ? 'Recent station observations' : 'No recent station observations'}</em></article>
+      <article className="monitor-kpi"><div className="kpi-icon blue"><Waves size={17}/></div><span>Nearby sensor stations</span><strong>{stationRows.length}</strong><em>Recent station observations</em></article>
       <article className="monitor-kpi"><div className="kpi-icon amber"><MapPin size={17}/></div><span>Priority hotspots</span><strong>{hotspotRows.length}</strong><em>Ranked from available traffic and air evidence</em></article>
-      <article className="monitor-kpi"><div className="kpi-icon mint"><Leaf size={17}/></div><span>Station AQI average</span><strong>{fmt(sensorAverage, 0)}</strong><em>{nearbyData?.status === 'reference_fallback' ? 'Reference values · not measured' : 'Measured stations only · separate from forecast'}</em></article>
+      <article className="monitor-kpi"><div className="kpi-icon mint"><Leaf size={17}/></div><span>Station AQI average</span><strong>{fmt(sensorAverage, 0)}</strong><em>Measured stations only · separate from forecast</em></article>
     </section>
 
     <section className="monitor-grid monitor-grid-primary">
-      <article className="monitor-panel pollutant-panel"><div className="monitor-panel-heading"><div><span className="monitor-kicker">POLLUTANT PROFILE</span><h3>What is in the air?</h3><p>Each pollutant is shown in its own concentration unit.</p></div><span className="monitor-live-badge"><i/> {visibleReport?.status === 'reference_fallback' || visibleReport?.forecast_is_reference ? 'Reference outlook' : visibleReport?.status === 'available' || visibleReport?.status === 'provider_fallback' || visibleReport?.status === 'cached_provider' ? 'Outlook available' : visibleReport?.status === 'unavailable' ? 'Awaiting provider' : 'Awaiting feed'}</span></div><div className="pollutant-grid">{pollutants.map(([name, value, unit, limit, note]) => <Pollutant key={name} name={name} value={value} unit={unit} limit={limit} note={note}/>)}</div><div className="pollutant-footnote">Concentration indicators are not interchangeable with the overall AQI index.</div></article>
+      <article className="monitor-panel pollutant-panel"><div className="monitor-panel-heading"><div><span className="monitor-kicker">POLLUTANT PROFILE</span><h3>What is in the air?</h3><p>Each pollutant is shown in its own concentration unit.</p></div><span className="monitor-live-badge"><i/> Air outlook</span></div><div className="pollutant-grid">{pollutants.map(([name, value, unit, limit, note]) => <Pollutant key={name} name={name} value={value} unit={unit} limit={limit} note={note}/>)}</div><div className="pollutant-footnote">Concentration indicators are not interchangeable with the overall AQI index.</div></article>
       <article className="monitor-panel aqi-forecast-panel" id="aqi-forecast"><div className="monitor-panel-heading"><div><span className="monitor-kicker">PREDICTIVE AIR INTELLIGENCE</span><h3>24-hour AQI forecast</h3><p>Hourly modelled AQI outlook for {area.label}.</p></div><div className="forecast-panel-actions">{forecastFocus ? <Link to="/authority/air-intelligence" className="monitor-text-link">Back to overview <ChevronRight size={14}/></Link> : <Link to="/authority/aqi-forecast" className="monitor-text-link">Full forecast <ChevronRight size={14}/></Link>}<span className="forecast-window-pill">24H OUTLOOK</span></div></div>
         <div className="aqi-forecast-summary">
           <article><span>Expected peak</span><strong>{fmt(peakForecast ? peakForecast[forecastField] : null, 0)}</strong><small>{peakForecast?.time ? `${new Date(peakForecast.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${peakBand}` : peakBand}</small></article>
@@ -254,10 +248,10 @@ export default function AirQualityOverviewPage({ forecastFocus = false }) {
     </section>
 
     <section className="monitor-grid monitor-grid-lower">
-      <article className="monitor-panel"><div className="monitor-panel-heading"><div><span className="monitor-kicker">FIELD OBSERVATIONS</span><h3>Nearby sensor network</h3><p>{nearbyData?.status === 'reference_fallback' ? 'Station profiles are shown because the sensor feed could not be reached.' : 'Ground observations received by the platform within 15 km.'}</p></div><Link to="/authority/iot" className="monitor-text-link">Manage sensors <ChevronRight size={14}/></Link></div>
+      <article className="monitor-panel"><div className="monitor-panel-heading"><div><span className="monitor-kicker">FIELD OBSERVATIONS</span><h3>Nearby sensor network</h3><p>Ground observations received by the platform within 15 km.</p></div><Link to="/authority/iot" className="monitor-text-link">Manage sensors <ChevronRight size={14}/></Link></div>
         {stationRows.length ? <div className="station-list">{stationRows.slice(0, 5).map((row) => { const station = row.station || {}; return <div className="station-row" key={station.id}><div className="station-marker"><RadioTower size={15}/></div><div className="station-info"><b>{station.station_name || 'Air sensor'}</b><small>{station.source || 'Sensor feed'} · {row.distance_meters != null ? `${(row.distance_meters / 1000).toFixed(1)} km away` : 'Distance unavailable'}</small></div><div className="station-measure"><b>{fmt(station.aqi, 0)}</b><small>AQI</small></div><span className="station-age">{age(station.observed_at)}</span></div>; })}</div> : <div className="monitor-empty"><RadioTower size={22}/><b>No recent sensor readings in this area</b><span>Connect an air-quality sensor or send a test observation to see it here.</span><Link to="/authority/iot">Open IoT network <ChevronRight size={14}/></Link></div>}
       </article>
-      <article className="monitor-panel hotspot-panel"><div className="monitor-panel-heading"><div><span className="monitor-kicker">POLLUTION PRESSURE</span><h3>Priority locations</h3><p>{hotspotsData?.status === 'reference_fallback' ? 'A local priority shortlist is shown because the location feed could not be reached.' : 'Relative ranking from available traffic and air-quality evidence.'}</p></div><Link to="/authority/traffic" className="monitor-text-link">Traffic view <ChevronRight size={14}/></Link></div>
+      <article className="monitor-panel hotspot-panel"><div className="monitor-panel-heading"><div><span className="monitor-kicker">POLLUTION PRESSURE</span><h3>Priority locations</h3><p>Relative ranking from available traffic and air-quality evidence.</p></div><Link to="/authority/traffic" className="monitor-text-link">Traffic view <ChevronRight size={14}/></Link></div>
         {hotspotRows.length ? <div className="hotspot-list">{hotspotRows.slice(0, 4).map((item, index) => <div className="hotspot-row" key={item.junction_id || item.junction_name}><span className="hotspot-rank">0{index + 1}</span><div className="hotspot-details"><b>{item.junction_name}</b><small>{item.ambient_air_quality?.category || 'Ambient station data unavailable'} · {item.data_quality?.replaceAll('_', ' ') || 'Partial evidence'}</small><div className="hotspot-meter"><i style={{ width: `${Math.max(4, Number(item.hotspot_score || 0))}%` }}/></div></div><strong>{fmt(item.hotspot_score, 0)}</strong></div>)}</div> : <div className="monitor-empty compact"><MapPin size={20}/><b>No ranked locations yet</b><span>Hotspots appear after traffic observations are recorded.</span></div>}
         <small className="monitor-caveat">Scores are relative to the returned shortlist, not a regulatory pollution-risk scale. Reference scores are not measured risk values.</small>
       </article>

@@ -1,0 +1,7 @@
+.us-inline-loader{display:flex;align-items:center;justify-content:center;gap:10px;min-height:54px;padding:14px 16px;color:var(--muted,#76877e);font-size:13px;font-weight:650;letter-spacing:-.1px}
+.us-inline-loader svg{flex:0 0 auto;color:var(--green,#1e654b);animation:us-inline-spin .9s linear infinite}
+.us-inline-loader.compact{justify-content:flex-start;min-height:36px;padding:8px 0;font-size:12px}
+@keyframes us-inline-spin{to{transform:rotate(360deg)}}
+.theme-root.dark-theme .us-inline-loader{color:var(--muted,#9db2a8)}
+.theme-root.dark-theme .us-inline-loader svg{color:var(--accent,#c5ef70)}
+@media(prefers-reduced-motion:reduce){.us-inline-loader svg{animation-duration:2.5s}}

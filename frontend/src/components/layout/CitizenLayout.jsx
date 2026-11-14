@@ -3,7 +3,6 @@ import { Activity, Bus, Camera, House, MapPin, Moon, Sun, TrendingUp } from 'luc
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 import FloatingAgentWidget from '../shared/FloatingAgentWidget.jsx';
-import DataStatusBanner from '../shared/DataStatusBanner.jsx';
 
 const links = [
   { to: '/citizen', label: 'Home', icon: House, end: true },
@@ -27,7 +26,7 @@ export default function CitizenLayout() {
         <button className="citizen-avatar" aria-label="UrbanSaarthi portal home" title="UrbanSaarthi portal" onClick={() => navigate('/citizen')}>US</button>
       </div>
     </header>
-    <main className="citizen-content"><DataStatusBanner/><Outlet /></main>
+    <main className="citizen-content"><Outlet /></main>
     <footer className="citizen-footer"><span>UrbanSaarthi · India</span><span>Air quality & traffic monitoring</span><span>Emergency: 112</span></footer>
     <FloatingAgentWidget mode="citizen" />
   </div>;
