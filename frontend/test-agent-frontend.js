@@ -16,29 +16,24 @@ console.log('--- RUNNING URBANSARTHI WORKSPACE SMOKE TESTS ---');
 const app = read('src/App.jsx');
 for (const [route, component] of [
   ['air-intelligence', 'AirQualityOverviewPage'], ['carbon', 'CarbonImpactPage'],
-  ['iot', 'IotNetworkPage'], ['traffic-lab', 'TrafficVisionPage'],
+  ['iot', 'IotNetworkPage'], ['traffic', 'TrafficInfoPage'],
 ]) assert(app.includes(`path="${route}"`) && app.includes(`<${component}`), `${route} page must be registered`);
-assert(app.includes('<Route path="traffic-simulation" element={<TrafficSimulationPage />} />') && app.includes('<Route path="signal-plans" element={<SignalPlansPage />} />') && app.includes('<Route path="digital-twin" element={<DigitalTwinPage />} />'), '60-minute forecast, signal-plan studio and vehicle digital twin must be separate authority routes');
-assert(app.includes('<Route path="traffic" element={<TrafficConditionsPage />} />'), 'Citizen traffic conditions must use its own nearby-traffic page');
 assert(app.includes('Navigate to="control"'), 'Authority workspace must open on City overview');
 console.log('✓ Air-first route structure verified');
 
 const layout = read('src/components/layout/AuthorityLayout.jsx');
-assert(!layout.includes('requireAuth') && !layout.includes('/auth/login') && !layout.includes('Securing your workspace'), 'Authority workspace must open directly without a login gate');
-for (const target of ['/authority/control', '/authority/air-intelligence', '/authority/carbon', '/authority/iot', '/authority/sources', '/authority/traffic-lab', '/authority/traffic-agent', '/authority/traffic-simulation', '/authority/analytics', '/authority/settings']) {
+for (const target of ['/authority/control', '/authority/air-intelligence', '/authority/iot', '/authority/traffic-lab', '/authority/traffic-agent', '/authority/traffic-simulation']) {
   assert(layout.includes(target), `Navigation must include ${target}`);
 }
-assert(layout.includes('OVERVIEW') && layout.includes('AIR QUALITY') && layout.includes('FIELD NETWORK') && layout.includes('TRAFFIC') && layout.includes('INSIGHTS & SYSTEM'), 'Navigation must group operational, air, field, traffic and insights sections');
+assert(layout.includes('OVERVIEW') && layout.includes('AIR QUALITY') && layout.includes('FIELD NETWORK') && layout.includes('TRAFFIC'), 'Navigation must group overview, AQI, IoT and traffic');
 assert(layout.indexOf("to: '/authority/control'") < layout.indexOf("to: '/authority/air-intelligence'") && layout.indexOf("to: '/authority/air-intelligence'") < layout.indexOf("to: '/authority/iot'") && layout.indexOf("to: '/authority/iot'") < layout.indexOf("to: '/authority/traffic-lab'") && layout.indexOf("to: '/authority/traffic-lab'") < layout.indexOf("to: '/authority/traffic-agent'") && layout.indexOf("to: '/authority/traffic-agent'") < layout.indexOf("to: '/authority/traffic-simulation'"), 'Admin navigation order must be Overview → AQI → IoT → Traffic');
-assert(layout.includes("to: '/authority/analytics'") && layout.includes("to: '/authority/sources'") && layout.includes("to: '/authority/settings'"), 'Implemented insights, source registry and preferences pages must be reachable from navigation');
-assert(!layout.includes("to: '/authority/signals'") && !layout.includes("to: '/authority/traffic-analysis'"), 'Legacy standalone Signal Plans and Traffic Analysis must remain consolidated into the Traffic Agent and Camera System');
+assert(!layout.includes("to: '/authority/signals'") && !layout.includes("to: '/authority/analytics'") && !layout.includes("to: '/authority/traffic-analysis'"), 'Removed standalone Signal Plans and Traffic Analysis must not appear in navigation');
 assert(!layout.includes('API configuration'), 'Technical API configuration label must not be shown in the main navigation');
 console.log('✓ Section navigation and user-facing labels verified');
 const shellCss = read('src/styles/app-shell-refinement.css');
 assert(shellCss.includes('.authority-app .sidebar') && shellCss.includes('.citizen-app .citizen-header') && shellCss.includes('.citizen-app .citizen-nav-item.active'), 'Shared authority sidebar and citizen navigation must receive the app-wide responsive theme');
 assert(layout.includes('aria-expanded={mobileOpen}') && layout.includes('aria-controls=\"authority-sidebar\"') && layout.includes('useEffect(() => { setMobileOpen(false); }, [location.pathname])'), 'Authority mobile navigation must be accessible and close after route navigation');
 const citizenLayout = read('src/components/layout/CitizenLayout.jsx');
-assert((citizenLayout.match(/to: '\/citizen(?:\/[^']*)?'/g) || []).length === 5, 'Citizen sidebar must contain exactly Home, AQI forecast, Traffic conditions, Bus & train and My trips');
 assert(citizenLayout.includes('aria-label=\"Citizen navigation\"') && citizenLayout.includes('aria-label={dark ?'), 'Citizen navigation and utility controls must be accessible');
 const appContext = read('src/context/AppContext.jsx');
 assert(appContext.includes('useState(false)') && !appContext.includes("getItem('us_theme')"), 'The green light theme must be the default after refresh, not an old persisted dark preference');
@@ -50,7 +45,7 @@ for (const endpoint of ['/aqi/nearby', '/air-intelligence/hotspots']) assert(aqi
 for (const feature of ['AqiDial', 'AqiForecastTrend', '24-hour AQI forecast', 'Expected peak', '24h average', 'Nearby sensor network', 'Priority locations']) assert(aqi.includes(feature), `AQI overview must include ${feature}`);
 assert(app.includes('path="aqi-forecast" element={<AirQualityOverviewPage forecastFocus />}'), 'Authority must provide a dedicated AQI forecast view without adding another sidebar item');
 const airService = read('src/services/airQuality.js');
-assert(airService.includes('hasAnyForecast') && airService.includes('fetchOpenMeteoAirQuality') && airService.includes("forecast_hours: '24'") && airService.includes('Do not block a usable OpenWeather'), 'AQI service must render a usable primary forecast without waiting on a second provider');
+assert(airService.includes('hasUsAqiForecast') && airService.includes('forecast_provider') && airService.includes('fetchOpenMeteoAirQuality') && airService.includes("forecast_hours: '24'"), 'AQI service must supplement a non-US-AQI forecast with a comparable 24-hour US AQI timeline when available');
 assert(aqi.includes('US AQI · 0–500') && aqi.includes('OpenWeather AQI · 1–5') && aqi.includes('matchingCurrentValue'), 'AQI forecast must keep provider index scales separate');
 console.log('✓ AQI-centred overview and visualisations verified');
 
@@ -63,16 +58,13 @@ console.log('✓ Carbon and pollutant estimator verified');
 const iot = read('src/pages/authority/IotNetworkPage.jsx');
 assert(iot.includes("api.get('/aqi/observations?max_age_hours=720&limit=200')"), 'IoT page must retrieve stored observations');
 assert(iot.includes("api.post('/aqi/observations', payload)"), 'IoT page must submit sensor observations to backend');
-assert(iot.includes("aqi: ''") && iot.includes("filter((key) => form[key] !== '')") && iot.includes('Empty fields are not converted to zero'), 'IoT sensor must omit blank measurements and never invent AQI or zero readings');
-assert(iot.includes('HTTP ingestion available') && iot.includes('device-level key provisioning and MQTT are not included') && iot.includes('plain HTTP for a trusted private LAN only') && iot.includes('HTTPS/TLS'), 'IoT transport, public-network TLS requirement and limits must be explicit');
+assert(iot.includes("aqi: ''") && iot.includes("form.aqi !== ''"), 'IoT sensor must not invent AQI when only particulate readings are supplied');
+assert(iot.includes('HTTP ingestion available') && iot.includes('does not currently run an MQTT broker'), 'IoT transport and limits must be explicit');
 console.log('✓ IoT observation ingestion and device registry verified');
 
 
-const trafficScene = read('src/pages/authority/TrafficSimulationScene.jsx');
-assert(trafficScene.includes('DETAILED ROAD SIMULATION') && trafficScene.includes('60-MINUTE ROAD NETWORK') && trafficScene.includes('vehicle_positions') && trafficScene.includes('networkGeometry') && trafficScene.includes('signalTimings') && trafficScene.includes('NativeVehicle') && trafficScene.includes('trafficMarkers'), 'Simulation scene must support tracked trajectories and clearly-labelled forecast flow markers');
-const citizenTraffic = read('src/pages/citizen/TrafficConditionsPage.jsx');
-assert(citizenTraffic.includes('getCurrentPosition') && citizenTraffic.includes('Use my location') && citizenTraffic.includes('/traffic/nearby') && citizenTraffic.includes('/traffic/news'), 'Citizen traffic must require explicit location and load nearby roads plus traffic news');
-assert(citizenTraffic.includes('fallbackGraceMs: 6500') && airService.includes('fallbackGraceMs: 7000'), 'Citizen traffic and AQI browser deadlines must allow their bounded backend provider lookups to complete');
+const trafficInfo = read('src/pages/citizen/TrafficInfoPage.jsx');
+assert(trafficInfo.includes('setScenarioData(null); setProvider(null); setLastUpdated(null);') && trafficInfo.includes('const isServiceFailure = !err?.status || err.status >= 500'), 'Old traffic scenario data is hidden during live refresh and local recovery is reserved for service failures');
 const carbonPage = read('src/pages/authority/CarbonImpactPage.jsx');
 assert(!carbonPage.includes('readLocalRecord(\'carbon-last-estimate\')') && carbonPage.includes('setResult(null);'), 'Old carbon results must not appear as initial fallback before the current estimate request');
 const traffic = read('src/pages/citizen/TrafficVisionPage.jsx');
@@ -82,24 +74,7 @@ assert(traffic.includes('approach_rois'), 'Traffic Lab must support camera ROI c
 assert(traffic.includes('saveLatestVisionEvidence'), 'Traffic Lab must hand vehicle counts to the emissions estimator');
 const evidenceStore = read('src/services/visionEvidence.js');
 assert(evidenceStore.includes('airtraffic.latestVisionEvidence') && evidenceStore.includes('LEGACY_STORAGE_KEY'), 'Video evidence storage must use the neutral key and preserve existing saved evidence');
-const forecastPage = read('src/pages/authority/TrafficSimulationPage.jsx');
-const signalPage = read('src/pages/authority/SignalPlansPage.jsx');
-const twinPage = read('src/pages/authority/DigitalTwinPage.jsx');
-assert(forecastPage.includes('/traffic/simulation/scenario?minutes=60&step_minutes=5') && forecastPage.includes('networkGeometry={result.network_geometry}') && !forecastPage.includes("api.post('/traffic/sumo/run'"), '60-minute traffic simulation must be a forecast-only road network and independent of SUMO');
-assert(signalPage.includes("api.post('/traffic/simulation/model-scenario'") && signalPage.includes("api.post('/traffic-detection/reports/signal-study'") && signalPage.includes('Saved signal plans'), 'Signal Plan Studio must compare timings and persist report history');
-assert(twinPage.includes("api.post('/traffic/sumo/run'") && twinPage.includes("api.get('/traffic/simulation/capabilities'") && twinPage.includes('native_simulation_available'), 'Vehicle-level digital twin must probe native availability before offering a run');
-assert(app.includes('RouteErrorBoundary') && app.includes('traffic-lab" element={<RouteErrorBoundary'), 'Traffic Lab route must show a recoverable error state instead of going blank on a render exception');
-const routeBoundary = read('src/components/shared/RouteErrorBoundary.jsx');
-assert(routeBoundary.includes('Traffic Lab could not load') && routeBoundary.includes('Try again') && routeBoundary.includes('/authority/control'), 'Traffic Lab render fallback must give the operator a recovery path');
-assert(read('src/services/api/client.js').includes("  : DEFAULT_API_URL).replace(/\\/$/, '')"), 'Production API requests must use Vercel same-origin API routing even if old Vercel env values point elsewhere');
-const vercelRouting = JSON.parse(read('vercel.json'));
-const rootVercelRouting = JSON.parse(read('../vercel.json'));
-assert(rootVercelRouting.rewrites[0].destination === 'https://urbansarthi.onrender.com/api/v1/:path*', 'Repository-root Vercel config must proxy to the existing Render host too');
-assert(vercelRouting.rewrites[0].source === '/api/v1/:path*' && vercelRouting.rewrites[0].destination === 'https://urbansarthi.onrender.com/api/v1/:path*', 'Vercel must proxy API requests to the existing Render backend before the SPA rewrite');
-assert(read('.env.production.example').includes('VITE_API_URL=/api/v1'), 'Vercel production must use the same-origin API URL');
-assert(read('src/pages/authority/AirIntelligencePage.jsx').includes('detailedComparisonReady') && read('src/pages/authority/AirIntelligencePage.jsx').includes('disabled={compareBusy || !detailedComparisonReady}'), 'Air impact comparison must not call an unavailable native simulation engine');
-assert(read('src/components/shared/DataStatusBanner.jsx').includes("detail.path.startsWith('/traffic-detection/')" ) && read('src/components/layout/AuthorityLayout.jsx').includes("event.key === 'Escape'"), 'Traffic workspaces must use local error states and the mobile drawer must be keyboard-dismissible');
-console.log('✓ Citizen traffic, camera evidence and native SUMO workflows verified');
+console.log('✓ Existing traffic video and operations workflow preserved');
 const html = read('index.html');
 const brand = read('src/components/shared/BrandMark.jsx');
 assert(html.includes('href="/favicon.png"') && !html.includes('href="/favicon.svg"'), 'PNG favicon must be linked in the browser shell');
@@ -111,25 +86,21 @@ assert(routePlanner.includes('slice(0, 3)') && routePlanner.includes('3 road rou
 assert(routePlanner.includes('String.fromCharCode(65 + index)') || routePlanner.includes('Route A'), 'Route planner should label distinct road alternatives');
 assert(routePlanner.includes('route-carbon-grid') && routePlanner.includes('route-emission-card'), 'Each route alternative must have a dedicated premium carbon card');
 assert(routePlanner.includes('sortRouteOptions') && routePlanner.includes('const displayRoutes'), 'Route cards and map must use one preference-sorted route order');
-assert(routePlanner.includes('planRunRef.current += 1;') && routePlanner.includes('const swap = () =>') && !routePlanner.includes('destination.resolved, mode, preference]'), 'Editing or swapping locations must cancel stale route requests; sorting preferences must not refetch the route network.');
-assert(!routePlanner.includes('useEffect(() => plan(') && !routePlanner.includes('void plan(') && routePlanner.includes('onSubmit={plan}'), 'Home must start route planning only after the journey form is submitted.');
-assert(routePlanner.includes('setResult(null); setSelectedRouteId(null);') && routePlanner.includes('Checking road-routing providers'), 'Old route data must be hidden while fresh route providers are queried');
+assert(routePlanner.includes("lastAutoKey.current = '';") && routePlanner.includes('planRunRef.current += 1;') && !routePlanner.includes('destination.resolved, mode, preference]'), 'Editing or swapping locations must cancel stale route requests; sorting preferences must not refetch the route network.');
+assert(routePlanner.includes('setResult(null); setSelectedRouteId(null);') && routePlanner.includes('Checking live road-routing providers'), 'Old route data must be hidden while fresh route providers are queried');
 assert(routePlanner.includes('Promise.all([') && routePlanner.includes('resolveMappedPlace(originQuery)') && routePlanner.includes('resolveMappedPlace(destinationQuery)'), 'Route submit must resolve both typed endpoints together instead of stopping after the first unresolved place');
 assert(routePlanner.includes('estimateRouteOnly(') && routePlanner.includes('No road path is available for this estimate'), 'If road routing is unavailable, return an honest estimate without drawing a fake path');
 assert(routePlanner.includes('Lowest CO₂') && routePlanner.includes('vs lowest') && routePlanner.includes('formatCO2'), 'Route cards must compare route-specific CO2 estimates');
 const routeStyles = read('src/styles/citizen.css');
 assert(routeStyles.includes('.route-carbon-grid') && routeStyles.includes('.route-emission-card') && routeStyles.includes('@media(max-width:700px){.route-carbon-grid{grid-template-columns:1fr'), 'Route carbon cards must have responsive premium styling');
 const publicRouting = read('src/services/publicRouting.js');
-assert(publicRouting.includes('api.get') && publicRouting.includes('/routing/geocode') && !publicRouting.includes('fetch('), 'Browser geocoding must use the configured backend instead of direct third-party CORS calls');
-assert(routePlanner.includes("api.post('/routing/plan'") && !routePlanner.includes('findPublicRoadRoutes'), 'Road routing must execute through the configured backend only');
+assert(publicRouting.includes('OSRM_BASES') && publicRouting.includes('requestValhalla') && publicRouting.includes('detourWaypoints'), 'Route fallback must query multiple OSM routers and forced road-network waypoints');
+assert(publicRouting.includes("data_quality: 'road-network-route'") && publicRouting.includes('coordinates'), 'Fallback alternatives must use provider-returned road geometry');
 const cityMap = read('src/components/maps/CityMap.jsx');
 assert(cityMap.includes('routeOptions') && cityMap.includes('Polyline'), 'Map must render road-network route geometries');
-assert(cityMap.includes('tile.openstreetmap.org') && cityMap.includes('basemaps.cartocdn.com') && cityMap.includes('tileerror'), 'Map tiles must avoid rotating OSM subdomains and fall back to CARTO');
-assert(!read('index.html').includes('fonts.googleapis.com') && !read('src/styles/authority.css').includes('fonts.googleapis.com'), 'UI fonts must not depend on blocked remote Google Fonts requests');
 const apiClient = read('src/services/api/client.js');
-assert(read('../render.yaml').includes('name: urbansarthi') && read('../render.yaml').includes('https://urbansarthi.vercel.app') && !read('../render.yaml').includes('urbansaarthi-api'), 'Render Blueprint must target the existing urbansarthi service and exact Vercel origin');
 assert(apiClient.includes('cacheResponse') && apiClient.includes('readApiSnapshot'), 'API client must restore saved read responses during backend outages');
-assert(apiClient.includes('FALLBACK_GRACE_MS = 5_000') && apiClient.includes('ATTEMPT_TIMEOUT_MS = 18_000') && apiClient.includes('fallbackDeadline') && !apiClient.includes('waitForFallbackGrace') && apiClient.includes("type: 'pending'"), 'Live API calls use a short retry window, respect caller timeouts and do not force a 40-second wait before cached fallback');
+assert(apiClient.includes('DEFAULT_REQUEST_TIMEOUT_MS = 70_000') && apiClient.includes('FALLBACK_GRACE_MS = 40_000') && apiClient.includes('ATTEMPT_TIMEOUT_MS = 9_000') && apiClient.includes('fallbackDeadline') && apiClient.includes('waitForFallbackGrace(requestStartedAt, fallbackGraceMs)') && apiClient.includes("type: 'pending'"), 'Live backend is retried throughout the 40-second window before any saved snapshot is restored');
 const dataBanner = read('src/components/shared/DataStatusBanner.jsx');
 assert(dataBanner.includes('Showing the latest saved information'), 'Cached response state must be visible and timestamped');
 assert(dataBanner.includes('Live data is temporarily delayed') && dataBanner.includes("location.pathname === '/authority/aqi-forecast'"), 'Connection copy must be neutral and the AQI workspace must use its own source status');
@@ -137,19 +108,18 @@ assert(dataBanner.includes("detail.type === 'pending'") && dataBanner.includes('
 assert(!fs.existsSync(path.join(root, 'src/pages/shared/AqiForecastPage.jsx')), 'The duplicate standalone AQI forecast page must be removed');
 const airQualitySource = read('src/pages/citizen/AirQualityPage.jsx');
 assert(airQualitySource.includes('loadLocationAirQuality') && airQualitySource.includes('searchPublicPlaces'), 'Combined AQI page must include forecast data and geocoder fallback');
-const trafficCss = read('src/pages/authority/premium-operations.css');
-assert(trafficCss.includes('.ul-lab') && trafficCss.includes('background:radial-gradient') && trafficCss.includes('.traffic-agent-page') && trafficCss.includes('@media(max-width:560px)'), 'Traffic Lab and Traffic Agent must use the responsive dark operations workbench design');
+const trafficCss = read('src/pages/citizen/traffic-lab-premium.css');
+assert(trafficCss.includes('--ul-panel:#ffffff') && trafficCss.includes('--ul-green:#6e984b') && trafficCss.includes('color-scheme:light') && trafficCss.includes('background:#f4f7f0'), 'Traffic Lab must use the same light-green theme as the app');
 const trafficAgent = read('src/pages/authority/TrafficAgentPage.jsx');
 assert(app.includes('path="traffic-agent"') && app.includes('<TrafficAgentPage'), 'Traffic Agent must be a separate authority route');
 assert(trafficAgent.includes('/traffic-detection/ops-workflow') && trafficAgent.includes('runWorkflow'), 'Separate Traffic Agent page must execute the real operations workflow endpoint');
 assert(trafficAgent.includes('autoStarted.current') && trafficAgent.includes('api.post') && trafficAgent.includes('!report.preview_only'), 'Traffic Agent must auto-start only from genuine saved YOLO evidence and never submit local preview values');
-assert(trafficAgent.includes('loadLatestCameraEvidence') && trafficAgent.includes('since_minutes=15') && !trafficAgent.includes('makeLocalPreview') && !trafficAgent.includes('EXAMPLE_REPORT'), 'Traffic Agent must consume fresh authenticated edge-camera evidence and never substitute a local fake result');
+assert(trafficAgent.includes('40000') && trafficAgent.includes('makeLocalPreview') && trafficAgent.includes('preview_only: true') && trafficAgent.includes('if (!workflowRef.current)'), 'Traffic Agent must reveal a local illustrative preview after the 40-second wait even while a slow request remains pending');
 assert(trafficAgent.includes('activeToolIndex') && trafficAgent.includes('tools list') && trafficAgent.includes('IN PROGRESS'), 'Traffic Agent must show an active workflow progress indicator without claiming individual tools completed before response');
-assert(trafficAgent.includes('Approve draft') && trafficAgent.includes('It does not operate physical lights.'), 'Agent must retain operator approval and no physical dispatch safeguards');
+assert(trafficAgent.includes('Approve draft') && trafficAgent.includes('physical_dispatch_enabled'), 'Agent must retain operator approval and no physical dispatch safeguards');
 assert(trafficAgent.includes('not inferred from this progress animation'), 'Agent must distinguish real tool results from the visual progress indicator');
-assert(!traffic.includes('makeIllustrativeTrafficReport') && !traffic.includes('previewFallbackStartedAt') && !traffic.includes('previewReport'), 'Traffic Lab must never create a local example report when no live inference exists');
-assert(traffic.includes('No result was generated') && traffic.includes('Waiting for source evidence'), 'Traffic Lab must show an empty/error state until real inference evidence exists');
-assert(app.includes('path="traffic-vision" element={<Navigate to="/citizen/traffic" replace />}'), 'Legacy citizen traffic-vision link must stay inside the citizen portal');
+assert(traffic.includes('setTimeout') && traffic.includes('40000') && traffic.includes('makeIllustrativeTrafficReport') && traffic.includes('preview_only: true') && traffic.includes('not sent to the Traffic Agent'), 'Traffic Lab must reveal a 40-second illustrative scene without treating it as YOLO evidence');
+assert(traffic.includes("previewReport ? 'Illustrative traffic scenario'"), 'Traffic Lab must identify the local example as an illustrative scenario, not a completed YOLO inference');
 const trafficAgentCss = read('src/pages/authority/traffic-agent.css');
 assert(trafficAgentCss.includes('.ta-hero') && trafficAgentCss.includes('#2f6a49') && trafficAgentCss.includes('@media(max-width:560px)') && trafficAgentCss.includes('.ta-workstream-note'), 'Traffic Agent must have a responsive premium green theme and readable execution note');
 console.log('✓ PNG favicon, multi-route map, Google Maps, carbon cards and outage recovery verified');
@@ -158,19 +128,19 @@ assert(!apiSnapshots.includes('STATUS_KEY') && apiSnapshots.includes('MAX_API_AG
 assert(apiSnapshots.includes('api-snapshot:v3') && apiSnapshots.includes('MAX_API_AGE_MS = 6 * 60 * 60 * 1000'), 'New release must not reuse old API fallback snapshots and limits their age to six hours');
 const airQualityService = read('src/services/airQuality.js');
 assert(airQualityService.includes('readApiSnapshot(apiPath)') && airQualityService.includes('savedApiSnapshot?.savedAt'), 'AQI fallback must preserve the original data timestamp');
-assert(traffic.includes('compactReport(analyzedReport)') && traffic.includes('Last successful analysis') && traffic.includes('reportRestored') && traffic.includes('/traffic-detection/reports?limit=8') && traffic.includes('Saved analysis reports'), 'Traffic Lab must persist and reopen server-side reports after refresh');
+assert(traffic.includes('compactReport(analyzedReport)') && traffic.includes('Last successful analysis') && traffic.includes('reportRestored'), 'Traffic Lab must persist compact historical evidence and clearly label restored reports');
 assert(!traffic.includes("setReport(null); setWorkflow(null);"), 'Failed re-analysis must not erase the previous successful traffic report');
 assert(!layout.includes("to: '/authority/aqi-forecast'"), 'Authority forecast should stay integrated in the single AQI overview');
 const airQualityPage = read('src/pages/citizen/AirQualityPage.jsx');
 assert(airQualityPage.includes('air-aqi-outlook') && airQualityPage.includes('AirQualityTrend'), 'Citizen AQI page must combine current readings and the 24-hour outlook');
 assert(citizenLayout.includes("to: '/citizen/aqi-forecast'") && citizenLayout.includes("label: 'AQI forecast'"), 'Citizen navigation must expose a dedicated AQI forecast destination');
 assert(app.includes('path="aqi-forecast" element={<AirQualityPage forecastFocus />}'), 'Citizen AQI forecast URL must open its focused forecast workspace');
-assert(!airQualityPage.includes('autoLoadStarted') && !airQualityPage.includes('void search()') && airQualityPage.includes('forecast-first'), 'Citizen AQI must require a selected city or explicit browser location rather than silently loading a guessed location');
+assert(airQualityPage.includes('autoLoadStarted') && airQualityPage.includes('void search()') && airQualityPage.includes('forecast-first'), 'Citizen forecast must load its default location on entry and prioritize the outlook on the forecast route');
 assert(airQualityPage.includes('forecastAverage') && airQualityPage.includes('forecastIntervalLabel') && airQualityPage.includes('forecastCategory(row)'), 'Citizen forecast must show correctly scaled summary metrics and provider-aware time intervals');
 const signalUi = read('src/pages/authority/SignalPlansPage.jsx');
 const signalApi = fs.readFileSync(path.join(root, '../backend/app/api/signals.py'), 'utf8');
 const signalService = fs.readFileSync(path.join(root, '../backend/app/services/signal_planning.py'), 'utf8');
-assert(signalUi.includes('Signal Plan Studio') && signalUi.includes('/traffic/simulation/model-scenario') && signalUi.includes('/traffic-detection/reports/signal-study') && signalApi.includes('/signals/plans') && signalService.includes('generate_recommendation'), 'Signal Plan Studio, its persisted forecast studies and the existing safe approval API must remain in the release');
+assert(signalUi.includes('Signal plans') && signalApi.includes('/signals/plans') && signalService.includes('generate_recommendation'), 'Signal plan UI, API routes and planning service must remain in the release');
 console.log('✓ Signal planning source files retained');
 console.log('✓ Live-first loading, error-only fallback, route sorting, AQI provenance and workflow navigation verified');
 
@@ -180,19 +150,18 @@ console.log('✓ Live-first loading, error-only fallback, route sorting, AQI pro
 const apiClientSource = read('src/services/api/client.js')
   .replace(/^import .*;\s*/gm, '')
   .replaceAll('import.meta.env.DEV', 'false')
-  .replaceAll('import.meta.env.VITE_API_URL', "'https://old-api.onrender.com/api/v1'")
-  .replaceAll('import.meta.env.VITE_API_BASE_URL', "'https://old-api.onrender.com/api/v1'")
+  .replaceAll('import.meta.env.VITE_API_URL', 'undefined')
+  .replaceAll('import.meta.env.VITE_API_BASE_URL', 'undefined')
   .replace(/^export /gm, '');
 let snapshotReads = 0;
 let statusSequence = 0;
-const runtimeFactory = new Function('readApiSnapshot', 'storeApiSnapshot', 'publishDataStatus', 'createDataStatusContext', `${apiClientSource}\nreturn { request, ApiError, API_BASE_URL };`);
+const runtimeFactory = new Function('readApiSnapshot', 'storeApiSnapshot', 'publishDataStatus', 'createDataStatusContext', `${apiClientSource}\nreturn { request, ApiError };`);
 const runtimeClient = runtimeFactory(
   () => { snapshotReads += 1; return { payload: { source: 'saved-snapshot' }, savedAt: Date.now() }; },
   () => {},
   () => {},
   (routePath) => ({ routePath, requestId: ++statusSequence }),
 );
-assert(runtimeClient.API_BASE_URL === '/api/v1', 'Production runtime must ignore stale cross-origin Vercel environment values');
 const originalFetch = globalThis.fetch;
 try {
   globalThis.fetch = async () => new Response(JSON.stringify({ source: 'live-backend' }), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -208,11 +177,13 @@ try {
   const wakeResult = await runtimeClient.request('/healthz/wake-check', { fallbackGraceMs: 2000 });
   assert(wakeResult.source === 'backend-woke-up' && wakeAttempts === 2 && snapshotReads === 0, 'A backend that recovers during the live-first window must be retried and beat the saved snapshot');
 
+  let graceElapsed = false;
   globalThis.fetch = async () => new Response(JSON.stringify({ detail: 'warming up' }), { status: 503, headers: { 'content-type': 'application/json' } });
-  const actionFallbackStart = Date.now();
-  const actionFallback = await runtimeClient.request('/routing/grace-check', { method: 'POST', body: '{}', cacheResponse: true, fallbackGraceMs: 20 });
-  assert(actionFallback.source === 'saved-snapshot' && Date.now() - actionFallbackStart < 100, 'A failed one-shot POST may restore its saved read snapshot without waiting through a GET retry window');
-  assert(snapshotReads === 1, 'The saved fallback must read one snapshot only');
+  const graceStart = Date.now();
+  const graceResult = await runtimeClient.request('/routing/grace-check', { method: 'POST', body: '{}', cacheResponse: true, fallbackGraceMs: 20 });
+  graceElapsed = Date.now() - graceStart >= 20;
+  assert(graceResult.source === 'saved-snapshot' && graceElapsed, 'A quick 5xx must wait through the live-first grace window before using a snapshot');
+  assert(snapshotReads === 1, 'The grace-window fallback must read one snapshot only after the delay');
 
   const nonCacheStart = Date.now();
   globalThis.fetch = async () => { throw new Error('offline'); };

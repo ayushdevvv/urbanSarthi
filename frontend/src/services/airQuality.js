@@ -20,7 +20,7 @@ export async function fetchOpenMeteoAirQuality(latitude, longitude, statusContex
     timezone: 'auto', forecast_hours: '24',
   });
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 6000);
+  const timer = setTimeout(() => controller.abort(), 9000);
   try {
     const response = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?${params}`, {
       signal: controller.signal, headers: { Accept: 'application/json' },
@@ -77,7 +77,7 @@ export async function loadLocationAirQuality(latitude, longitude) {
   try {
     // The shared client gives the live backend its full retry/grace window.
     // Direct-provider recovery is attempted only after that request fails.
-    data = await api.get(apiPath, { timeoutMs: 8500, fallbackGraceMs: 7000 });
+    data = await api.get(apiPath);
   } catch (error) {
     apiError = error;
     const availabilityFailure = !error?.status || error.status >= 500 || error.status === 408 || error.status === 429;
@@ -87,11 +87,8 @@ export async function loadLocationAirQuality(latitude, longitude) {
   if (data?.current && (data.current.us_aqi != null || data.current.openweather_index != null || data.current.pm25 != null || data.current.pm2_5 != null)) {
     // Prefer a comparable US AQI timeline for users. OpenWeather's 1–5
     // values are a valid backup, but must never be drawn as if they were US AQI.
-    const hasAnyForecast = Array.isArray(data.forecast) && data.forecast.some((row) => row?.us_aqi != null || row?.openweather_index != null);
-    // Do not block a usable OpenWeather 3-hour forecast while waiting for a
-    // second provider. Only call Open-Meteo when the primary provider returned
-    // no usable 24-hour index timeline at all.
-    if (!hasAnyForecast) {
+    const hasUsAqiForecast = Array.isArray(data.forecast) && data.forecast.some((row) => row?.us_aqi != null);
+    if (!hasUsAqiForecast) {
       try {
         const providerForecast = await fetchOpenMeteoAirQuality(latitude, longitude, createDataStatusContext(routePath));
         if (providerForecast.forecast.some((row) => row?.us_aqi != null)) {

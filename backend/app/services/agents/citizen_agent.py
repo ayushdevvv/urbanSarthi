@@ -24,7 +24,7 @@ from app.services.agent_engine import (
 )
 from app.services.agents.base import (
     AgentExecutionResult,
-    call_llm_synthesis_with_info,
+    call_llm_synthesis,
     get_llm_provider,
 )
 
@@ -295,7 +295,7 @@ def run_citizen_agent(
         "and provide actionable health/mask guidance based on AQI. "
         "Never invent data. Keep answers concise, helpful, and transparent about estimates."
     )
-    llm_resp, llm_used_model = call_llm_synthesis_with_info(system_prompt, q, tool_results)
+    llm_resp = call_llm_synthesis(system_prompt, q, tool_results)
 
     # Fallback response generator if LLM was not used or failed
     if not llm_resp:
@@ -364,8 +364,8 @@ def run_citizen_agent(
         data_mode="mixed" if len(set(data_modes)) > 1 else (data_modes[0] if data_modes else "mock"),
         data_mode_label=overall_label,
         recommendations=recommendations,
-        llm_mode=("google_gemma" if llm_used_model and llm_used_model.startswith("gemma-") else "google_gemini") if llm_resp else "rule_based_fallback",
-        llm_model=llm_used_model,
+        llm_mode="llm" if provider != "fallback" else "rule_based_fallback",
+        llm_model=model_name,
         extra_data={
             "city": _resolve_city(orig_lat, orig_lon)["name"],
             "coordinates": {"origin": [orig_lat, orig_lon], "destination": [d_lat, d_lon] if (d_lat and d_lon) else None},

@@ -20,10 +20,6 @@ export default function DataStatusBanner() {
       if (requestId) latestRequestByPath.current[key] = requestId;
 
       if (!detail.path) return;
-      // Traffic Lab, Traffic Agent and the simulator each render their own
-      // actionable loading/error states. Do not duplicate those local states
-      // with a generic app-wide "live data delayed" banner.
-      if (detail.path.startsWith('/traffic-detection/') || detail.path.startsWith('/traffic/junctions') || detail.path.startsWith('/traffic/simulation/')) return;
       // Keep an independent state per endpoint. A healthy AQI request must not
       // erase an outage from a separate traffic request, and a pending retry
       // must clear only that endpoint's previous warning.
@@ -44,10 +40,6 @@ export default function DataStatusBanner() {
   // Avoid surfacing unrelated station/hotspot API retries as a page-wide outage.
   if (location.pathname === '/authority/air-intelligence' || location.pathname === '/authority/aqi-forecast') return null;
   if (!status || dismissed) return null;
-  // A failed optional feed should not create a generic app-wide toast. Its page
-  // already owns a contextual empty/error state; show the banner only when we
-  // actually render cached data or a provider-backed outlook.
-  if (status.type === 'offline') return null;
   const hasSnapshot = status.type === 'snapshot';
   const hasProvider = status.type === 'provider';
   const timestamp = hasSnapshot && status.cachedAt

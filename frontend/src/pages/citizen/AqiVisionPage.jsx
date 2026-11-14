@@ -1,95 +1,141 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, Camera, CheckCircle2, Cloud, ImagePlus, LoaderCircle, ScanSearch, ShieldAlert, Wind } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { Activity, AlertTriangle, CheckCircle2, Clock3, LocateFixed, MapPin, RefreshCw, Search, Wind } from 'lucide-react';
 import PageIntro from '../../components/shared/PageIntro.jsx';
+import CityMap from '../../components/maps/CityMap.jsx';
 import { api } from '../../services/api/client.js';
-import './aqi-vision.css';
+import './location-aqi.css';
 
-const initialReadings = { pm25: '', pm10: '', temperature: '', humidity: '', season: 'Winter', day_or_night: 'Day' };
+const fmt = (n, digits = 1) => n == null || !Number.isFinite(Number(n)) ? '—' : Number(n).toFixed(digits);
+const hour = (s) => { try { return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(s)); } catch { return s; } };
+const categoryClass = (name = '') => name.toLowerCase().replaceAll(' ', '-');
+const hasCurrentIndex = (data) => data?.current?.us_aqi != null || data?.current?.openweather_index != null;
+const indexValue = (item) => item?.openweather_index ?? item?.us_aqi ?? null;
 
-function ImageInput({ label, hint, value, onChange, preview, id }) {
-  return <label className="vision-image-drop" htmlFor={id}>
-    {preview ? <img src={preview} alt={`${label} preview`} /> : <span className="vision-image-placeholder"><ImagePlus size={25}/></span>}
-    <span className="vision-image-copy"><b>{value?.name || label}</b><small>{value ? `${(value.size / 1024 / 1024).toFixed(2)} MB · ready` : hint}</small></span>
-    <span className="vision-image-action"><Camera size={15}/>{value ? 'Change image' : 'Add image'}</span>
-    <input id={id} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => onChange(event.target.files?.[0] || null)} />
-  </label>;
+function categoryForAqi(value) {
+  if (value == null || !Number.isFinite(Number(value))) return 'Unavailable';
+  const n = Number(value);
+  if (n <= 50) return 'Good';
+  if (n <= 100) return 'Moderate';
+  if (n <= 150) return 'Unhealthy for sensitive groups';
+  if (n <= 200) return 'Unhealthy';
+  if (n <= 300) return 'Very unhealthy';
+  return 'Hazardous';
+}
+
+async function fetchOpenMeteoDirect(latitude, longitude) {
+  const params = new URLSearchParams({
+    latitude: String(latitude), longitude: String(longitude), timezone: 'auto', forecast_hours: '24',
+    current: 'us_aqi,european_aqi,pm2_5,pm10,nitrogen_dioxide,ozone,carbon_monoxide,sulphur_dioxide',
+    hourly: 'us_aqi,european_aqi,pm2_5,pm10',
+  });
+  const response = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?${params}`, { headers: { Accept: 'application/json' } });
+  if (!response.ok) throw new Error(`Air quality provider returned ${response.status}`);
+  const payload = await response.json();
+  const current = payload.current || {};
+  const hourly = payload.hourly || {};
+  const times = hourly.time || [];
+  const values = hourly.us_aqi || [];
+  const pm25 = hourly.pm2_5 || [];
+  const pm10 = hourly.pm10 || [];
+  return {
+    status: current.us_aqi == null ? 'partial' : 'available', provider: 'Open-Meteo / CAMS', aqi_scale: 'US AQI 0–500',
+    latitude: payload.latitude ?? latitude, longitude: payload.longitude ?? longitude,
+    timezone: payload.timezone, updated_at: current.time,
+    current: { us_aqi: current.us_aqi ?? null, openweather_index: null, european_aqi: current.european_aqi ?? null,
+      category: categoryForAqi(current.us_aqi), pm25: current.pm2_5 ?? null, pm10: current.pm10 ?? null,
+      nitrogen_dioxide: current.nitrogen_dioxide ?? null, ozone: current.ozone ?? null,
+      carbon_monoxide: current.carbon_monoxide ?? null, sulphur_dioxide: current.sulphur_dioxide ?? null },
+    forecast: times.map((time, i) => ({ time, us_aqi: values[i] ?? null, openweather_index: null, category: categoryForAqi(values[i]), pm25: pm25[i] ?? null, pm10: pm10[i] ?? null })).slice(0, 24),
+    model: 'CAMS atmospheric composition forecast',
+    note: 'Location-based atmospheric model forecast, not an official ground-station measurement. Values depend on the provider update cycle.',
+  };
 }
 
 export default function AqiVisionPage() {
-  const [readings, setReadings] = useState(initialReadings);
-  const [front, setFront] = useState(null);
-  const [rear, setRear] = useState(null);
-  const [frontPreview, setFrontPreview] = useState('');
-  const [rearPreview, setRearPreview] = useState('');
-  const [modelStatus, setModelStatus] = useState(null);
-  const [result, setResult] = useState(null);
+  const [location, setLocation] = useState(null);
+  const [query, setQuery] = useState('Lucknow, Uttar Pradesh');
+  const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [error, setError] = useState('');
+  const [lastUpdated, setLastUpdated] = useState(null);
 
-  useEffect(() => {
-    let active = true;
-    api.get('/aqi-vision/status', { fallbackGraceMs: 0 }).then((status) => { if (active) setModelStatus(status); }).catch(() => { if (active) setModelStatus({ ready: false, note: 'Model status could not be reached.' }); });
-    return () => { active = false; };
+  const loadForecast = useCallback(async (latitude, longitude, label) => {
+    setLoading(true); setError('');
+    try {
+      let data;
+      try { data = await api.get(`/aqi/location-forecast?latitude=${latitude}&longitude=${longitude}`); }
+      catch { data = null; }
+      // Prefer the backend's server-side OpenWeather integration. If it is not configured
+      // or cannot respond, the backend/browser can fall back to Open-Meteo/CAMS.
+      if (!data || data.status === 'unavailable' || !hasCurrentIndex(data)) {
+        try { data = await fetchOpenMeteoDirect(latitude, longitude); }
+        catch (fallbackError) {
+          if (!data || !hasCurrentIndex(data)) throw fallbackError;
+        }
+      }
+      setReport(data);
+      if (data.status === 'unavailable' || !hasCurrentIndex(data)) setError(data.note || 'Air quality forecast is temporarily unavailable for this location.');
+      setLastUpdated(new Date().toISOString());
+      setLocation({ latitude, longitude, label: label || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` });
+    } catch (err) {
+      setReport({ status: 'unavailable', current: { us_aqi: null, category: 'Unavailable', pm25: null, pm10: null }, forecast: [], note: 'The air quality service could not be reached. Try again when connectivity returns; no unrelated value is substituted.' });
+      setError(err?.message || 'Could not retrieve an air-quality forecast.');
+    } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    if (!front) { setFrontPreview(''); return undefined; }
-    const url = URL.createObjectURL(front); setFrontPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [front]);
-  useEffect(() => {
-    if (!rear) { setRearPreview(''); return undefined; }
-    const url = URL.createObjectURL(rear); setRearPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [rear]);
+  const useCurrentLocation = useCallback(() => {
+    if (!navigator.geolocation) { setError('Location access is not available in this browser.'); return; }
+    setLocating(true); setError('');
+    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
+      const latitude = coords.latitude, longitude = coords.longitude;
+      let label = 'Your current location';
+      try { const place = await api.get(`/routing/reverse-geocode?latitude=${latitude}&longitude=${longitude}`); label = place.label || label; } catch { /* coordinates still identify the forecast location */ }
+      setQuery(label);
+      setLocating(false);
+      loadForecast(latitude, longitude, label);
+    }, (err) => {
+      setLocating(false);
+      setError(err.code === 1 ? 'Location permission was denied. Allow location access in your browser and try again.' : 'Could not get your location. Check device location services and retry.');
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+  }, [loadForecast]);
 
-  const canSubmit = useMemo(() => Boolean(front && rear && ['pm25', 'pm10', 'temperature', 'humidity'].every((key) => readings[key] !== '' && Number.isFinite(Number(readings[key])))), [front, rear, readings]);
-
-  async function analyze(event) {
-    event.preventDefault(); setError(''); setResult(null);
-    if (!front || !rear) { setError('Add both a front and rear roadside image.'); return; }
-    setLoading(true);
-    const form = new FormData();
-    form.append('front_image', front); form.append('rear_image', rear);
-    Object.entries(readings).forEach(([key, value]) => form.append(key, value));
+  const searchLocation = useCallback(async (event) => {
+    event?.preventDefault?.();
+    const text = query.trim();
+    if (!text) { setError('Enter a city, neighbourhood, or address.'); return; }
+    setLoading(true); setError('');
     try {
-      const payload = await api.postForm('/aqi-vision/analyze', form, { timeoutMs: 120000 });
-      setResult(payload);
-    } catch (err) { setError(err?.message || 'AQI Vision could not complete inference.'); }
-    finally { setLoading(false); }
-  }
+      const response = await api.get(`/routing/geocode?q=${encodeURIComponent(text)}&limit=5`);
+      const place = response?.results?.[0];
+      if (!place) throw new Error(`No mapped location found for “${text}”. Try a landmark or nearby area.`);
+      setQuery(place.label || text);
+      await loadForecast(Number(place.latitude), Number(place.longitude), place.label || text);
+    } catch (err) { setError(err?.message || 'Could not find that location.'); setLoading(false); }
+  }, [query, loadForecast]);
 
-  return <div className="aqi-vision-page">
-    <PageIntro eyebrow="MULTIMODAL AIR INTELLIGENCE" title="AQI Vision" description="Combine two roadside views with current sensor readings to estimate an air-quality category." action={<span className={`vision-model-status ${modelStatus?.ready ? 'ready' : 'offline'}`}><i/>{modelStatus?.ready ? 'Model ready' : 'Model unavailable'}</span>} />
-    <div className="vision-model-note"><Activity size={16}/><span><b>Model output, not a station reading.</b> The model predicts a category from supplied images and measurements. It does not produce an official CPCB AQI value.</span></div>
-    <form className="vision-workspace" onSubmit={analyze}>
-      <section className="panel vision-panel">
-        <div className="vision-panel-head"><span className="vision-step">01</span><div><h3>Roadside imagery</h3><p>Capture or upload clear views from the same area, close in time.</p></div></div>
-        <div className="vision-image-grid">
-          <ImageInput id="vision-front" label="Front road view" hint="JPG, PNG or WebP · max 8 MB" value={front} onChange={setFront} preview={frontPreview}/>
-          <ImageInput id="vision-rear" label="Rear road view" hint="JPG, PNG or WebP · max 8 MB" value={rear} onChange={setRear} preview={rearPreview}/>
-        </div>
-      </section>
-      <section className="panel vision-panel">
-        <div className="vision-panel-head"><span className="vision-step">02</span><div><h3>Current environment</h3><p>Enter readings from a connected sensor or a calibrated handheld monitor.</p></div></div>
-        <div className="vision-reading-grid">
-          <label>PM2.5 <span>µg/m³</span><input type="number" min="0" max="2000" step="0.1" required value={readings.pm25} onChange={(e) => setReadings({ ...readings, pm25: e.target.value })} placeholder="Required"/></label>
-          <label>PM10 <span>µg/m³</span><input type="number" min="0" max="2000" step="0.1" required value={readings.pm10} onChange={(e) => setReadings({ ...readings, pm10: e.target.value })} placeholder="Required"/></label>
-          <label>Temperature <span>°C</span><input type="number" min="-50" max="70" step="0.1" required value={readings.temperature} onChange={(e) => setReadings({ ...readings, temperature: e.target.value })} placeholder="Required"/></label>
-          <label>Humidity <span>%</span><input type="number" min="0" max="100" step="0.1" required value={readings.humidity} onChange={(e) => setReadings({ ...readings, humidity: e.target.value })} placeholder="Required"/></label>
-          <label>Season<select value={readings.season} onChange={(e) => setReadings({ ...readings, season: e.target.value })}><option>Winter</option><option>Summer</option><option>Monsoon</option></select></label>
-          <label>Time of day<select value={readings.day_or_night} onChange={(e) => setReadings({ ...readings, day_or_night: e.target.value })}><option>Day</option><option>Night</option></select></label>
-        </div>
-      </section>
-      {error && <div className="vision-error"><AlertTriangle size={16}/>{error}</div>}
-      <div className="vision-submit-row"><span><ShieldAlert size={15}/> Inputs are processed for inference and are not published as a public station observation.</span><button className="primary" type="submit" disabled={!canSubmit || loading || modelStatus?.ready === false}>{loading ? <><LoaderCircle className="spin" size={16}/> Analysing images</> : <><ScanSearch size={16}/> Analyse air quality</>}</button></div>
-    </form>
-    {result && <section className="panel vision-result" aria-live="polite">
-      <div className="vision-result-icon"><Wind size={22}/></div><div className="vision-result-main"><span className="eyebrow">MODEL CLASSIFICATION</span><h3>{result.predicted_category}</h3><p>{result.note}</p></div>
-      <div className="vision-confidence"><strong>{Number(result.confidence).toFixed(1)}%</strong><span>Model confidence</span></div>
-      {Array.isArray(result.probabilities) && <div className="vision-probabilities">{result.probabilities.map((item) => <div key={item.category}><span>{item.category}</span><div><i style={{ width: `${Math.max(0, Math.min(100, Number(item.probability) || 0))}%` }}/></div><b>{Number(item.probability).toFixed(1)}%</b></div>)}</div>}
-      <div className="vision-result-foot"><CheckCircle2 size={15}/> Inference completed {result.generated_at ? new Date(result.generated_at).toLocaleString() : 'just now'} · model prediction only</div>
-    </section>}
-    {!modelStatus?.ready && <section className="vision-setup"><Cloud size={17}/><div><b>AQI Vision model needs setup</b><span>{modelStatus?.note || 'The server model and dependencies are not ready. The feature will activate when its model bundle is available.'}</span></div></section>}
+  const current = report?.current || {};
+  const shownCurrentIndex = indexValue(current);
+  const isOpenWeatherScale = current.openweather_index != null;
+  const markers = location ? [{ id: 'aqi-location', lat: location.latitude, lng: location.longitude, title: location.label, description: shownCurrentIndex == null ? 'Air-quality forecast unavailable' : `${isOpenWeatherScale ? 'OpenWeather index' : 'US AQI'} ${Math.round(shownCurrentIndex)} · ${current.category}`, kind: isOpenWeatherScale ? (shownCurrentIndex >= 4 ? 'critical' : shownCurrentIndex >= 3 ? 'busy' : 'normal') : (shownCurrentIndex >= 151 ? 'critical' : shownCurrentIndex >= 101 ? 'busy' : 'normal') }] : [];
+  const visibleForecast = (report?.forecast || []).filter((item) => indexValue(item) != null).slice(0, 12);
+
+  return <div className="location-aqi-page">
+    <PageIntro eyebrow="AQI FORECAST" title="Predict AQI" description="Search a location or use your current position to view its AQI index and hourly outlook." action={<button className="utility" type="button" onClick={() => location && loadForecast(location.latitude, location.longitude, location.label)} disabled={!location || loading}><RefreshCw size={14}/>{loading ? 'Updating…' : 'Refresh forecast'}</button>} />
+    <section className="panel aqi-location-hero aqi-search-hero">
+      <form className="aqi-place-search" onSubmit={searchLocation}><label htmlFor="aqi-place-query"><span className="eyebrow">ENTER A LOCATION</span><input id="aqi-place-query" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="City, neighbourhood, or address" autoComplete="off" /></label><button className="primary" type="submit" disabled={loading}><Search size={15}/>{loading ? 'Checking…' : 'Predict AQI'}</button></form>
+      <div className="aqi-location-copy"><span className="aqi-location-icon"><LocateFixed size={20}/></span><div><span className="eyebrow">SELECTED LOCATION</span><h2>{location?.label || 'Choose an area'}</h2><p>{location ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}` : 'Enter a location above or use your browser location.'}</p></div></div>
+      <button className="secondary aqi-location-button" type="button" onClick={useCurrentLocation} disabled={locating || loading}><LocateFixed size={16}/>{locating ? 'Finding your location…' : 'Use my location'}</button>
+    </section>
+    {error && <div className="aqi-location-notice"><AlertTriangle size={16}/><span>{error}</span><button type="button" onClick={() => location && loadForecast(location.latitude, location.longitude, location.label)}>Retry</button></div>}
+    {!report && <section className="panel aqi-location-empty"><span><Wind size={30}/></span><h3>Your local AQI outlook will appear here</h3><p>Enter a city or use your current location to load the AQI index, pollutant readings, and hourly outlook.</p></section>}
+    {report && <>
+      <div className="aqi-current-grid">
+        <section className={`panel aqi-current-card aqi-category-${categoryClass(current.category)}`}><div className="aqi-current-heading"><div><span className="eyebrow">CURRENT LOCAL OUTLOOK</span><h3>{current.category || 'Unavailable'}</h3></div><span className="aqi-source-pill">{hasCurrentIndex(report) ? 'Forecast updated' : 'No current value'}</span></div><div className="aqi-current-value"><strong>{shownCurrentIndex == null ? '—' : Math.round(shownCurrentIndex)}</strong><span>{isOpenWeatherScale ? 'OPENWEATHER INDEX · 1–5' : 'US AQI · 0–500'}</span></div><p>{shownCurrentIndex == null ? 'No current value was returned for this location.' : isOpenWeatherScale ? 'OpenWeather’s own 1–5 air-quality index. It is not equivalent to the US AQI scale.' : 'A location-based atmospheric model estimate, not a ground-station measurement.'}</p><div className="aqi-index-dual"><div><small>OpenWeather index</small><b>{current.openweather_index == null ? '—' : current.openweather_index}<i>/ 5</i></b></div><div><small>US AQI</small><b>{current.us_aqi == null ? '—' : Math.round(current.us_aqi)}<i>/ 500</i></b></div></div><div className="aqi-current-footer"><span><Clock3 size={13}/> Provider time: {report.updated_at ? hour(report.updated_at) : 'unavailable'}</span><span>{report.provider || 'Source unavailable'}</span></div></section>
+        <section className="panel aqi-pollutant-card"><div className="eyebrow">POLLUTANTS</div><h3>Air composition</h3><div className="aqi-pollutant-grid"><div><small>PM2.5</small><b>{fmt(current.pm25)} <small>µg/m³</small></b></div><div><small>PM10</small><b>{fmt(current.pm10)} <small>µg/m³</small></b></div><div><small>Ozone</small><b>{fmt(current.ozone)} <small>µg/m³</small></b></div><div><small>Nitrogen dioxide</small><b>{fmt(current.nitrogen_dioxide)} <small>µg/m³</small></b></div></div><p>Pollutant concentrations use the provider’s forecast grid for your coordinates.</p></section>
+      </div>
+      <section className="panel aqi-outlook-panel"><div className="panel-head"><div><div className="eyebrow">NEXT 12 HOURS</div><h3>Hourly AQI outlook</h3></div><span className="status-pill">{visibleForecast.length} forecast points</span></div>{visibleForecast.length ? <div className="aqi-hourly-grid">{visibleForecast.map((item) => <article className="aqi-hourly-item" key={item.time}><small>{hour(item.time)}</small><strong>{Math.round(indexValue(item))}</strong><span className={`aqi-mini-category category-${categoryClass(item.category)}`}>{item.category}</span><div className="aqi-mini-bar"><i style={{ height: `${Math.max(7, Math.min(100, Number(indexValue(item)) / (item.openweather_index != null ? 5 : 3.5) * (item.openweather_index != null ? 100 : 1)))}%` }}/></div></article>)}</div> : <div className="aqi-location-empty compact"><AlertTriangle size={20}/><b>Hourly forecast unavailable</b><p>The provider did not return forecast points. Refresh to try again.</p></div>}<p className="aqi-attribution-note">Source: {report.provider === 'OpenWeather Air Pollution API' ? <a href="https://openweathermap.org/api/air-pollution" target="_blank" rel="noreferrer">OpenWeather Air Pollution API</a> : <a href="https://open-meteo.com/en/docs/air-quality-api" target="_blank" rel="noreferrer">Open-Meteo Air Quality API</a>}. {report.note}</p></section>
+      <div className="aqi-location-bottom"><section className="panel aqi-location-map-panel"><div className="panel-head"><div><div className="eyebrow">MAP</div><h3>Forecast location</h3></div><MapPin size={17}/></div><CityMap markers={markers} city="Delhi NCR" zoom={14}/></section><section className="panel aqi-location-explainer"><CheckCircle2 size={19}/><h3>How to read this result</h3><p>This page uses your coordinates to request a forecast grid cell. Values can differ from an air-quality monitoring station nearby, and a forecast is not a medical or regulatory measurement.</p><small>Last request: {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'Not updated'}</small></section></div>
+    </>}
   </div>;
 }

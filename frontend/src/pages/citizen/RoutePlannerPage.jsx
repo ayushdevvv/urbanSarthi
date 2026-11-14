@@ -6,7 +6,7 @@ import CityMap, { getLocationCoordinates } from '../../components/maps/CityMap.j
 import { EmptyState, ErrorNotice } from '../../components/shared/Toast.jsx';
 import { api } from '../../services/api/client.js';
 import { useApp } from '../../context/AppContext.jsx';
-import { estimateRouteOnly, searchPublicPlaces } from '../../services/publicRouting.js';
+import { estimateRouteOnly, findPublicRoadRoutes, searchPublicPlaces } from '../../services/publicRouting.js';
 
 const formatDuration = (seconds) => seconds == null ? '—' : seconds >= 3600 ? `${Math.floor(seconds / 3600)} hr ${Math.round((seconds % 3600) / 60)} min` : `${Math.max(1, Math.round(seconds / 60))} min`;
 const formatDistance = (meters) => meters == null ? '—' : meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
@@ -14,6 +14,12 @@ const formatCO2 = (grams) => grams == null || !Number.isFinite(Number(grams)) ? 
 
 const routePalette = ['#26764f', '#8b9f4e', '#b17b3d', '#497d78', '#806c98'];
 const routeIdentity = (route) => route?.id ?? `${route?.mode}-${route?.label}`;
+let geocodeQueue = Promise.resolve();
+function queueGeocode(task) {
+  const current = geocodeQueue.then(task, task);
+  geocodeQueue = current.then(() => new Promise((resolve) => window.setTimeout(resolve, 1100))).catch(() => {});
+  return current;
+}
 function buildGoogleMapsUrl(route, origin, destination, mode) {
   if (!origin?.resolved || !destination?.resolved) return '';
   const coordinates = route?.geometry?.coordinates || [];
@@ -78,11 +84,16 @@ function sortRouteOptions(routes = [], preference = 'balanced') {
   }));
 }
 
-function initialPoint(label = '') { const clean = String(label || '').trim(); const [lat, lon] = clean ? getLocationCoordinates(clean) : [null, null]; const known = ['New Delhi Railway Station', 'India Gate', 'Delhi NCR', 'New Delhi', 'Rajiv Chowk', 'Akshardham', 'Connaught Place', 'ITO Crossing', 'Mumbai', 'Bengaluru', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Lucknow', 'Ahmedabad', 'Jaipur'].includes(clean); return { label: clean, latitude: known ? lat : null, longitude: known ? lon : null, resolved: known }; }
+function initialPoint(label) { const [lat, lon] = getLocationCoordinates(label); const known = ['New Delhi Railway Station', 'India Gate', 'Delhi NCR', 'New Delhi', 'Rajiv Chowk', 'Akshardham', 'Connaught Place', 'ITO Crossing', 'Mumbai', 'Bengaluru', 'Chennai', 'Kolkata', 'Hyderabad', 'Pune', 'Lucknow', 'Ahmedabad', 'Jaipur'].includes(label); return { label, latitude: lat, longitude: lon, resolved: known }; }
 async function resolveMappedPlace(query) {
   const clean = String(query || '').trim();
   if (!clean) throw new Error('Enter a starting point and destination.');
-  const results = await searchPublicPlaces(clean, 5);
+  let results = [];
+  try {
+    const response = await queueGeocode(() => api.get(`/routing/geocode?q=${encodeURIComponent(clean)}&limit=5`, { timeoutMs: 9000 }));
+    results = response?.results || [];
+  } catch { /* direct public geocoder below */ }
+  if (!results.length) results = await searchPublicPlaces(clean, 5);
   if (!results.length) throw new Error(`No mapped location matched “${clean}”. Try a nearby landmark or full address.`);
   const selected = results.find((item) => String(item.label || '').toLowerCase() === clean.toLowerCase()) || results[0];
   const latitude = Number(selected.latitude), longitude = Number(selected.longitude);
@@ -91,32 +102,60 @@ async function resolveMappedPlace(query) {
 }
 export default function RoutePlannerPage({ embedded = false }) {
   const { notify } = useApp(); const location = useLocation(); const navigate = useNavigate();
-  const [origin, setOrigin] = useState(() => initialPoint(location.state?.from || ''));
-  const [destination, setDestination] = useState(() => initialPoint(location.state?.to || ''));
+  const [origin, setOrigin] = useState(() => initialPoint(location.state?.from || 'New Delhi Railway Station'));
+  const [destination, setDestination] = useState(() => initialPoint(location.state?.to || 'India Gate'));
   const [nearbyPlaces, setNearbyPlaces] = useState([]); const [nearbyBusy, setNearbyBusy] = useState(false); const [nearbyKind, setNearbyKind] = useState('all');
-  const [currentLocationBusy, setCurrentLocationBusy] = useState(false);
-  const planRunRef = useRef(0);
+  const [resolving, setResolving] = useState({ origin: false, destination: false }); const [currentLocationBusy, setCurrentLocationBusy] = useState(false);
+  const autoPlanTimer = useRef(null); const lastAutoKey = useRef(''); const planRunRef = useRef(0);
   const pointLabelsRef = useRef({ origin: origin.label, destination: destination.label });
+  const geocodeSequenceRef = useRef({ origin: 0, destination: 0 });
+  const isResolving = resolving.origin || resolving.destination;
+  useEffect(() => { if (!origin.resolved) resolveLocation('origin'); if (!destination.resolved) resolveLocation('destination'); }, []);
   const [preference, setPreference] = useState('balanced'); const [mode, setMode] = useState('driving');
   const [result, setResult] = useState(null); const [selectedRouteId, setSelectedRouteId] = useState(null); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [showCoords, setShowCoords] = useState(false);
-  const markers = [origin.resolved && { id: 'origin', lat: origin.latitude, lng: origin.longitude, title: origin.label, kind: 'normal' }, destination.resolved && { id: 'destination', lat: destination.latitude, lng: destination.longitude, title: destination.label, kind: 'critical' }].filter(Boolean);
+  const markers = [{ id: 'origin', lat: origin.latitude, lng: origin.longitude, title: origin.label, kind: 'normal' }, { id: 'destination', lat: destination.latitude, lng: destination.longitude, title: destination.label, kind: 'critical' }];
   const updatePoint = (key, field, value) => {
     // Any edit invalidates an in-flight route response so an older journey
     // cannot overwrite the newer endpoints on the map.
     planRunRef.current += 1;
+    lastAutoKey.current = '';
     setBusy(false);
     if (field === 'label') {
       pointLabelsRef.current[key] = value;
+      geocodeSequenceRef.current[key] += 1;
+      setResolving((state) => ({ ...state, [key]: false }));
     }
     (key === 'origin' ? setOrigin : setDestination)((point) => ({ ...point, [field]: value, ...(field === 'label' ? { resolved: false } : {}) }));
     setResult(null); setError('');
   };
   const swap = () => {
     planRunRef.current += 1;
+    lastAutoKey.current = '';
     setBusy(false);
+    geocodeSequenceRef.current.origin += 1;
+    geocodeSequenceRef.current.destination += 1;
+    setResolving({ origin: false, destination: false });
     pointLabelsRef.current = { origin: destination.label, destination: origin.label };
     setOrigin(destination); setDestination(origin); setResult(null); setError('');
   };
+  async function resolveLocation(key, queryOverride) {
+    const point = key === 'origin' ? origin : destination;
+    const query = String(queryOverride ?? point.label).trim();
+    if (!query || (point.resolved && !queryOverride)) return;
+    const sequence = ++geocodeSequenceRef.current[key];
+    setResolving((state) => ({ ...state, [key]: true }));
+    try {
+      const selected = await resolveMappedPlace(query);
+      if (sequence !== geocodeSequenceRef.current[key] || pointLabelsRef.current[key].trim() !== query) return;
+      pointLabelsRef.current[key] = selected.label;
+      (key === 'origin' ? setOrigin : setDestination)(selected);
+      setResult(null);
+    } catch (err) {
+      if (sequence === geocodeSequenceRef.current[key] && pointLabelsRef.current[key].trim() === query) setError(err.message || 'Could not resolve the location.');
+    } finally {
+      if (sequence === geocodeSequenceRef.current[key]) setResolving((state) => ({ ...state, [key]: false }));
+    }
+  }
   const useCurrentLocation = () => {
     if (!navigator.geolocation) { setError('This browser does not support location access.'); return; }
     setCurrentLocationBusy(true); setError('');
@@ -124,8 +163,8 @@ export default function RoutePlannerPage({ embedded = false }) {
       const latitude = position.coords.latitude, longitude = position.coords.longitude;
       let label = 'My current location';
       try { const reverse = await api.get(`/routing/reverse-geocode?latitude=${latitude}&longitude=${longitude}`); label = reverse.label || label; } catch {}
-      planRunRef.current += 1; setBusy(false);
-      pointLabelsRef.current.origin = label;
+      planRunRef.current += 1; lastAutoKey.current = ''; setBusy(false);
+      pointLabelsRef.current.origin = label; geocodeSequenceRef.current.origin += 1;
       setOrigin({ label, latitude, longitude, resolved: true }); setResult(null); setCurrentLocationBusy(false);
     }, (geoError) => { setCurrentLocationBusy(false); setError(geoError.code === 1 ? 'Location permission was denied. You can still search for any place.' : 'Could not retrieve your current location. Try again or search for a place.'); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   };
@@ -135,8 +174,7 @@ export default function RoutePlannerPage({ embedded = false }) {
     try { const response = await api.get(`/routing/nearby-places?latitude=${destination.latitude}&longitude=${destination.longitude}&radius_m=3000&kind=${nearbyKind}`); setNearbyPlaces(response.places || []); }
     catch { setNearbyPlaces([]); } finally { setNearbyBusy(false); }
   }, [destination.latitude, destination.longitude, destination.resolved, nearbyKind]);
-  async function plan(event) {
-    event?.preventDefault?.();
+  async function plan() {
     const runId = ++planRunRef.current;
     const originQuery = origin.label.trim();
     const destinationQuery = destination.label.trim();
@@ -155,6 +193,8 @@ export default function RoutePlannerPage({ embedded = false }) {
       }
       pointLabelsRef.current = { origin: resolvedOrigin.label, destination: resolvedDestination.label };
       setOrigin(resolvedOrigin); setDestination(resolvedDestination);
+      const routeKey = `${resolvedOrigin.latitude},${resolvedOrigin.longitude}|${resolvedDestination.latitude},${resolvedDestination.longitude}|${mode}`;
+      lastAutoKey.current = routeKey;
       if (Math.abs(Number(resolvedOrigin.latitude) - Number(resolvedDestination.latitude)) < 1e-7
         && Math.abs(Number(resolvedOrigin.longitude) - Number(resolvedDestination.longitude)) < 1e-7) {
         throw new Error('Choose two different locations to plan a route.');
@@ -168,36 +208,65 @@ export default function RoutePlannerPage({ embedded = false }) {
         origin_label: resolvedOrigin.label, destination_label: resolvedDestination.label, preference, modes: [mode],
       };
 
-      // Route planning and its external OSM lookups run on the configured API
-      // host. The browser never calls third-party road routers directly, so
-      // their CORS/preflight policies cannot break the route planner.
-      let payload = null;
-      let backendError = null;
-      try {
-        payload = await api.post('/routing/plan', requestBody, { timeoutMs: 40000 });
-      } catch (requestError) {
-        backendError = requestError;
-      }
+      // Query the configured backend and browser-accessible OSM routing in
+      // parallel. A slow/cold backend must not prevent the road router from
+      // returning a real route geometry as soon as it is available.
+      const [backendResult, publicResult] = await Promise.allSettled([
+        api.post('/routing/plan', requestBody, { timeoutMs: 12000 }),
+        findPublicRoadRoutes({ origin: resolvedOrigin, destination: resolvedDestination, mode }),
+      ]);
       if (runId !== planRunRef.current) return;
       if (pointLabelsRef.current.origin !== resolvedOrigin.label || pointLabelsRef.current.destination !== resolvedDestination.label) return;
+      const payload = backendResult.status === 'fulfilled' ? backendResult.value : null;
+      const backendError = backendResult.status === 'rejected' ? backendResult.reason : null;
+      const publicRoutes = publicResult.status === 'fulfilled' ? publicResult.value : [];
+      const publicRoutingError = publicResult.status === 'rejected' ? publicResult.reason : null;
 
-      const returnedRoutes = Array.isArray(payload?.routes) ? payload.routes : [];
-      const backendRoadRoutes = returnedRoutes.filter((route) =>
+      const backendRoadRoutes = (payload?.routes || []).filter((route) =>
         route?.data_quality === 'road-network-route' && (route?.geometry?.coordinates || []).length >= 2
       );
-      const backendEstimate = returnedRoutes.find((route) => route?.data_quality === 'estimated' && Number(route?.distance_meters) > 0);
-      const selectedRoutes = backendRoadRoutes.length ? backendRoadRoutes : backendEstimate ? [backendEstimate] : [];
-      const fallbackEstimate = !selectedRoutes.length && backendError
-        ? estimateRouteOnly(resolvedOrigin, resolvedDestination, mode, backendError.message || 'The UrbanSaarthi API is temporarily unavailable.')
-        : null;
-      if (fallbackEstimate) selectedRoutes.push(fallbackEstimate);
-      if (!selectedRoutes.length) {
-        const reason = backendError?.message || payload?.warnings?.[0];
-        throw new Error(reason ? `A route could not be loaded. ${reason}` : 'No mapped road route or estimate was returned. Check the locations and try again.');
+      const mergedRoutes = [];
+      const addDistinctRoute = (candidate) => {
+        const a = candidate?.geometry?.coordinates || [];
+        if (candidate?.data_quality !== 'road-network-route' || a.length < 2) return;
+        const isDuplicate = mergedRoutes.some((existing) => {
+          const b = existing.geometry?.coordinates || [];
+          if (b.length < 2) return false;
+          const sample = Array.from({ length: 24 }, (_, index) => a[Math.round(index * (a.length - 1) / 23)]);
+          const near = sample.filter(([lon, lat]) => b.some(([otherLon, otherLat]) => {
+            const dLat = (Number(lat) - Number(otherLat)) * Math.PI / 180;
+            const dLon = (Number(lon) - Number(otherLon)) * Math.PI / 180;
+            const h = Math.sin(dLat / 2) ** 2 + Math.cos(Number(lat) * Math.PI / 180) * Math.cos(Number(otherLat) * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+            return 6371000 * 2 * Math.asin(Math.sqrt(Math.min(1, h))) <= 30;
+          })).length;
+          return near / sample.length >= 0.965;
+        });
+        if (!isDuplicate) mergedRoutes.push(candidate);
+      };
+      // Prefer the backend's AQI-enriched road paths, then fill any gaps with
+      // browser-side OSM routes. Each card and the map uses this same array.
+      [...backendRoadRoutes, ...publicRoutes].forEach(addDistinctRoute);
+      if (runId !== planRunRef.current) return;
+
+      if (!mergedRoutes.length) {
+        const backendEstimate = (payload?.routes || []).find((route) => route?.data_quality === 'estimated' && Number(route?.distance_meters) > 0);
+        const estimateReason = publicRoutingError?.message || backendError?.message || 'Mapped road providers did not return a route path.';
+        const localEstimate = backendEstimate || estimateRouteOnly(resolvedOrigin, resolvedDestination, mode, estimateReason);
+        if (localEstimate) mergedRoutes.push({
+          ...localEstimate,
+          id: localEstimate.id || `estimate-${mode}-${resolvedOrigin.latitude}-${resolvedDestination.latitude}`,
+          warnings: [...(localEstimate.warnings || []), 'This is a distance/time estimate only. No road path is drawn. Use Google Maps for turn-by-turn directions.'],
+        });
+      }
+      if (!mergedRoutes.length) {
+        const reason = publicRoutingError?.message || backendError?.message || payload?.warnings?.[0];
+        throw new Error(reason ? `A route could not be loaded. ${reason}` : 'A route could not be loaded. Check the locations and try again.');
       }
 
-      const estimateOnly = selectedRoutes.every((route) => route.data_quality === 'estimated');
-      const identifiedRoutes = selectedRoutes.map((route, index) => ({
+      const estimateOnly = mergedRoutes.every((route) => route.data_quality === 'estimated');
+      // Assign stable IDs before sorting, so changing Fastest / Balanced /
+      // Cleanest never disconnects a selected card from its map polyline.
+      const identifiedRoutes = mergedRoutes.map((route, index) => ({
         ...route,
         id: route.id || `route-${mode}-${index}-${Math.round(Number(route.distance_meters) || 0)}-${Math.round(Number(route.duration_seconds) || 0)}`,
       }));
@@ -205,12 +274,11 @@ export default function RoutePlannerPage({ embedded = false }) {
       const orderedPayload = {
         ...(payload || {}),
         routes: orderedRoutes,
-        warnings: [
-          ...(payload?.warnings || []),
-          ...(estimateOnly ? ['No mapped road path is available right now. The shown distance, time and CO₂ are estimates only.'] : orderedRoutes.length < 3 ? [`${orderedRoutes.length} distinct mapped route(s) were available for this journey.`] : []),
-          ...(backendError ? ['The API could not be reached. This local distance/time estimate has no road geometry or live enrichment.'] : []),
-        ],
-        route_source: estimateOnly ? (payload ? 'UrbanSaarthi estimate' : 'Local distance/time estimate') : 'UrbanSaarthi API · OpenStreetMap routing',
+        warnings: [...(payload?.warnings || []), ...(estimateOnly
+          ? ['No mapped road path is available right now. The shown distance, time and CO₂ are estimates only.']
+          : orderedRoutes.length < 3 ? [`${orderedRoutes.length} distinct mapped route(s) were available for this journey.`] : []),
+        ...(!payload && !estimateOnly ? ['Road geometry was returned directly by OpenStreetMap routing; live AQI and traffic enrichment could not be retrieved for this route.'] : [])],
+        route_source: estimateOnly ? (payload ? 'UrbanSaarthi estimate' : 'Local distance/time estimate') : backendRoadRoutes.length ? 'UrbanSaarthi + OpenStreetMap routing' : 'OpenStreetMap routing',
       };
       setResult(orderedPayload);
       setSelectedRouteId(routeIdentity(orderedRoutes[0]));
@@ -220,7 +288,17 @@ export default function RoutePlannerPage({ embedded = false }) {
       if (runId === planRunRef.current) setBusy(false);
     }
   }
-  useEffect(() => { if (result) loadNearbyPlaces(); }, [result, loadNearbyPlaces]);
+  useEffect(() => {
+    if (!origin.resolved || !destination.resolved) return;
+    const key = `${origin.latitude},${origin.longitude}|${destination.latitude},${destination.longitude}|${mode}`;
+    if (lastAutoKey.current === key) return;
+    window.clearTimeout(autoPlanTimer.current);
+    autoPlanTimer.current = window.setTimeout(() => { lastAutoKey.current = key; plan(); }, 450);
+    return () => window.clearTimeout(autoPlanTimer.current);
+    // plan uses the current values; the key scopes automatic updates to actual coordinate/mode changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [origin.latitude, origin.longitude, origin.resolved, destination.latitude, destination.longitude, destination.resolved, mode]);
+  useEffect(() => { loadNearbyPlaces(); }, [loadNearbyPlaces]);
   function selectRoute(route) { setSelectedRouteId(route.id ?? `${route.mode}-${route.label}`); notify(`Selected ${route.label || route.mode} route. The map and Google Maps handoff now use this option.`); }
   const displayRoutes = useMemo(() => sortRouteOptions(result?.routes || [], preference), [result, preference]);
   const selectedRoute = displayRoutes.find((route) => routeIdentity(route) === selectedRouteId) || displayRoutes[0] || null;
@@ -242,22 +320,22 @@ export default function RoutePlannerPage({ embedded = false }) {
   return <>
     <PageIntro eyebrow={embedded ? 'CITY TRAVEL' : 'LIVE JOURNEY PLANNER'} title={embedded ? 'Where are you headed today?' : 'Plan a trip'} description="Compare mapped road alternatives by travel time, distance and estimated tailpipe CO₂, then open your chosen route in Google Maps." />
     <ErrorNotice message={error} onRetry={plan}/>
-    <div className="planner-layout"><form className="panel planner-form" onSubmit={plan}><div className="panel-head"><div><div className="eyebrow">YOUR JOURNEY</div><h3>Where to?</h3></div><button type="button" className="icon-btn" title="Swap origin and destination" onClick={swap}><ArrowLeftRight size={16}/></button></div>
-      <label className="location-input"><span className="route-origin-dot"/><span><small>Starting from</small><input value={origin.label} onChange={(e) => updatePoint('origin', 'label', e.target.value)} aria-label="Starting location" placeholder="Search a place or address" autoComplete="off"/></span></label>
-      <label className="location-input"><span className="route-destination-dot"/><span><small>Going to</small><input value={destination.label} onChange={(e) => updatePoint('destination', 'label', e.target.value)} aria-label="Destination" placeholder="Search a place or address" autoComplete="off"/></span></label>
-      <div className="route-location-actions"><button type="button" className="text-action coordinate-toggle" onClick={() => setShowCoords(!showCoords)}>{showCoords ? 'Hide' : 'Edit'} map coordinates</button><button className="text-action" type="button" onClick={useCurrentLocation} disabled={currentLocationBusy}><LocateFixed size={14}/>{currentLocationBusy ? 'Finding location…' : 'Use my location'}</button></div>
+    <div className="planner-layout"><section className="panel planner-form"><div className="panel-head"><div><div className="eyebrow">YOUR JOURNEY</div><h3>Where to?</h3></div><button className="icon-btn" title="Swap origin and destination" onClick={swap}><ArrowLeftRight size={16}/></button></div>
+      <label className="location-input"><span className="route-origin-dot"/><span><small>Starting from</small><input value={origin.label} onChange={(e) => updatePoint('origin', 'label', e.target.value)} onBlur={() => resolveLocation('origin')} aria-label="Starting location" placeholder="Search a place or address" autoComplete="off"/></span></label>
+      <label className="location-input"><span className="route-destination-dot"/><span><small>Going to</small><input value={destination.label} onChange={(e) => updatePoint('destination', 'label', e.target.value)} onBlur={() => resolveLocation('destination')} aria-label="Destination" placeholder="Search a place or address" autoComplete="off"/></span></label>
+      <div className="route-location-actions"><button className="text-action coordinate-toggle" onClick={() => setShowCoords(!showCoords)}>{showCoords ? 'Hide' : 'Edit'} map coordinates</button><button className="text-action" type="button" onClick={useCurrentLocation} disabled={currentLocationBusy}><LocateFixed size={14}/>{currentLocationBusy ? 'Finding location…' : 'Use my location'}</button></div>{isResolving && <small className="route-resolving"><Search size={12}/> Finding mapped place…</small>}
       {showCoords && <div className="coordinates-grid">{[['origin','latitude','Origin latitude'],['origin','longitude','Origin longitude'],['destination','latitude','Destination latitude'],['destination','longitude','Destination longitude']].map(([key,field,label])=><label key={label}>{label}<input type="number" step="any" value={key==='origin'?origin[field]:destination[field]} onChange={(e)=>updatePoint(key,field,e.target.value)} required/></label>)}</div>}
-      <div className="field-label">ROUTE PREFERENCE</div><div className="route-pref-options">{[['fastest','Fastest',Clock],['balanced','Balanced',Route],['cleanest','Cleanest',Leaf]].map(([value,label,Icon])=><button type="button" key={value} className={preference===value?'selected':''} onClick={()=>setPreference(value)}><Icon size={14}/>{label}</button>)}</div>
+      <div className="field-label">ROUTE PREFERENCE</div><div className="route-pref-options">{[['fastest','Fastest',Clock],['balanced','Balanced',Route],['cleanest','Cleanest',Leaf]].map(([value,label,Icon])=><button key={value} className={preference===value?'selected':''} onClick={()=>setPreference(value)}><Icon size={14}/>{label}</button>)}</div>
       <label className="mode-select">Travel mode<select value={mode} onChange={(e)=>setMode(e.target.value)}><option value="driving">Driving</option><option value="walking">Walking</option><option value="cycling">Cycling</option></select></label>
-      <button className="primary full plan-submit" type="submit" disabled={busy}><Navigation size={16}/>{busy ? 'Updating route…' : 'Show route options'}</button><small className="route-auto-note">Enter both places and choose Show route options when you are ready. Bus and train journeys are in Public transport.</small>
-    </form><section className="panel planner-map-panel"><div className="panel-head"><div><div className="eyebrow">ROUTE MAP</div><h3>{origin.label} → {destination.label}</h3></div><span className={`status-pill ${mappedRoutes.length >= 3 ? 'status-success' : ''}`}>{busy ? 'Checking live routes…' : mappedRoutes.length >= 3 ? '3 road routes mapped' : mappedRoutes.length ? `${mappedRoutes.length} mapped route${mappedRoutes.length === 1 ? '' : 's'}` : result ? 'Distance estimate only' : 'Awaiting route'}</span></div><CityMap markers={markers} route={selectedRoute?.geometry?.coordinates?.map?.(([lon,lat]) => ({lat,lng:lon})) || []} routeOptions={routeOptions} zoom={12}/><div className="route-map-legend">{routeOptions.filter((item) => item.coordinates.length > 1).slice(0, 3).map((item) => <span key={item.id} className={item.selected ? 'active' : ''}><i style={{ background: item.color }} />{item.label}{item.selected && <small>Selected</small>}</span>)}</div><div className="map-foot"><span><MapPin size={13}/> {mappedRoutes.length ? 'Routes follow mapped roads' : 'No road path is available for this estimate'}</span><small>Map data © OpenStreetMap</small></div>{googleMapsUrl && <div className="route-map-actions"><span>{selectedRoute ? `Selected: ${selectedRoute.label || selectedRoute.mode}` : 'Choose a mapped route'}</span><a className="primary" href={googleMapsUrl} target="_blank" rel="noreferrer"><ExternalLink size={14}/> {selectedRoute?.data_quality === 'estimated' ? 'Calculate directions in Google Maps' : 'Open selected route in Google Maps'}</a></div>}</section></div>
+      <button className="primary full plan-submit" onClick={plan} disabled={busy || isResolving}><Navigation size={16}/>{busy ? 'Updating route…' : 'Show route options'}</button><small className="route-auto-note">Compare driving, walking and cycling paths. For buses and trains, use Public transport.</small>
+    </section><section className="panel planner-map-panel"><div className="panel-head"><div><div className="eyebrow">ROUTE MAP</div><h3>{origin.label} → {destination.label}</h3></div><span className={`status-pill ${mappedRoutes.length >= 3 ? 'status-success' : ''}`}>{busy ? 'Checking live routes…' : mappedRoutes.length >= 3 ? '3 road routes mapped' : mappedRoutes.length ? `${mappedRoutes.length} mapped route${mappedRoutes.length === 1 ? '' : 's'}` : result ? 'Distance estimate only' : 'Awaiting route'}</span></div><CityMap markers={markers} route={selectedRoute?.geometry?.coordinates?.map?.(([lon,lat]) => ({lat,lng:lon})) || []} routeOptions={routeOptions} zoom={12}/><div className="route-map-legend">{routeOptions.filter((item) => item.coordinates.length > 1).slice(0, 3).map((item) => <span key={item.id} className={item.selected ? 'active' : ''}><i style={{ background: item.color }} />{item.label}{item.selected && <small>Selected</small>}</span>)}</div><div className="map-foot"><span><MapPin size={13}/> {mappedRoutes.length ? 'Routes follow mapped roads' : 'No road path is available for this estimate'}</span><small>Map data © OpenStreetMap</small></div>{googleMapsUrl && <div className="route-map-actions"><span>{selectedRoute ? `Selected: ${selectedRoute.label || selectedRoute.mode}` : 'Choose a mapped route'}</span><a className="primary" href={googleMapsUrl} target="_blank" rel="noreferrer"><ExternalLink size={14}/> {selectedRoute?.data_quality === 'estimated' ? 'Calculate directions in Google Maps' : 'Open selected route in Google Maps'}</a></div>}</section></div>
     <section className="route-results"><div className="section-heading"><div><div className="eyebrow">ROUTE OPTIONS</div><h3>{result ? (mappedRoutes.length ? `${mappedRoutes.length} mapped road routes` : 'Journey estimate') : 'Compare available journeys'}</h3></div>{result?.public_trip_id && <span className="status-pill">Trip ref {result.public_trip_id}</span>}</div>
       {result?.warnings?.length > 0 && <div className="warning-stack">{result.warnings.map((warning, i) => <div key={i}><ShieldAlert size={14}/>{warning}</div>)}</div>}
       {displayRoutes.length > 0 && <div className="route-carbon-insight">
         <div className="route-carbon-insight-copy"><span>CARBON TRADE-OFF</span><h4>{carbonSpread == null ? 'Compare the estimated footprint' : `${formatCO2(carbonSpread)} spread across these options`}</h4><p>{selectedEmissionDownside == null ? 'Choose a route to compare its estimated tailpipe impact with the lowest-footprint option.' : selectedEmissionDownside <= 0.5 ? 'Your selected route has the lowest estimated tailpipe footprint in this comparison.' : `Your selected route carries approximately ${formatCO2(selectedEmissionDownside)} more tailpipe CO₂ than the lowest-footprint option.`}</p></div>
         <div className="route-carbon-insight-metric"><strong>{selectedEmissionDownside == null ? '—' : selectedEmissionDownside <= 0.5 ? 'Lowest' : `+${formatCO2(selectedEmissionDownside)}`}</strong><small>Selected route downside</small></div>
       </div>}
-      {busy ? <div className="panel route-options-loading"><div className="loading-lines">Checking road-routing providers and sorting alternatives…</div></div> : displayRoutes.length ? <div className="route-carbon-grid">{displayRoutes.map((route, index) => {
+      {busy ? <div className="panel route-options-loading"><div className="loading-lines">Checking live road-routing providers and sorting alternatives…</div></div> : displayRoutes.length ? <div className="route-carbon-grid">{displayRoutes.map((route, index) => {
         const key = routeIdentity(route);
         const active = key === routeIdentity(selectedRoute);
         const mapped = (route.geometry?.coordinates || []).length > 1 && route.data_quality === 'road-network-route';

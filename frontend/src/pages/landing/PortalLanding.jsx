@@ -34,7 +34,7 @@ export default function PortalLanding() {
       <section className="landing-visual" aria-label="City mobility overview">
         <div className="city-glow city-glow-one"/><div className="city-glow city-glow-two"/>
         <div className="city-road city-road-main"/><div className="city-road city-road-cross"/>
-        <div className="city-map-label"><span className="live-dot"/> CITY MODEL OVERVIEW <small>ROAD NETWORK OUTLOOK</small></div>
+        <div className="city-map-label"><span className="live-dot"/> CITY MODEL OVERVIEW <small>SUMO TRAFFIC FORECAST</small></div>
         <div className="float-card deploy-card"><small><Activity size={12}/> TRAFFIC SNAPSHOT</small><b>{snapshot.roads} road segments</b><p>Modelled city network</p></div>
         <div className="float-card delay-card"><small>Vehicles in latest model frame</small><b>{snapshot.vehicles.toLocaleString('en-IN')}</b><span>Simulation observations</span></div>
         <div className="float-card network-card"><small>Queue forecast in 30 minutes</small><b>{snapshot.forecast.toLocaleString('en-IN')}</b><span><TrendingUp size={12}/> {Math.round((snapshot.forecast - snapshot.queue)/snapshot.queue*100)}% above current queue</span></div>

@@ -12,7 +12,6 @@ from app.schemas import GtfsImportOut, RealtimeArrivalIn, TransitAlertIn, Transi
 from app.services.common import audit, utc_now
 from app.services.gtfs import _active_service_ids, _gtfs_datetime, import_gtfs_zip
 from app.services.gtfs import find_direct_transit_options
-from app.services.live_search import search_live_news
 from zoneinfo import ZoneInfo
 
 router = APIRouter(prefix="/transit", tags=["Public transport"])
@@ -217,29 +216,6 @@ def stop_arrivals(stop_external_id: str, db: Session = Depends(get_db), minutes_
             "minutes_ahead": minutes_ahead, "arrivals": rows[:limit],
             "status": "available" if rows else "no_arrival_data",
             "note": "Realtime estimates are preferred where provided. Static GTFS arrivals are schedules, not live vehicle positions."}
-
-
-@router.get("/live-intel")
-def transit_live_intelligence(
-    query: str = Query(default="", max_length=240),
-    city: str = Query(default="India", max_length=120),
-    mode: str = Query(default="all", pattern="^(all|bus|train|metro)$"),
-    limit: int = Query(default=8, ge=1, le=12),
-):
-    """Search recent, source-attributed bus/train/metro service reporting.
-
-    This endpoint supplements GTFS/GTFS-RT schedules; news articles are never
-    presented as arrival boards or proof of real-time vehicle locations.
-    """
-    clean_city = " ".join(city.split())[:120] or "India"
-    clean_query = " ".join(query.split())[:240]
-    mode_terms = {"all": "bus train metro rail", "bus": "bus", "train": "train railway", "metro": "metro subway"}[mode]
-    search = clean_query or f"latest {mode_terms} service updates delays disruptions advisories"
-    full_query = f"{search} {clean_city} India public transport"
-    result = search_live_news(full_query, limit=limit, topic="news")
-    result.update({"city": clean_city, "mode": mode, "search_query": full_query,
-                   "service_data_note": "News search provides recent reporting only. Live departures, vehicle positions and delay minutes require an operator GTFS-Realtime or official transport API feed."})
-    return result
 
 
 @router.get("/plan")

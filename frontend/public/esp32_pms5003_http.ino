@@ -13,8 +13,7 @@
 
   Set API_URL to a backend address reachable from the ESP32. For local testing,
   use your computer's LAN IP, not 127.0.0.1. Demo backend ingestion is open;
-  For production, set INGESTION_API_KEY to the same backend key in this firmware
-  and the API environment. Keep the key private and rotate it if the device is lost.
+  add authentication / ingestion keys before exposing a production endpoint.
 */
 
 #include <WiFi.h>
@@ -25,11 +24,10 @@ const char* WIFI_SSID = "YOUR_WIFI_NAME";
 const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 const char* API_URL = "http://192.168.1.10:8000/api/v1/aqi/observations";
 
-const char* INGESTION_API_KEY = "SET_BACKEND_INGESTION_API_KEY";
-const char* STATION_ID = "YOUR_DEVICE_ID";
-const char* STATION_NAME = "YOUR_STATION_NAME";
-const float STATION_LAT = 0.0;  // Set the installed sensor's actual latitude.
-const float STATION_LON = 0.0;  // Set the installed sensor's actual longitude.
+const char* STATION_ID = "ESP32-LKO-01";
+const char* STATION_NAME = "Gomti Nagar Air Node";
+const float STATION_LAT = 26.8467;
+const float STATION_LON = 80.9462;
 const unsigned long SEND_INTERVAL_MS = 30000;
 
 HardwareSerial pmsSerial(2);
@@ -80,9 +78,6 @@ void postObservation(float pm25, float pm10) {
   HTTPClient http;
   http.begin(API_URL);  // Plain HTTP is intended for a trusted local LAN demo.
   http.addHeader("Content-Type", "application/json");
-  if (String(INGESTION_API_KEY).length() >= 32 && String(INGESTION_API_KEY) != "SET_BACKEND_INGESTION_API_KEY") {
-    http.addHeader("X-Ingestion-Key", INGESTION_API_KEY);
-  }
 
   String body = "{";
   body += "\"external_station_id\":\"" + String(STATION_ID) + "\",";

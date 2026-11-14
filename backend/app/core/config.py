@@ -1,6 +1,5 @@
 from functools import lru_cache
 from pydantic import model_validator
-from urllib.parse import urlparse
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,43 +18,22 @@ class Settings(BaseSettings):
     weather_api_key: str = ""
     tomtom_api_key: str = ""
     model_path: str = ""
-    # Google AI is optional: deterministic workflows remain available without credentials.
+    # Optional LLM API keys for agentic tool-calling; rule-based fallback active when omitted
     gemini_api_key: str = ""
-    google_ai_primary_model: str = "gemini-3.8-flash"
-    google_ai_fallback_model: str = "gemma-4-26b-a4b-it"
-    google_ai_timeout_seconds: int = 12
+    openai_api_key: str = ""
+    # Optional Groq key for LangGraph native tool-calling in the Traffic Lab.
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-120b"
     # Optional override for the bundled YOLO traffic checkpoint.
     traffic_model_path: str = ""
     sumo_binary: str = ""
-    ingestion_api_key: str = ""
     gtfs_max_upload_mb: int = 30
     auto_refresh_forecasts: bool = True
     forecast_refresh_min_interval_seconds: int = 300
 
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_postgres_driver(cls, values):
-        """Render and many managed Postgres hosts supply postgres:// or postgresql:// URLs.
-
-        This project installs psycopg v3, so normalize those aliases to its explicit
-        SQLAlchemy dialect before the engine and Alembic read the setting.
-        """
-        if isinstance(values, dict):
-            url = str(values.get("database_url") or values.get("DATABASE_URL") or "").strip()
-            if url.startswith("postgres://"):
-                values["database_url"] = "postgresql+psycopg://" + url[len("postgres://"):]
-            elif url.startswith("postgresql://"):
-                values["database_url"] = "postgresql+psycopg://" + url[len("postgresql://"):]
-        return values
-
     @property
     def cors_origin_list(self) -> list[str]:
-        origins: list[str] = []
-        for item in self.cors_origins.split(","):
-            origin = item.strip().rstrip("/")
-            if origin and origin not in origins:
-                origins.append(origin)
-        return origins
+        return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
 
     @model_validator(mode="after")
     def validate_production_security(self):
@@ -64,16 +42,8 @@ class Settings(BaseSettings):
         origins = self.cors_origin_list
         if not origins or "*" in origins:
             raise ValueError("Production CORS_ORIGINS must list explicit frontend origins; wildcard is not allowed")
-        for origin in origins:
-            parsed = urlparse(origin)
-            if parsed.scheme != "https" or not parsed.netloc or parsed.path or parsed.query or parsed.fragment or parsed.username or parsed.password:
-                raise ValueError("Every production CORS_ORIGINS entry must be an exact HTTPS origin without a path")
         if self.database_url.lower().startswith("sqlite"):
             raise ValueError("Production deployments must use PostgreSQL; SQLite is for local development and tests")
-        # Human login has been removed from this public hackathon release.
-        # Device ingestion remains protected by its own high-entropy key.
-        if len(self.ingestion_api_key) < 32:
-            raise ValueError("Production deployments must set INGESTION_API_KEY to at least 32 characters for edge devices.")
         return self
 
 

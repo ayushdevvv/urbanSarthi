@@ -40,22 +40,3 @@ def ingest_vision_event(payload: TrafficObservationIn, request: Request, db: Ses
     return {"accepted": True, "observation_id": row.id, "junction_external_id": junction.external_id,
             "observed_at": row.observed_at.isoformat(), "video_stored": False,
             "note": "Send aggregated detections from an authorized edge worker; raw CCTV streams are not stored by this API."}
-
-@router.post("/source-heartbeat")
-def source_heartbeat(payload: dict, request: Request, db: Session = Depends(get_db), actor=Depends(require_ingestion_access)):
-    """Authenticated edge-worker heartbeat; only successful ingestion can mark a source online."""
-    from app.models import DataSource
-    from app.services.common import utc_now
-    external_id = str(payload.get("external_id") or "").strip()[:100]
-    if len(external_id) < 2:
-        raise HTTPException(status_code=422, detail="external_id is required")
-    source = db.scalar(select(DataSource).where(DataSource.external_id == external_id))
-    if source is None:
-        raise HTTPException(status_code=404, detail="Register the source before sending a heartbeat")
-    source.status = "online"
-    source.last_success_at = utc_now()
-    source.last_error = None
-    audit(db, getattr(actor, "id", None), "data_source.device_heartbeat", "data_source", external_id,
-          {"device": str(payload.get("device") or "edge-worker")[:120]}, request.client.host if request.client else None)
-    db.commit()
-    return {"external_id": external_id, "status": "online", "last_success_at": source.last_success_at.isoformat()}

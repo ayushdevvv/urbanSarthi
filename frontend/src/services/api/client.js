@@ -1,40 +1,16 @@
 import { readApiSnapshot, storeApiSnapshot, publishDataStatus, createDataStatusContext } from '../apiSnapshot.js';
 
-const DEFAULT_API_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000/api/v1' : '/api/v1';
-const FALLBACK_GRACE_MS = 5_000;
+const DEFAULT_API_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000/api/v1' : 'https://urbansarthi.onrender.com/api/v1';
+const FALLBACK_GRACE_MS = 40_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 70_000;
-const ATTEMPT_TIMEOUT_MS = 18_000;
-const VISITOR_ID_KEY = 'urbansaarthi_visitor_id';
-let memoryVisitorId = '';
+const ATTEMPT_TIMEOUT_MS = 9_000;
 
-function createVisitorId() {
-  return globalThis.crypto?.randomUUID?.() || `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}${Math.random().toString(16).slice(2)}`;
+async function waitForFallbackGrace(startedAt, graceMs = FALLBACK_GRACE_MS) {
+  const remaining = graceMs - (Date.now() - startedAt);
+  if (remaining > 0) await new Promise((resolve) => globalThis.setTimeout(resolve, remaining));
 }
 
-function getVisitorId() {
-  try {
-    let id = globalThis.localStorage?.getItem(VISITOR_ID_KEY);
-    if (!id) {
-      id = createVisitorId();
-      globalThis.localStorage?.setItem(VISITOR_ID_KEY, id);
-    }
-    return id;
-  } catch {
-    if (!memoryVisitorId) memoryVisitorId = createVisitorId();
-    return memoryVisitorId;
-  }
-}
-
-function needsVisitorIdentity(path) {
-  return /^\/(?:routing\/plan|trips(?:\/|$)|analytics\/my-mobility(?:\?|$)|ticketing(?:\/|\?|$))/.test(String(path || ""));
-}
-
-// Production always uses the same-origin Vercel rewrite. This deliberately
-// ignores stale VITE_API_URL values that may still point directly at Render.
-// Local development can continue to override the backend URL.
-export const API_BASE_URL = (import.meta.env.DEV
-  ? (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || DEFAULT_API_URL)
-  : DEFAULT_API_URL).replace(/\/$/, '');
+export const API_BASE_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || DEFAULT_API_URL).replace(/\/$/, '');
 
 export class ApiError extends Error {
   constructor(message, status, payload) {
@@ -63,9 +39,9 @@ export async function request(path, options = {}) {
   const statusContext = createDataStatusContext(routePathAtRequestStart);
   const publishStatus = (detail) => publishDataStatus(detail, statusContext);
   const headers = new Headers(options.headers || {});
-  if (needsVisitorIdentity(path) && !headers.has('X-Visitor-ID')) headers.set('X-Visitor-ID', getVisitorId());
   const method = String(options.method || 'GET').toUpperCase();
-  const cacheEligible = method === 'GET' || (options.cacheResponse === true && typeof options.body === 'string');
+  const privatePath = /^\/(?:auth(?:\/|\?|$)|trips(?:\/|\?|$)|users(?:\/|\?|$)|profile(?:\/|\?|$)|analytics\/my-mobility(?:\/|\?|$)|agent(?:\/|\?|$)|routing\/(?:geocode|reverse-geocode)(?:\/|\?|$))/i.test(path);
+  const cacheEligible = (method === 'GET' && !privatePath) || (options.cacheResponse === true && typeof options.body === 'string');
   const cacheKey = method === 'GET' ? path : requestCacheKey(path, options.body);
   // A new live request clears any stale page-level warning while it is in flight.
   publishStatus({ type: 'pending', path: cacheKey });
@@ -81,8 +57,9 @@ export async function request(path, options = {}) {
     return saved.payload;
   };
 
-  // Give the live API a short retry window, then use a saved read snapshot when available.
-  // Non-read operations honour their caller-supplied timeout (important for video and SUMO jobs).
+  // Always give the live API first opportunity to respond. After 40 seconds,
+  // availability failures may restore a last-successful snapshot. External
+  // cancellation is preserved for uploads/navigation.
   const controller = new AbortController();
   const onExternalAbort = () => controller.abort(externalSignal?.reason);
   if (externalSignal) {
@@ -113,10 +90,8 @@ export async function request(path, options = {}) {
       const attemptController = new AbortController();
       const relayAbort = () => attemptController.abort(controller.signal.reason);
       controller.signal.addEventListener('abort', relayAbort, { once: true });
-      const remainingLiveWindow = retryable ? Math.max(250, fallbackDeadline - Date.now()) : timeoutMs;
-      const attemptTimeout = retryable
-        ? Math.max(250, Math.min(ATTEMPT_TIMEOUT_MS, Math.max(250, remainingLiveWindow)))
-        : Math.max(250, timeoutMs);
+      const remainingLiveWindow = retryable ? Math.max(250, fallbackDeadline - Date.now()) : ATTEMPT_TIMEOUT_MS;
+      const attemptTimeout = Math.max(250, Math.min(ATTEMPT_TIMEOUT_MS, remainingLiveWindow));
       const attemptTimeoutId = globalThis.setTimeout(
         () => attemptController.abort(new DOMException('Connection attempt timed out', 'TimeoutError')),
         attemptTimeout,
@@ -137,7 +112,7 @@ export async function request(path, options = {}) {
 
       const remaining = fallbackDeadline - Date.now();
       if (remaining <= 0) break;
-      const delay = Math.min(300 * Math.min(2 ** attempt, 4), remaining);
+      const delay = Math.min(1_500 * Math.min(2 ** attempt, 4), remaining);
       attempt += 1;
       await retryDelay(delay);
       response = undefined;
@@ -147,6 +122,7 @@ export async function request(path, options = {}) {
     const reason = controller.signal.aborted && !isExternalAbort
       ? `The service did not respond within ${Math.round(Math.max(1000, timeoutMs) / 1000)} seconds.`
       : 'The service could not be reached.';
+    if (!isExternalAbort && cacheEligible) await waitForFallbackGrace(requestStartedAt, fallbackGraceMs);
     const saved = isExternalAbort ? null : returnSaved(reason);
     if (saved !== null) return saved;
     if (!isExternalAbort) publishStatus({ type: 'offline', path: cacheKey, reason });
@@ -156,10 +132,11 @@ export async function request(path, options = {}) {
     externalSignal?.removeEventListener?.('abort', onExternalAbort);
   }
 
-  // A failed read may use its saved response after the short retry window.
-  // Non-read requests are never replayed automatically.
+  // A failed read is allowed to use the saved response only after the complete
+  // retry window has expired. Non-read requests are never replayed automatically.
   if (!response || availabilityStatus(response.status)) {
     const reason = response ? `The service returned ${response.status}.` : 'The service could not be reached.';
+    if (cacheEligible) await waitForFallbackGrace(requestStartedAt, fallbackGraceMs);
     const saved = returnSaved(reason);
     if (saved !== null) return saved;
     publishStatus({ type: 'offline', path: cacheKey, reason });
@@ -174,7 +151,8 @@ export async function request(path, options = {}) {
     // 404/422 is a real request or permission error, not an outage to mask.
     const outageStatus = response.status >= 500 || response.status === 408 || response.status === 429;
     if (outageStatus) {
-        const saved = returnSaved(`The service returned ${response.status}.`);
+      if (cacheEligible) await waitForFallbackGrace(requestStartedAt, fallbackGraceMs);
+      const saved = returnSaved(`The service returned ${response.status}.`);
       if (saved !== null) return saved;
       publishStatus({ type: 'offline', path: cacheKey, reason: `The service returned ${response.status}.` });
     } else {

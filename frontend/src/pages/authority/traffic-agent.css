@@ -174,14 +174,3 @@
 .ta-metric-card>small{font-size:10px}
 .ta-preview-disclosure{font-size:11px}
 @media(max-width:560px){.ta-step b{font-size:12px}.ta-step small{font-size:10px}.ta-workstream-note{font-size:10px}.ta-panel-heading h2,.ta-results-heading h2{font-size:20px}}
-
-/* Live camera evidence action and premium operational polish. */
-.ta-live-camera-action{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:12px 0 13px;padding:14px 15px;border:1px solid #dbe8d3;border-radius:13px;background:linear-gradient(110deg,#f5faef,#fff)}
-.ta-live-camera-action>div{display:grid;gap:5px;min-width:0}
-.ta-live-camera-action b{display:flex;align-items:center;gap:7px;color:#294c37;font-size:12px}
-.ta-live-camera-action b svg{color:#638c4e}
-.ta-live-camera-action small{font-size:10px;color:#7d8e7e;line-height:1.5}
-.ta-live-camera-action .ta-secondary-action{flex:0 0 auto;min-height:40px;padding:9px 12px;font-size:11px}
-.ta-evidence-source small{line-height:1.5}
-.ta-error-note{font-size:11px}
-@media(max-width:620px){.ta-live-camera-action{align-items:stretch;flex-direction:column}.ta-live-camera-action .ta-secondary-action{width:100%}}

@@ -10,7 +10,6 @@ import os
 import tempfile
 from contextlib import suppress
 from collections import defaultdict
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -18,11 +17,10 @@ from app.services.traffic_detection import _load_model, VEHICLE_ALIASES
 from app.services.traffic_calibration import normalize_rois, point_in_polygon
 
 MAX_VIDEO_SECONDS = 600
-MAX_SAMPLED_FRAMES = 48
-MAX_SIDE = 960
+MAX_SAMPLED_FRAMES = 180
+MAX_SIDE = 1280
 
 
-@lru_cache(maxsize=1)
 def video_status() -> dict[str, Any]:
     """Report actual import/runtime health instead of only checking package metadata."""
     opencv_available = False
@@ -52,6 +50,7 @@ def video_status() -> dict[str, Any]:
         native_sumo_path = sumo_binary()
     except Exception:
         native_sumo_path = None
+    from app.core.config import settings
     from app.services.traffic_simulation import BASE as simulation_base
     try:
         from importlib.util import find_spec
@@ -59,23 +58,17 @@ def video_status() -> dict[str, Any]:
     except (ImportError, ValueError):
         xgboost_available = False
     forecast_artifacts_present = all((simulation_base / "models" / name).is_file() for name in ("queue_model.json", "queue_model_60min.json", "metrics.json", "metrics_60min.json", "edge_mean.json")) and (simulation_base / "data" / "raw.csv").is_file()
-    try:
-        agent_packages_available = find_spec("google.adk") is not None
-    except (ImportError, ModuleNotFoundError, ValueError):
-        agent_packages_available = False
-    from app.services.agents.base import get_google_api_key, get_google_models
-    google_api_key = get_google_api_key()
-    google_primary_model, google_fallback_model = get_google_models()
+    agent_packages_available = all(find_spec(name) is not None for name in ("langgraph", "langchain_core", "langchain_groq"))
     if not model_status.get("weights_present"):
-        readiness_note = "Vehicle detection is not configured on this server yet. Restore the required model files and restart the service."
+        readiness_note = "YOLO traffic weights are missing. Restore backend/models/best.pt or set TRAFFIC_MODEL_PATH."
     elif not model_status.get("inference_dependency_available"):
-        readiness_note = "Vehicle detection services are not installed on this server yet. Rebuild the service with its required dependencies."
+        readiness_note = "Ultralytics is not installed. Install backend/requirements.txt and restart the API."
     elif not opencv_available:
-        readiness_note = "Video processing is not available on this server yet. Rebuild the service with video support enabled."
+        readiness_note = opencv_note or "OpenCV is not installed or could not be imported."
     elif not (opencv_ffmpeg_enabled or ffmpeg_fallback_available):
-        readiness_note = "No compatible video decoder is available on this server yet."
+        readiness_note = "OpenCV is installed but no supported video decoder was detected. Install imageio-ffmpeg."
     else:
-        readiness_note = "Vehicle detection and video processing are ready."
+        readiness_note = "YOLO, OpenCV and a video decoder are ready."
     return {
         **model_status,
         "opencv_available": opencv_available,
@@ -90,10 +83,7 @@ def video_status() -> dict[str, Any]:
         "forecast_artifacts_present": forecast_artifacts_present,
         "forecast_ready": bool(forecast_artifacts_present and xgboost_available) or bool(native_sumo_path),
         "agent_tools_ready": True,
-        "llm_tool_calling_ready": bool(agent_packages_available and google_api_key),
-        "llm_provider": "Google AI" if agent_packages_available and google_api_key else "deterministic",
-        "llm_primary_model": google_primary_model if google_api_key else None,
-        "llm_fallback_model": google_fallback_model if google_api_key else None,
+        "llm_tool_calling_ready": bool(agent_packages_available and settings.groq_api_key.strip() or agent_packages_available and os.getenv("GROQ_API_KEY", "").strip()),
         "video_analysis_ready": bool(model_status.get("ready") and opencv_available and (opencv_ffmpeg_enabled or ffmpeg_fallback_available)),
         "video_max_seconds": MAX_VIDEO_SECONDS,
         "video_max_sampled_frames": MAX_SAMPLED_FRAMES,

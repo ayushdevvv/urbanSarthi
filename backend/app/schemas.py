@@ -99,7 +99,7 @@ class TrafficObservationIn(BaseModel):
     source: str = Field(default="manual", max_length=80)
     observed_at: datetime | None = None
     vehicle_count: int = Field(default=0, ge=0, le=100000)
-    queue_length_m: float | None = Field(default=None, ge=0, le=100000)
+    queue_length_m: float = Field(default=0, ge=0, le=100000)
     average_speed_kmph: float | None = Field(default=None, ge=0, le=250)
     average_wait_seconds: float | None = Field(default=None, ge=0, le=86400)
     lane_density: float | None = Field(default=None, ge=0, le=1)
@@ -369,7 +369,7 @@ class JunctionCreateIn(BaseModel):
     cluster_id: int | None = None
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
-    status: Literal["unknown"] = "unknown"
+    status: Literal["online", "degraded", "offline", "unknown"] = "unknown"
     lane_count: int = Field(default=4, ge=1, le=64)
     baseline_cycle_seconds: int = Field(default=90, ge=30, le=240)
     configuration: dict[str, Any] = Field(default_factory=dict)
@@ -380,7 +380,7 @@ class DataSourceUpsertIn(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     source_type: Literal["camera", "cpcb", "openaq", "gtfs", "osm", "atcs", "sumo", "transit", "other"]
     provider: str = Field(min_length=1, max_length=100)
-    status: Literal["not_configured", "unknown"] = "not_configured"
+    status: Literal["online", "degraded", "offline", "not_configured", "unknown"] = "not_configured"
     freshness_seconds: int | None = Field(default=None, ge=0, le=604800)
     safe_config: dict[str, Any] = Field(default_factory=dict)
 

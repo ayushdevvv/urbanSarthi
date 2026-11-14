@@ -78,21 +78,6 @@ class TrafficObservation(Base):
     )
 
 
-class TrafficAnalysisReport(TimestampMixin, Base):
-    """Compact, durable results from camera inference and traffic-agent runs."""
-    __tablename__ = "traffic_analysis_reports"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    public_id: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False)
-    report_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
-    junction_id: Mapped[int | None] = mapped_column(ForeignKey("junctions.id", ondelete="SET NULL"), nullable=True, index=True)
-    source_name: Mapped[str] = mapped_column(String(180), default="unknown source", nullable=False)
-    source_mode: Mapped[str] = mapped_column(String(40), default="unknown", nullable=False)
-    summary: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
-    result: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
-    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    __table_args__ = (Index("ix_traffic_reports_created", "created_at"),)
-
-
 class AqiObservation(Base):
     __tablename__ = "aqi_observations"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

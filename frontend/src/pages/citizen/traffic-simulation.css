@@ -68,9 +68,3 @@
 .traffic-crowd-legend .crowd-heavy{background:#dc514d}.traffic-crowd-legend .crowd-slow{background:#e5a13a}.traffic-crowd-legend .crowd-moving{background:#46a878}.traffic-crowd-legend small{margin-left:auto}
 .traffic-scenario-page .traffic-info-heading p{line-height:1.5}
 @media(max-width:560px){.traffic-crowd-legend{gap:9px;padding:10px 12px}.traffic-crowd-legend small{flex-basis:100%;margin-left:0}}
-
-/* Explicit provenance treatment for the reference-network playback. */
-.traffic-sim-scene-head .eyebrow{display:inline-flex;align-items:center;gap:7px;color:#6b7d54;font-weight:900;letter-spacing:.095em;font-size:9px}
-.traffic-sim-scene-head .eyebrow:before{content:"";width:7px;height:7px;border-radius:50%;background:#b98b45;box-shadow:0 0 0 3px #b98b4520}
-.traffic-sim-scene-head p{max-width:720px}
-.traffic-sim-live{font-variant-numeric:tabular-nums}

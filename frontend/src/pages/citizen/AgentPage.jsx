@@ -193,7 +193,7 @@ export default function AgentPage({ adminMode = false }) {
           <div className="agent-titles">
             <h1>Traffic & Air Intelligence</h1>
             <p>
-              Coordinates traffic scenarios, air-quality outlooks and corridor advice, with a built-in fallback to keep essential guidance available.
+              Rule-based reasoning engine coordinating SUMO traffic simulations, Open-Meteo CAMS atmospheric data, and road corridor route advisors without third-party LLM key lock-in.
             </p>
           </div>
         </div>
@@ -209,7 +209,7 @@ export default function AgentPage({ adminMode = false }) {
             }`}
           >
             <Sparkles size={13} />
-            <span>{agentResult?.data_mode_label || 'Traffic outlook · Air-quality outlook'}</span>
+            <span>{agentResult?.data_mode_label || '⚡ SUMO Traffic Model · 🌐 Open-Meteo'}</span>
           </div>
           <div className="city-indicator-pill">
             Region: <b>{agentResult?.city || selectedCity.name}</b>

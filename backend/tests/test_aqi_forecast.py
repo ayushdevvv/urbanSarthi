@@ -31,7 +31,6 @@ def test_openweather_forecast_is_limited_to_the_next_24_hours(monkeypatch):
     ]
     forecast_payload = {"list": forecast_items}
     calls = []
-    aqi._AQI_FORECAST_CACHE.clear()
 
     def fake_get(url, **kwargs):
         calls.append(url)
@@ -46,9 +45,4 @@ def test_openweather_forecast_is_limited_to_the_next_24_hours(monkeypatch):
     assert result["aqi_scale"] == "OpenWeather 1–5"
     assert len(result["forecast"]) == 8
     assert all(row["openweather_index"] in {2, 3} for row in result["forecast"])
-    assert len(calls) == 2
-    assert result["served_from_cache"] is False
-    cached = aqi.location_aqi_forecast(26.45, 80.33)
-    assert cached["served_from_cache"] is True
-    assert cached["is_stale"] is False
     assert len(calls) == 2

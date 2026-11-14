@@ -32,7 +32,7 @@ export default function FloatingAgentWidget({ mode = 'citizen' }) {
     {
       sender: 'agent',
       text: isAuthority
-        ? 'Welcome, Operator. I am the Traffic & Air Assistant. Ask me about city bottlenecks, compare traffic signal plans, or review citizen hazard reports.'
+        ? 'Welcome, Operator. I am the Traffic & Air Assistant. Ask me about city bottlenecks, simulate SUMO interventions, or review citizen hazard reports.'
         : 'Hello! I am your Traffic & Air Assistant. Ask me about clean routes, traffic delays, air quality, or report a road hazard.',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
@@ -187,7 +187,7 @@ export default function FloatingAgentWidget({ mode = 'citizen' }) {
     }
   };
 
-  // Authority: run a traffic intervention preview
+  // Authority: run SUMO intervention simulation
   const handleRunSimulation = async () => {
     setSimulating(true);
     setSimResult(null);
@@ -287,7 +287,7 @@ export default function FloatingAgentWidget({ mode = 'citizen' }) {
                   onClick={() => setActiveTab('simulate')}
                 >
                   <Cpu size={13} />
-                  <span>Road Simulation</span>
+                  <span>SUMO Simulate</span>
                 </button>
               </>
             )}
@@ -531,7 +531,7 @@ export default function FloatingAgentWidget({ mode = 'citizen' }) {
               </div>
             )}
 
-            {/* TAB 3 (Authority): TRAFFIC PREVIEW */}
+            {/* TAB 3 (Authority): SUMO SIMULATE */}
             {activeTab === 'simulate' && isAuthority && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div className="widget-form-group">
@@ -549,7 +549,7 @@ export default function FloatingAgentWidget({ mode = 'citizen' }) {
                   disabled={simulating}
                 >
                   {simulating ? <RefreshCw size={14} className="spin" /> : <Cpu size={14} />}
-                  <span>Run Traffic Simulation</span>
+                  <span>Run SUMO Model Simulation</span>
                 </button>
 
                 {simResult && (
@@ -563,7 +563,7 @@ export default function FloatingAgentWidget({ mode = 'citizen' }) {
                         </b>
                       </div>
                       <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '4px' }}>
-                        * Forecast from reference traffic records. For planning only; it does not control physical signals.
+                        * Model trained on 518,400 SUMO rows. Analytical projection; does not replace certified municipal operator dispatch.
                       </div>
                     </div>
                   </div>
@@ -615,7 +615,7 @@ export default function FloatingAgentWidget({ mode = 'citizen' }) {
                 <input
                   type="text"
                   className="drawer-input"
-                  placeholder={isAuthority ? 'Ask about traffic, signals, air quality or incidents...' : 'Ask about routes, traffic, AQI...'}
+                  placeholder={isAuthority ? 'Ask about traffic, signals, YOLO, or triage...' : 'Ask about routes, traffic, AQI...'}
                   value={inputQuery}
                   onChange={(e) => setInputQuery(e.target.value)}
                 />

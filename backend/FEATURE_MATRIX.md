@@ -31,7 +31,7 @@ This matrix is the backend implementation checklist derived from the 14-page Nav
 | Smart ticketing | Authenticated ticket-request history, status, cancellation, provider-status contract | Prototype boundary: not a confirmed booking, valid ticket, QR admission credential or payment transaction until an official operator is integrated |
 | Service disruptions | Transit alerts and city traffic/AQI/roadwork/incident/system alerts with severity and lifecycle | Implemented |
 | Live Urban Command Centre | Network and cluster summaries, online/degraded statuses, current congestion, queue/vehicle metrics, AQI coverage, alerts, latest forecasts and source freshness | Implemented; only data actually received by API is shown |
-| Optional synthetic lab network | `seed_demo.py --demo-network` creates 24 clearly synthetic clusters and 48 placeholder junctions; default seed creates none | Opt-in development fixture only; never a real network or production baseline |
+| 24 connected clusters | Seed command creates 24 clearly synthetic clusters with 48 placeholder junctions | Implemented seed baseline; replace synthetic coordinates and labels before real pilot |
 | Adaptive signal planning | Camera-ROI approach counts plus 70% approach-volume and 30% NOx+PM+CO intensity proxy; min-green and 45% green-budget cap; draft/simulated/approved/rejected lifecycle | Implemented as advisory candidate generation; requires all four canonical ROIs for directional optimization and field safety validation before deployment |
 | Dynamic green split | Four canonical camera ROIs; approach demand and relative local-pollutant intensity contribute to proposed green-time allocation | Prototype boundary: camera calibration is operator-defined; equal-split fallback when calibration is incomplete; not certified for field control |
 | Human-authorized control | Role checks, audit entries, approval/rejection and dispatch-preview payload | Implemented; physical ATCS dispatch is disabled and no controller command is sent |
@@ -41,7 +41,7 @@ This matrix is the backend implementation checklist derived from the 14-page Nav
 | Continuous improvement | Retains telemetry, route choices, selected options, trip lifecycle and actual-metric JSON; training script produces MAE/RMSE | Implemented data pipeline surface; automated retraining/model registry/drift alerts still need deployment jobs |
 | City/mobility analytics | Personal usage metrics and operator city summary | Implemented; only registered-user trips are stored, not anonymous route queries |
 | Source health | Data-source registry, heartbeat endpoint, status/freshness and error fields | Implemented |
-| Security and accountability | Public hackathon demo operator actor, per-browser anonymous citizen identity, separate edge-ingestion key, freshness-based device state, audit logs and non-actuating traffic design | Public authority endpoints are intentionally open for judging; protect the workspace with proper identity/RBAC before a real municipal deployment. Edge ingestion still requires a 32+ character key |
+| Security and accountability | Unauthenticated demo endpoints, shared demo identity, audit logs, environment secrets, non-actuating traffic design | Demo-only; authentication and role checks must be restored before production |
 | Schema versioning without drift | SQLAlchemy 2.x metadata, Alembic migration history (base + GTFS frequency) and no startup `create_all` | Implemented; new changes must use new reviewed Alembic revisions |
 
 ## Database domains

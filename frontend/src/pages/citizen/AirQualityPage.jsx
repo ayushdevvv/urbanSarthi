@@ -52,12 +52,13 @@ function AirQualityTrend({ rows }) {
 }
 
 export default function AirQualityPage({ authorityMode = false, forecastFocus = false } = {}) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState('Lucknow, Uttar Pradesh');
   const [location, setLocation] = useState(null);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState('');
+  const autoLoadStarted = useRef(false);
   const requestSequence = useRef(0);
 
   const load = useCallback(async (latitude, longitude, label) => {
@@ -84,9 +85,9 @@ export default function AirQualityPage({ authorityMode = false, forecastFocus = 
     try {
       let places = [];
       try {
-        const response = await api.get(`/routing/geocode?q=${encodeURIComponent(text)}&limit=5`, { timeoutMs: 7000, fallbackGraceMs: 2500 });
+        const response = await api.get(`/routing/geocode?q=${encodeURIComponent(text)}&limit=5`, { timeoutMs: 9000 });
         places = response?.results || [];
-      } catch { /* retry through the configured API client */ }
+      } catch { /* direct public geocoder below */ }
       if (!places.length) {
         try { places = await searchPublicPlaces(text, 5); } catch { places = []; }
       }
@@ -103,19 +104,22 @@ export default function AirQualityPage({ authorityMode = false, forecastFocus = 
     setLoading(false);
     if (!navigator.geolocation) { setError('Location access is not available in this browser.'); return; }
     setLocating(true); setError('');
-    navigator.geolocation.getCurrentPosition(({ coords }) => {
+    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
       if (requestId !== requestSequence.current) return;
-      const pointLabel = 'Your current location';
-      setLocating(false);
-      setQuery(pointLabel);
-      // Start the forecast using coordinates immediately; reverse geocoding only
-      // improves the label and never blocks the AQI request.
-      void load(coords.latitude, coords.longitude, pointLabel);
-      api.get(`/routing/reverse-geocode?latitude=${coords.latitude}&longitude=${coords.longitude}`, { timeoutMs: 3500, fallbackGraceMs: 1500 })
-        .then((place) => { if (requestId + 1 === requestSequence.current && place?.label) setQuery(place.label); })
-        .catch(() => {});
-    }, (geoError) => { if (requestId === requestSequence.current) { setLocating(false); setError(geoError.code === 1 ? 'Location permission was denied. You can search for a city instead.' : 'Could not retrieve your location. Check device location services and retry.'); } }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 120000 });
+      let label = 'Your current location';
+      try { const place = await api.get(`/routing/reverse-geocode?latitude=${coords.latitude}&longitude=${coords.longitude}`); label = place.label || label; } catch { /* coordinates remain usable */ }
+      if (requestId !== requestSequence.current) return;
+      setQuery(label); setLocating(false); load(coords.latitude, coords.longitude, label);
+    }, (geoError) => { if (requestId === requestSequence.current) { setLocating(false); setError(geoError.code === 1 ? 'Location permission was denied. You can search for a city instead.' : 'Could not retrieve your location. Check device location services and retry.'); } }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
   };
+
+  useEffect(() => {
+    if (autoLoadStarted.current) return;
+    autoLoadStarted.current = true;
+    // Load the default city on entry so citizens see an outlook immediately.
+    // They can replace it with any city or their device location at any time.
+    void search();
+  }, []);
 
   const current = report?.current || {};
   const index = currentIndex(current);

@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { MapContainer, Marker, Popup, TileLayer, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
 const cityCenters = {
-  India: [22.0, 79.0],
   'Delhi NCR': [28.6139, 77.2090], 'New Delhi': [28.6139, 77.2090],
   'Rajiv Chowk': [28.6328, 77.2197], 'Akshardham': [28.6127, 77.2773], 'Connaught Place': [28.6315, 77.2167], 'ITO Crossing': [28.6289, 77.2410],
   Mumbai: [19.0760, 72.8777], Bengaluru: [12.9716, 77.5946], Chennai: [13.0827, 80.2707],
@@ -11,7 +10,7 @@ const cityCenters = {
   Lucknow: [26.8467, 80.9462], Ahmedabad: [23.0225, 72.5714], Jaipur: [26.9124, 75.7873],
   'New Delhi Railway Station': [28.6429, 77.2196], 'India Gate': [28.6129, 77.2295],
 };
-export const getLocationCoordinates = (label) => cityCenters[label] || cityCenters.India;
+export const getLocationCoordinates = (label) => cityCenters[label] || cityCenters['Delhi NCR'];
 
 const dotIcon = (kind = 'normal') => L.divIcon({
   className: `map-pin map-pin-${kind}`, html: '<span></span>', iconSize: [18, 18], iconAnchor: [9, 9],
@@ -32,18 +31,8 @@ function MapViewport({ points, fallbackCenter, zoom }) {
   return null;
 }
 
-export default function CityMap({ city = 'India', markers = [], route = [], routeOptions = [], zoom = 12, className = '' }) {
+export default function CityMap({ city = 'Delhi NCR', markers = [], route = [], routeOptions = [], zoom = 12, className = '' }) {
   const fallbackCenter = getLocationCoordinates(city);
-  const [tileProvider, setTileProvider] = useState('osm');
-  const handleTileError = useCallback(() => {
-    if (tileProvider === 'osm') setTileProvider('carto');
-  }, [tileProvider]);
-  const tileUrl = tileProvider === 'osm'
-    ? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-  const tileAttribution = tileProvider === 'osm'
-    ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
   const routeCoords = useMemo(() => (route || []).filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]), [route]);
   const markerPositions = markers.filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]);
   const alternativeCoords = (routeOptions || []).flatMap((item) => (item.coordinates || []).filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)]));
@@ -51,9 +40,9 @@ export default function CityMap({ city = 'India', markers = [], route = [], rout
   return <div className={`leaflet-map ${className}`}>
     <MapContainer center={fallbackCenter} zoom={zoom} scrollWheelZoom className="leaflet-canvas">
       <MapViewport points={viewportPoints} fallbackCenter={fallbackCenter} zoom={zoom} />
-      <TileLayer key={tileProvider} attribution={tileAttribution} url={tileUrl} eventHandlers={{ tileerror: handleTileError }} />
-      {(routeOptions || []).filter((item) => !item.selected && Array.isArray(item.coordinates) && item.coordinates.length > 1).map((item, index) => <Polyline key={item.id ?? `alt-route-${index}`} positions={item.coordinates.filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)])} pathOptions={{ color: item.color || '#397ac4', weight: item.pathOptions?.weight ?? 5, opacity: item.pathOptions?.opacity ?? 0.9, dashArray: item.pathOptions?.dashArray ?? '8 6', lineCap: 'round', lineJoin: 'round', ...item.pathOptions }} />)}
-      {(routeOptions || []).filter((item) => item.selected && Array.isArray(item.coordinates) && item.coordinates.length > 1).map((item, index) => <Polyline key={item.id ?? `selected-route-${index}`} positions={item.coordinates.filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)])} pathOptions={{ color: item.color || '#1f8a62', weight: item.pathOptions?.weight ?? 7, opacity: item.pathOptions?.opacity ?? 1, lineCap: 'round', lineJoin: 'round', ...item.pathOptions }} />)}
+      <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      {(routeOptions || []).filter((item) => !item.selected && Array.isArray(item.coordinates) && item.coordinates.length > 1).map((item, index) => <Polyline key={item.id ?? `alt-route-${index}`} positions={item.coordinates.filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)])} pathOptions={{ color: item.color || '#397ac4', weight: 5, opacity: 0.9, dashArray: '8 6', lineCap: 'round', lineJoin: 'round' }} />)}
+      {(routeOptions || []).filter((item) => item.selected && Array.isArray(item.coordinates) && item.coordinates.length > 1).map((item, index) => <Polyline key={item.id ?? `selected-route-${index}`} positions={item.coordinates.filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))).map((point) => [Number(point.lat), Number(point.lng)])} pathOptions={{ color: item.color || '#1f8a62', weight: 7, opacity: 1, lineCap: 'round', lineJoin: 'round' }} />)}
       {!(routeOptions || []).some((item) => item.selected && (item.coordinates || []).length > 1) && routeCoords.length > 1 && <Polyline positions={routeCoords} pathOptions={{ color: '#1f8a62', weight: 7, opacity: 1, lineCap: 'round', lineJoin: 'round' }} />}
       {markers.map((marker, index) => <Marker key={marker.id ?? `${marker.lat}-${marker.lng}-${index}`} position={[Number(marker.lat), Number(marker.lng)]} icon={dotIcon(marker.kind || 'normal')}><Popup><b>{marker.title || 'Location'}</b>{marker.description && <div>{marker.description}</div>}</Popup></Marker>)}
     </MapContainer>

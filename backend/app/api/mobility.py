@@ -20,119 +20,29 @@ def plan_route(payload: RoutePlanIn, db: Session = Depends(get_db), user: User |
     return result
 
 
-def _nominatim_items(payload: list, query: str) -> list[dict]:
-    return [
-        {
-            "label": item.get("display_name", query),
-            "latitude": float(item["lat"]),
-            "longitude": float(item["lon"]),
-            "type": item.get("type"),
-            "category": item.get("category"),
-            "place_id": item.get("place_id"),
-        }
-        for item in payload
-        if isinstance(item, dict) and item.get("lat") and item.get("lon")
-    ]
-
-
-def _photon_items(payload: dict, query: str) -> list[dict]:
-    results = []
-    for feature in payload.get("features", []):
-        coordinates = (feature.get("geometry") or {}).get("coordinates") or []
-        if len(coordinates) < 2:
-            continue
-        props = feature.get("properties") or {}
-        label = ", ".join(str(value) for value in (
-            props.get("name"), props.get("housenumber"), props.get("street"),
-            props.get("district"), props.get("city") or props.get("town"),
-            props.get("state"), props.get("country"),
-        ) if value)
-        results.append({
-            "label": label or query,
-            "latitude": float(coordinates[1]),
-            "longitude": float(coordinates[0]),
-            "type": props.get("type"),
-            "category": props.get("osm_value") or props.get("osm_key"),
-            "place_id": props.get("osm_id"),
-        })
-    return results
-
-
 @router.get("/routing/geocode")
 def geocode_location(q: str = Query(min_length=2, max_length=180), limit: int = Query(default=5, ge=1, le=8)):
-    """Search places from the API worker, avoiding browser-side provider CORS."""
-    clean_query = q.strip()
-    safe_limit = max(1, min(8, limit))
-    headers = {"User-Agent": "UrbanSaarthi/1.0 (location search)", "Accept": "application/json"}
+    """Search for a place using OpenStreetMap's public geocoder."""
     try:
-        response = httpx.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={"q": clean_query, "format": "jsonv2", "addressdetails": 1, "limit": safe_limit},
-            headers=headers,
-            timeout=5.5,
-        )
+        response = httpx.get("https://nominatim.openstreetmap.org/search", params={"q": q, "format": "jsonv2", "addressdetails": 1, "limit": limit}, headers={"User-Agent": "UrbanSaarthi/1.0 (location search)"}, timeout=8.0)
         response.raise_for_status()
-        results = _nominatim_items(response.json(), clean_query)
-        if results:
-            return {"results": results[:safe_limit], "provider": "OpenStreetMap Nominatim"}
-    except (httpx.HTTPError, ValueError, TypeError, KeyError):
-        pass
-
-    # Photon is a server-side fallback for Nominatim timeouts, DNS failures and
-    # empty matches. Browser code never calls either geocoder directly.
-    try:
-        response = httpx.get(
-            "https://photon.komoot.io/api/",
-            params={"q": clean_query, "limit": safe_limit},
-            headers=headers,
-            timeout=5.5,
-        )
-        response.raise_for_status()
-        results = _photon_items(response.json(), clean_query)
-        if results:
-            return {"results": results[:safe_limit], "provider": "Photon / OpenStreetMap"}
-    except (httpx.HTTPError, ValueError, TypeError, KeyError):
-        pass
-
-    return {"results": [], "provider": None, "message": "Place search is temporarily unavailable. Try a more specific place name or enter coordinates."}
+        payload = response.json()
+        return {"results": [{"label": item.get("display_name", q), "latitude": float(item["lat"]), "longitude": float(item["lon"]), "type": item.get("type"), "category": item.get("category"), "place_id": item.get("place_id")} for item in payload if item.get("lat") and item.get("lon")], "provider": "OpenStreetMap Nominatim"}
+    except (httpx.HTTPError, ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(status_code=503, detail="Place search is temporarily unavailable. Try a more specific place name or enter coordinates.") from exc
 
 
 @router.get("/routing/reverse-geocode")
 def reverse_geocode(latitude: float = Query(ge=-90, le=90), longitude: float = Query(ge=-180, le=180)):
-    headers = {"User-Agent": "UrbanSaarthi/1.0 (location search)", "Accept": "application/json"}
     try:
-        response = httpx.get(
-            "https://nominatim.openstreetmap.org/reverse",
-            params={"lat": latitude, "lon": longitude, "format": "jsonv2", "zoom": 16},
-            headers=headers,
-            timeout=5.5,
-        )
+        response = httpx.get("https://nominatim.openstreetmap.org/reverse", params={"lat": latitude, "lon": longitude, "format": "jsonv2", "zoom": 16}, headers={"User-Agent": "UrbanSaarthi/1.0 (location search)"}, timeout=8.0)
         response.raise_for_status()
         item = response.json()
         address = item.get("address") or {}
-        label = address.get("amenity") or address.get("road") or address.get("suburb") or address.get("city_district") or address.get("city") or address.get("town") or address.get("village") or item.get("display_name")
-        if label:
-            return {"label": label, "display_name": item.get("display_name", label), "latitude": latitude, "longitude": longitude, "address": address, "provider": "OpenStreetMap Nominatim"}
-    except (httpx.HTTPError, ValueError, TypeError, KeyError):
-        pass
-
-    try:
-        response = httpx.get(
-            "https://photon.komoot.io/reverse",
-            params={"lat": latitude, "lon": longitude},
-            headers=headers,
-            timeout=5.5,
-        )
-        response.raise_for_status()
-        features = response.json().get("features") or []
-        props = (features[0].get("properties") or {}) if features else {}
-        label = props.get("name") or props.get("street") or props.get("district") or props.get("city") or props.get("town") or props.get("state")
-        if label:
-            return {"label": label, "display_name": label, "latitude": latitude, "longitude": longitude, "address": props, "provider": "Photon / OpenStreetMap"}
-    except (httpx.HTTPError, ValueError, TypeError, KeyError):
-        pass
-
-    return {"label": f"{latitude:.5f}, {longitude:.5f}", "display_name": f"{latitude:.5f}, {longitude:.5f}", "latitude": latitude, "longitude": longitude, "address": {}, "provider": None}
+        label = address.get("amenity") or address.get("road") or address.get("suburb") or address.get("city_district") or address.get("city") or address.get("town") or address.get("village") or item.get("display_name") or f"{latitude:.5f}, {longitude:.5f}"
+        return {"label": label, "display_name": item.get("display_name", label), "latitude": latitude, "longitude": longitude, "address": address}
+    except (httpx.HTTPError, ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(status_code=503, detail="Location name lookup is temporarily unavailable.") from exc
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

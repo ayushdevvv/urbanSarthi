@@ -6,6 +6,7 @@ psycopg[binary]>=3.2,<4.0
 pydantic>=2.10,<3.0
 pydantic-settings>=2.8,<3.0
 email-validator>=2.2,<3.0
+argon2-cffi>=23.1,<26.0
 httpx>=0.28,<1.0
 python-multipart>=0.0.20,<1.0
 joblib>=1.4,<2.0
@@ -25,12 +26,9 @@ torchvision==0.25.0+cpu
 # Supplied SUMO traffic forecast model
 xgboost>=2.1,<4
 opencv-python-headless>=4.10,<5
-
-# Google-first agent orchestration (lazy-imported; deterministic fallback if unavailable).
--r requirements-agent.txt
+langgraph>=0.2,<2
+langchain-core>=0.3,<2
+langchain-groq>=0.2,<2
 
 # Portable FFmpeg decoder fallback for phone-recorded / cloud-incompatible video codecs
 imageio-ffmpeg>=0.5.1,<1
-
-# Official SUMO application wheel (includes the Linux binaries; no apt/Docker required).
-eclipse-sumo==1.28.0

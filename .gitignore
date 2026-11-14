@@ -1,41 +1,25 @@
-# Environment and secrets
-.env
-.env.*
-!.env.example
+# Installed packages (each project installs independently)
+**/node_modules/
+
+# Local environment files and secrets
 **/.env
 **/.env.*
 !**/.env.example
 
-# Frontend dependencies / builds
-node_modules/
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
+# Build output
+**/dist/
+**/build/
+**/coverage/
+
+# Generated Excalidraw fonts copied from npm package
+client/public/fonts/
+
+# Logs
 *.log
 npm-debug.log*
 
-# Python backend
-__pycache__/
-*.py[cod]
-*.so
-.venv/
-venv/
-ENV/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-
-# Local databases, model artifacts, and uploads
-*.sqlite
-*.sqlite3
-*.db
-backend/models/*.joblib
-backend/uploads/
-
-# Editors / OS
-.vscode/
-.idea/
+# OS / editor
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/

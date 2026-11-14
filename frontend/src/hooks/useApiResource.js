@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const PREVIEW_DELAY_MS = 5_000;
+const PREVIEW_DELAY_MS = 40_000;
 const isAvailabilityFailure = (error) => !error?.status || error.status >= 500 || error.status === 408 || error.status === 429;
 
 /**
  * Race-safe resource loader shared by dashboard pages.
  * Live responses always win. A page may opt into an illustrative local preview
- * only after an availability failure has persisted for a short retry window.
+ * only after an availability failure has persisted for the 40-second grace period.
  */
 export default function useApiResource(loader, dependencies = []) {
   const [data, setData] = useState(null);

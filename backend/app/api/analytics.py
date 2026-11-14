@@ -31,4 +31,4 @@ def city_summary(db: Session = Depends(get_db), user=Depends(require_roles("oper
     return {"period_days": days, "trip_requests": len(trips), "completed_trips": sum(t.status == "completed" for t in trips),
             "cancelled_trips": sum(t.status == "cancelled" for t in trips),
             "recorded_route_distance_km": round(sum(t.distance_meters or 0 for t in trips) / 1000, 2),
-            "note": "City totals include saved guest trips associated with browser-scoped visitor IDs; unsaved route searches are not persisted."}
+            "note": "Anonymous trip planning requests are not persisted, and these metrics reflect only registered users' saved trips."}
