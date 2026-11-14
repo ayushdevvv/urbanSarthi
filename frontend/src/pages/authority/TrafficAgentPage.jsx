@@ -126,6 +126,7 @@ export default function TrafficAgentPage() {
   const [distanceKm, setDistanceKm] = useState(String(savedEvidence?.value?.segment_distance_km || 0.5));
   const [workflow, setWorkflow] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [dispatchPreview, setDispatchPreview] = useState(null);
   const [error, setError] = useState('');
@@ -178,9 +179,10 @@ export default function TrafficAgentPage() {
         segment_distance_km: Number(distanceKm) || 0.5,
       }, { timeoutMs: 40000 });
       workflowRef.current = result;
+      setInitialLoading(false);
       setWorkflow(result);
       saveLocalRecord('traffic-agent-last-workflow', result);
-      notify(result.agent?.agent_mode === 'langgraph_groq_tool_calling' ? 'TrafficSaarthi completed its LangGraph tool run.' : 'TrafficSaarthi completed its analysis workflow.');
+      notify('TrafficSaarthi completed its analysis.');
     } catch (err) {
       setError(err?.message || 'The Traffic Agent could not complete the workflow.');
       if (!automatic) notify('The service did not complete the live run. Showing a local preview where possible.');
@@ -208,8 +210,9 @@ export default function TrafficAgentPage() {
     return () => globalThis.clearInterval(interval);
   }, [loading, attemptStartedAt]);
 
-  // Show an illustrative, local-only workspace after 40 seconds if there is no
-  // saved evidence or if the service has not produced a workflow result.
+  // Show an illustrative, local-only workspace after five seconds if there is no
+  // saved evidence or if the service has not produced a workflow result. A later live
+  // response replaces this preview because the request remains active.
   useEffect(() => {
     const started = attemptStartedAt;
     const interval = globalThis.setInterval(() => setWaitSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
@@ -220,7 +223,8 @@ export default function TrafficAgentPage() {
         workflowRef.current = localPreview;
         setWorkflow(localPreview);
       }
-    }, 40000);
+      setInitialLoading(false);
+    }, 5000);
     return () => { globalThis.clearInterval(interval); globalThis.clearTimeout(timeout); };
   }, [attemptStartedAt, report, scenario, cycleSeconds, distanceKm]);
 
@@ -261,7 +265,7 @@ export default function TrafficAgentPage() {
       <div className="ta-hero-copy">
         <div className="ta-eyebrow"><span className="ta-pulse-dot"/> URBANSAARTHI / TRAFFIC OPERATIONS</div>
         <h1>TrafficSaarthi <em>Agent</em></h1>
-        <p>An operations agent that reads traffic evidence, estimates vehicle emissions, drafts safe signal timing and runs a 60-minute forecast. It completes the analysis itself, then hands the decision to an operator.</p>
+        <p>Turn saved traffic evidence into an emissions estimate, a candidate signal plan and a 60-minute traffic outlook. Every recommendation stays with an operator for review.</p>
         <div className="ta-hero-actions">
           <Link to="/authority/traffic-lab" className="ta-secondary-action">Open Traffic Lab <ArrowRight size={15}/></Link>
           <button type="button" className="ta-primary-action" onClick={() => runWorkflow()} disabled={!hasEvidence || !junctionId || loading}>
@@ -271,16 +275,22 @@ export default function TrafficAgentPage() {
       </div>
       <div className="ta-hero-status">
         <span className={`ta-status-icon ${systemStatus?.agent_tools_ready ? 'is-ready' : ''}`}><Bot size={22}/></span>
-        <div><b>{loading ? 'Agent working' : workflow ? (preview ? 'Preview available' : 'Workflow completed') : 'Agent ready'}</b><small>{systemStatus?.llm_tool_calling_ready ? 'LangGraph + Groq available' : 'Deterministic tools available · Groq optional'}</small></div>
+        <div><b>{loading ? 'Agent working' : workflow ? (preview ? 'Preview available' : 'Analysis ready') : 'Agent ready'}</b><small>{systemStatus?.agent_tools_ready ? 'Analysis steps are available' : 'Ready when traffic evidence and a junction are selected'}</small></div>
         <span className={`ta-status-chip ${loading ? 'working' : preview ? 'preview' : workflow ? 'done' : ''}`}>{loading ? 'RUNNING' : preview ? 'LOCAL PREVIEW' : workflow ? 'COMPLETE' : 'READY'}</span>
       </div>
     </header>
 
-    <section className="ta-workspace-grid">
+    {initialLoading && <section className="ta-entry-loading" role="status" aria-live="polite">
+      <span className="ta-entry-loader"><LoaderCircle size={24} className="ta-spin"/><Bot size={18}/></span>
+      <div><b>Preparing Traffic Agent</b><p>Checking saved traffic evidence and available junctions.</p></div>
+      <span className="ta-entry-progress"><i/></span>
+    </section>}
+
+    {!initialLoading && <section className="ta-workspace-grid">
       <div className="ta-panel ta-source-panel">
         <div className="ta-panel-heading"><div><span>INPUT EVIDENCE</span><h2>What the agent is analysing</h2></div><span className="ta-soft-icon"><Activity size={18}/></span></div>
         {hasEvidence ? <>
-          <div className="ta-evidence-source"><div className="ta-file-icon"><Gauge size={20}/></div><div><b>{report.source_filename || 'Saved traffic evidence'}</b><small>{report.model || 'YOLO model'} · {report.video?.sampled_frames || 1} sampled frames{reportSavedAt ? ` · ${new Date(reportSavedAt).toLocaleString()}` : ''}</small></div><span>YOLO REPORT</span></div>
+          <div className="ta-evidence-source"><div className="ta-file-icon"><Gauge size={20}/></div><div><b>{report.source_filename || 'Saved traffic evidence'}</b><small>Vehicle detection · {report.video?.sampled_frames || 1} sampled frames{reportSavedAt ? ` · ${new Date(reportSavedAt).toLocaleString()}` : ''}</small></div><span>YOLO REPORT</span></div>
           <div className="ta-source-metrics"><div><small>Vehicles</small><b>{Number(totalVehicles).toLocaleString()}</b></div><div><small>Scene density</small><b>{report.congestion_estimate || '—'}</b></div><div><small>Confidence</small><b>{Math.round(Number(report.confidence_threshold || 0.3) * 100)}%</b></div></div>
         </> : <div className="ta-no-evidence"><div><Gauge size={22}/></div><b>No saved YOLO report yet</b><p>Run an image or video analysis in Traffic Lab. The agent will start automatically when that report is available.</p><Link to="/authority/traffic-lab" className="ta-inline-link">Create traffic evidence <ArrowRight size={14}/></Link></div>}
         <div className="ta-control-grid">
@@ -294,7 +304,7 @@ export default function TrafficAgentPage() {
       </div>
 
       <div className="ta-panel ta-execution-panel">
-        <div className="ta-panel-heading"><div><span>AUTONOMOUS EXECUTION</span><h2>Agent workstream</h2></div><span className={`ta-execution-badge ${loading ? 'active' : workflow ? 'finished' : ''}`}><i/>{loading ? 'Executing' : workflow ? 'Run returned' : 'Standing by'}</span></div>
+        <div className="ta-panel-heading"><div><span>AGENT WORKFLOW</span><h2>Analysis steps</h2></div><span className={`ta-execution-badge ${loading ? 'active' : workflow ? 'finished' : ''}`}><i/>{loading ? 'Executing' : workflow ? 'Run returned' : 'Standing by'}</span></div>
         <div className="ta-step-list">
           {TOOL_STEPS.map((step, index) => {
             const Icon = step.icon;
@@ -307,16 +317,16 @@ export default function TrafficAgentPage() {
             </div>;
           })}
         </div>
-        <div className="ta-workstream-note">The agent runs evidence inspection, emissions estimation, signal drafting and forecasting on the server. Tool completion is confirmed from the response, not inferred from this progress animation.</div>
-        {loading && <div className="ta-running-callout"><span className="ta-running-orb"><Bot size={18}/></span><div><b>TrafficSaarthi is working through the evidence</b><p>The operations workflow is running as one job. Results and the executed-tool trace appear when the backend returns.</p></div><span className="ta-elapsed"><Timer size={13}/> {waitSeconds}s</span></div>}
+        <div className="ta-workstream-note">The progress indicator shows that the review is underway. Completed steps are confirmed when the analysis returns.</div>
+        {loading && <div className="ta-running-callout"><span className="ta-running-orb"><Bot size={18}/></span><div><b>TrafficSaarthi is working through the evidence</b><p>The analysis is in progress. Its results will appear here as soon as the review finishes.</p></div><span className="ta-elapsed"><Timer size={13}/> {waitSeconds}s</span></div>}
         {error && <div className="ta-error-note"><XCircle size={15}/><span>{error}</span></div>}
         {preview && <div className="ta-preview-disclosure"><Sparkles size={15}/><span><b>Illustrative preview</b> · locally calculated from the saved report (or an example scenario). It is not a live backend result and cannot be approved or dispatched.</span></div>}
         {!workflow && !loading && <div className="ta-waiting-state"><span><Bot size={24}/></span><b>Waiting for an evidence-backed run</b><small>When a saved YOLO report and registered junction are available, the agent starts automatically.</small></div>}
       </div>
-    </section>
+    </section>}
 
     {workflow && <>
-      <div className="ta-results-heading"><div><span>WORKFLOW OUTPUT</span><h2>{preview ? 'Illustrative operations preview' : 'Analysis, plan and forecast'}</h2></div><span className={`ta-result-mode ${preview ? 'preview' : ''}`}>{preview ? 'LOCAL CALCULATION' : workflow.agent?.agent_mode === 'langgraph_groq_tool_calling' ? 'LANGGRAPH + GROQ' : 'DETERMINISTIC TOOL RUN'}</span></div>
+      <div className="ta-results-heading"><div><span>WORKFLOW OUTPUT</span><h2>{preview ? 'Illustrative operations preview' : 'Analysis, plan and forecast'}</h2></div><span className={`ta-result-mode ${preview ? 'preview' : ''}`}>{preview ? 'ILLUSTRATIVE PREVIEW' : 'AGENT ANALYSIS'}</span></div>
       <section className="ta-metrics-grid">
         <article className="ta-metric-card ta-metric-primary"><span>ESTIMATED CO₂</span><strong>{emissions ? `${Number(emissions.co2_g || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} g` : '—'}</strong><small>Tailpipe proxy · indicative factors</small><Leaf size={19}/></article>
         <article className="ta-metric-card"><span>ESTIMATED NOx</span><strong>{emissions ? `${Number(emissions.nox_g || 0).toFixed(3)} g` : '—'}</strong><small>Vehicle class × corridor distance</small><Wind size={18}/></article>
@@ -334,18 +344,18 @@ export default function TrafficAgentPage() {
         </article>
 
         <article className="ta-panel ta-forecast-panel">
-          <div className="ta-panel-heading"><div><span>02 / SCENARIO FORECAST</span><h2>Next 60 minutes</h2></div><span className="ta-forecast-engine">{workflow.simulation?.engine_label || workflow.simulation?.engine || 'Forecast'}</span></div>
+          <div className="ta-panel-heading"><div><span>02 / SCENARIO FORECAST</span><h2>Next 60 minutes</h2></div><span className="ta-forecast-engine">60-minute outlook</span></div>
           <div className="ta-forecast-kpis"><div><small>Road network</small><b>{summary.road_count ?? workflow.simulation?.training_data?.road_edges ?? '—'}</b></div><div><small>Heavy roads · start</small><b>{summary.heavy_roads_start ?? '—'}</b></div><div><small>Heavy roads · +60m</small><b>{summary.heavy_roads_end ?? '—'}</b></div></div>
           <MiniTimeline points={timeline}/>
-          <div className="ta-forecast-footnote">{workflow.simulation?.engine_fallback_note || workflow.simulation?.evidence_linkage_note || workflow.simulation?.caveats?.[0] || 'Forecast output is separate from current live traffic observations.'}</div>
+          <div className="ta-forecast-footnote">{preview ? 'Illustrative outlook only. It is not a live traffic forecast.' : 'Forecast reflects the selected scenario and the available traffic evidence.'}</div>
         </article>
       </section>
       {workflow.agent?.response && <section className="ta-panel ta-agent-assessment"><span className="ta-assessment-icon"><Bot size={18}/></span><div><span>TRAFFICSAARTHI ASSESSMENT</span><p>{workflow.agent.response}</p>{workflow.agent.llm_note && <small>{workflow.agent.llm_note}</small>}</div></section>}
-      <section className="ta-tools-row"><div><b>Executed tools</b><small>{calledTools.length} tools returned by this workflow</small></div><div className="ta-tool-chips">{calledTools.map((tool) => <span key={tool}><CheckCircle2 size={13}/>{tool.replaceAll('_', ' ')}</span>)}</div></section>
+      <section className="ta-tools-row"><div><b>Completed steps</b><small>{calledTools.length} steps confirmed by the analysis</small></div><div className="ta-tool-chips">{calledTools.map((tool) => <span key={tool}><CheckCircle2 size={13}/>{TOOL_STEPS.find((step) => step.key === tool)?.title || tool.replaceAll('_', ' ')}</span>)}</div></section>
       {workflow.simulation?.caveats?.length > 0 && <div className="ta-caveats"><ShieldCheck size={15}/><span>{workflow.simulation.caveats.join(' ')}</span></div>}
       {dispatchPreview && <pre className="ta-dispatch-preview">{JSON.stringify(dispatchPreview, null, 2)}</pre>}
     </>}
 
-    <footer className="ta-footer"><span>URBANSAARTHI · TRAFFICSAARTHI AGENT</span><span>Evidence → Analysis → Draft → Forecast → Human review</span></footer>
+    <footer className="ta-footer"><span>URBANSAARTHI · TRAFFIC AGENT</span><span>Evidence → Insight → Signal draft → Operator review</span></footer>
   </main>;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Activity, Bell, Camera, ChevronRight, House, Leaf, Menu, Moon, RadioTower, Sun, Wind, Network } from 'lucide-react';
+import { Activity, Bell, Bot, Camera, ChevronRight, House, Leaf, Menu, Moon, RadioTower, Sun, Wind, Network } from 'lucide-react';
 import { useApp } from '../../context/AppContext.jsx';
 import BrandMark from '../shared/BrandMark.jsx';
 import FloatingAgentWidget from '../shared/FloatingAgentWidget.jsx';
@@ -13,6 +13,7 @@ const navGroups = [
   ]},
   { label: 'TRAFFIC', items: [
     { label: 'Traffic Lab', to: '/authority/traffic-lab', icon: Camera },
+    { label: 'Traffic Agent', to: '/authority/traffic-agent', icon: Bot },
     { label: 'Traffic Simulation', to: '/authority/traffic-simulation', icon: Activity },
     { label: 'Digital Twin', to: '/authority/digital-twin', icon: Network },
   ]},
@@ -27,7 +28,7 @@ const navGroups = [
 const meta = {
   '/authority/control': ['Overview', 'Overview'],
   '/authority/traffic-lab': ['Traffic', 'Traffic Lab'],
-  '/authority/traffic-agent': ['Traffic', 'Traffic agent'],
+  '/authority/traffic-agent': ['Traffic', 'Traffic Agent'],
   '/authority/digital-twin': ['Traffic', 'Digital Twin'],
   '/authority/air-intelligence': ['Air quality', 'AQI overview'],
   '/authority/aqi-forecast': ['Air quality', 'AQI Forecast'],

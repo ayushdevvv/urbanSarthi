@@ -174,3 +174,90 @@
 .ta-metric-card>small{font-size:10px}
 .ta-preview-disclosure{font-size:11px}
 @media(max-width:560px){.ta-step b{font-size:12px}.ta-step small{font-size:10px}.ta-workstream-note{font-size:10px}.ta-panel-heading h2,.ta-results-heading h2{font-size:20px}}
+
+
+/* Premium entry state and theme parity with the rest of the authority workspace. */
+.ta-entry-loading{display:flex;align-items:center;gap:14px;min-height:142px;margin:19px 0;padding:22px 24px;border:1px solid #dfe8da;border-radius:16px;background:linear-gradient(115deg,#f6faf2,#fff);box-shadow:0 10px 28px #173f2c0b}
+.ta-entry-loader{position:relative;display:grid;place-items:center;width:52px;height:52px;flex:0 0 52px;border-radius:16px;background:#e8f1e2;color:#548345}
+.ta-entry-loader svg:last-child{position:absolute;right:-4px;bottom:-4px;padding:4px;border-radius:9px;background:#fff;border:1px solid #dfe8da}
+.ta-entry-loading>div{flex:1;min-width:0}
+.ta-entry-loading>div>b{display:block;color:#214433;font-size:15px;font-weight:800}
+.ta-entry-loading p{margin:5px 0 0;color:#788a7d;font-size:12px;line-height:1.5}
+.ta-entry-progress{display:block;width:104px;height:5px;overflow:hidden;border-radius:99px;background:#e5eddf}
+.ta-entry-progress i{display:block;width:38%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#90b66e,#3f7950);animation:ta-entry-progress 1.15s ease-in-out infinite alternate}
+@keyframes ta-entry-progress{from{transform:translateX(-6%)}to{transform:translateX(170%)}}
+
+.dark .traffic-agent-page{color-scheme:dark;--ta-ink:#e4eee5;--ta-muted:#9eb1a2;--ta-line:#304237;--ta-soft:#1b2a21;color:var(--ta-ink)}
+.dark .ta-hero{border-color:var(--ta-line)}
+.dark .ta-eyebrow,.dark .ta-panel-heading>div>span,.dark .ta-results-heading>div>span,.dark .ta-agent-assessment>div>span{color:#a0c184}
+.dark .ta-hero h1{color:#e5efe6}
+.dark .ta-hero h1 em{color:#a2c981}
+.dark .ta-hero-copy>p{color:#a8b8ac}
+.dark .ta-secondary-action{background:#1c2b22;border-color:#3b5142;color:#c8dcc8}
+.dark .ta-hero-status{background:linear-gradient(145deg,#213328,#19271f);border-color:#3a5040;box-shadow:0 8px 26px #0003}
+.dark .ta-hero-status b,.dark .ta-panel-heading h2,.dark .ta-results-heading h2{color:#e0ebe1}
+.dark .ta-hero-status small{color:#a1b3a4}
+.dark .ta-status-icon,.dark .ta-status-icon.is-ready,.dark .ta-soft-icon,.dark .ta-file-icon,.dark .ta-no-evidence>div{background:#293e2e;color:#a6ca88}
+.dark .ta-status-chip,.dark .ta-execution-badge,.dark .ta-result-mode,.dark .ta-plan-status{background:#293b2d;color:#b6d09c}
+.dark .ta-status-chip.working,.dark .ta-execution-badge.active{background:#473a22;color:#e8ce8b}
+.dark .ta-status-chip.done,.dark .ta-execution-badge.finished{background:#23432c;color:#a9d29a}
+.dark .ta-status-chip.preview,.dark .ta-result-mode.preview{background:#463923;color:#e7cd91}
+.dark .ta-panel,.dark .ta-metric-card,.dark .ta-tools-row{background:#1a2920;border-color:#304237;box-shadow:0 8px 24px #0002}
+.dark .ta-evidence-source,.dark .ta-no-evidence,.dark .ta-step,.dark .ta-source-metrics>div,.dark .ta-plan-summary>div,.dark .ta-forecast-kpis>div{background:#202f26;border-color:#35483a}
+.dark .ta-evidence-source b,.dark .ta-no-evidence>b,.dark .ta-source-metrics b,.dark .ta-step b,.dark .ta-plan-summary b,.dark .ta-forecast-kpis b,.dark .ta-phase-row>div:first-child b,.dark .ta-tools-row>div:first-child b{color:#dce9dd}
+.dark .ta-evidence-source small,.dark .ta-source-metrics small,.dark .ta-no-evidence>p,.dark .ta-step small,.dark .ta-step-state,.dark .ta-plan-summary small,.dark .ta-forecast-kpis small,.dark .ta-phase-row>div:first-child small,.dark .ta-tools-row>div:first-child small{color:#9bad9f}
+.dark .ta-control-grid label>span,.dark .ta-prompt-field>span{color:#b5c8b8}
+.dark .ta-control-grid input,.dark .ta-control-grid select,.dark .ta-prompt-field textarea{background:#142119;border-color:#3a5141;color:#e1ece2;color-scheme:dark}
+.dark .ta-inline-note{background:#3b3321;color:#e3cd94}
+.dark .ta-step-index{background:#2b3e2f;color:#a9ca8c}
+.dark .ta-step.complete,.dark .ta-step.running{background:#24372a;border-color:#3b5940}
+.dark .ta-step.complete .ta-step-index{background:#2d4a31;color:#b2d79e}
+.dark .ta-running-callout,.dark .ta-workstream-note{background:#24372a;border-color:#3a5440;color:#b3c7b5}
+.dark .ta-running-orb{background:#314b35;color:#b7d69e}
+.dark .ta-running-callout b,.dark .ta-running-callout p{color:#c4d6c5}
+.dark .ta-error-note{background:#3b2623;border-color:#68413a;color:#f0b6aa}
+.dark .ta-preview-disclosure,.dark .ta-approval-locked{background:#3c3321;border-color:#655534;color:#e5d19b}
+.dark .ta-preview-disclosure b{color:#f0dca8}
+.dark .ta-waiting-state,.dark .ta-waiting-state small{color:#9fb1a2}
+.dark .ta-waiting-state b{color:#d1dfd2}
+.dark .ta-waiting-state>span{background:#283b2d;color:#a9c98b}
+.dark .ta-metric-card>span,.dark .ta-metric-card>small{color:#a5b5a7}
+.dark .ta-metric-card>strong{color:#e1ece2}
+.dark .ta-metric-primary{background:linear-gradient(145deg,#263b2b,#1a2920);border-color:#3d5940}
+.dark .ta-plan-rationale,.dark .ta-caveats,.dark .ta-ta-footer{color:#a0b1a3}
+.dark .ta-plan-status.status-approved{background:#23442c;color:#b6daa5}
+.dark .ta-plan-status.status-rejected{background:#482a27;color:#f0b1a7}
+.dark .ta-plan-status.status-preview{background:#453923;color:#e8d097}
+.dark .ta-phase-track{background:#314238}
+.dark .ta-phase-row>strong{color:#b7d49b}
+.dark .ta-phase-row>small{color:#9aab9d}
+.dark .ta-review-actions{border-color:#35483a}
+.dark .ta-review-actions>div span{color:#c3d5c4}
+.dark .ta-review-actions>div small{color:#9bad9f}
+.dark .ta-reject-button{background:#3c2926;border-color:#67433c;color:#f0b5aa}
+.dark .ta-reviewed-note,.dark .ta-approval-locked{background:#26382b;border-color:#3b5740;color:#c2d9b4}
+.dark .ta-reviewed-note button{background:#213128;border-color:#4b6649;color:#c4ddb5}
+.dark .ta-forecast-engine,.dark .ta-forecast-footnote,.dark .ta-chart-wrap{background:#202f26;color:#a8b9aa;border-color:#35483a}
+.dark .ta-grid-line{stroke:#3b4b3e}
+.dark .ta-chart-axis,.dark .ta-empty-chart{color:#9cad9e}
+.dark .ta-chart-dot{stroke:#1a2920}
+.dark .ta-agent-assessment{background:linear-gradient(110deg,#263a2b,#1b2a21);border-color:#35483a}
+.dark .ta-assessment-icon{background:#304832;color:#b2d398}
+.dark .ta-agent-assessment p{color:#d0dfd1}
+.dark .ta-agent-assessment small{color:#a2b3a5}
+.dark .ta-tool-chips span{background:#2a3d2e;color:#bfd9ae}
+.dark .ta-dispatch-preview{background:#142119;border-color:#35483a;color:#c6d8c7}
+.dark .ta-footer{border-color:#304237;color:#94a799}
+.dark .ta-entry-loading{background:linear-gradient(115deg,#213328,#19271f);border-color:#3a5040;box-shadow:0 8px 26px #0003}
+.dark .ta-entry-loading>div>b{color:#e0ebe1}
+.dark .ta-entry-loading p{color:#a1b3a4}
+.dark .ta-entry-loader{background:#2b4030;color:#b5d699}
+.dark .ta-entry-loader svg:last-child{background:#1a2920;border-color:#3b5142}
+.dark .ta-entry-progress{background:#314438}
+.dark .main:has(.traffic-agent-page){background:#111c16;color:#e1ece2}
+.dark .main:has(.traffic-agent-page) .topbar{background:#19271f;border-color:#304237;color:#e1ece2}
+.dark .main:has(.traffic-agent-page) .crumb h1{color:#e1ece2}
+.dark .main:has(.traffic-agent-page) .crumb small{color:#9caf9f}
+.dark .main:has(.traffic-agent-page) .topbar .utility,.dark .main:has(.traffic-agent-page) .topbar .icon-btn{background:#203027;border-color:#3b5142;color:#d0e0d2}
+.dark .main:has(.traffic-agent-page) .content{background:#111c16}
+@media(max-width:620px){.ta-entry-loading{align-items:flex-start;padding:16px}.ta-entry-progress{display:none}.ta-entry-loading>div>b{font-size:13px}}
