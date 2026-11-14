@@ -10,7 +10,7 @@ const value = (n, suffix = '') => n === null || n === undefined ? '—' : `${n.t
 const previewSummary = (period) => ({
   period_days: period, trip_requests: 1248, completed_trips: 986, cancelled_trips: 74,
   recorded_route_distance_km: 4832,
-  note: 'Illustrative mobility profile for interface review. It is not a live city measurement.',
+  note: 'Reference mobility totals are shown because the reporting service could not be reached. They are not live city measurements.',
 });
 
 export default function AnalyticsPage() {
@@ -29,10 +29,10 @@ export default function AnalyticsPage() {
 
   return <>
     <PageIntro eyebrow="INTEGRATED COMMAND CENTRE" title="City analytics" description="Review mobility activity, trip outcomes and citywide performance." action={<><select className="select" value={range} onChange={(e) => setRange(Number(e.target.value))}><option value={1}>24 hours</option><option value={7}>Last 7 days</option><option value={30}>30 days</option><option value={90}>Quarter</option></select><button className="primary" onClick={exportReport} disabled={!shown}><Download size={15}/> Export report</button><button className="utility" onClick={reload} disabled={loading}><RefreshCw size={14}/> {loading ? 'Refreshing…' : 'Refresh'}</button></>} />
-    <WorkspaceDataState loading={loading && !fallbackReady} fallback={previewMode} title="Loading city analytics" detail="Preparing the selected reporting period." fallbackTitle="Sample analytics are active" fallbackDetail="These reference totals keep the dashboard available until current records arrive."/>
+    <WorkspaceDataState loading={loading && !fallbackReady} fallback={previewMode} title="Loading city analytics" detail="Preparing the selected reporting period." fallbackTitle="Reference analytics available" fallbackDetail="Reference totals are shown because the reporting service could not be reached."/>
     <div className="range-tabs">{[[1, '24 hours'], [7, '7 days'], [30, '30 days'], [90, 'Quarter']].map(([days, label]) => <button className={range === days ? 'active' : ''} onClick={() => setRange(Number(days))} key={days}>{label}</button>)}</div>
     {!shown ? <section className="panel us-connection-card" aria-live="polite"><div className="us-connection-icon"><Activity size={22}/></div><h3>{loading ? 'Loading city analytics' : 'City analytics are being prepared'}</h3><p>{loading ? 'Loading the selected reporting period.' : 'The selected reporting period could not be refreshed. Retry to check for the latest records.'}</p><button className="primary" onClick={reload} disabled={loading}><RefreshCw size={15}/>Retry live data</button></section> : <>
-      <div className={`notice scenario-notice ${previewMode ? 'notice-preview' : ''}`}><Activity size={14}/>{previewMode ? 'Illustrative analytics preview · reference values only' : 'City analytics · live data'}</div>
+      <div className={`notice scenario-notice ${previewMode ? 'notice-preview' : ''}`}><Activity size={14}/>{previewMode ? 'Reference analytics · local values' : 'City analytics · live data'}</div>
       <div className="analytics-kpis">
         <MetricCard icon={Route} label="Trip requests" value={value(shown.trip_requests)} detail="Mobility requests" />
         <MetricCard icon={Activity} label="Completed trips" value={value(shown.completed_trips)} detail="Completed journeys" />

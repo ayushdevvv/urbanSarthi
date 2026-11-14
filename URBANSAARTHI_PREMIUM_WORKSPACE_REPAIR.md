@@ -1,40 +1,36 @@
-# UrbanSaarthi workspace repair and UI refinement
+# UrbanSaarthi — error-only recovery and loading refinement
 
-## Navigation
+## Data and recovery behaviour
 
-- Overview is the first authority sidebar item.
-- Traffic is next: Traffic Lab, Traffic Simulation, and Digital Twin.
-- AQI follows Traffic: AQI Forecast and CO₂ Emissions.
-- Legacy traffic-model URLs continue to open Traffic Lab.
-- Legacy signal-plan URLs continue to open Digital Twin.
+- Removed timer-driven seeded data. A request that is merely slow stays in its loading state; elapsed time alone never switches the page to generated values.
+- AQI Forecast and Traffic Simulation continue to use their existing live API flows. Their bundled/reference view is used only after the relevant API request fails or returns an incomplete response.
+- Digital Twin only displays its built-in timing references after the plans endpoint fails. A successful empty plans response remains an empty state so operators can create or register real plans.
+- Traffic Lab creates a local recovery report only after an analysis request has actually been sent and the API fails, returns an error, or does not return a completed report. It is not shown on page load, is not persisted, and is not passed to Traffic Agent.
+- Traffic Agent creates a local recovery analysis only after its workflow request fails or returns an incomplete/error response. The recovery view is not saved as a server workflow and cannot be approved or dispatched.
+- CO₂ Emissions opens with real saved YOLO evidence or empty operator inputs. Its local calculation is used only after a calculation API error from a run based on saved evidence or operator-entered vehicle counts.
+- A late successful API response remains authoritative; no mock data is substituted just because the request takes longer than a fixed delay.
 
-## Traffic Lab
+## Loading and appearance
 
-- Fixed the render-time crash caused by unresolved icon components.
-- Added a route-level error boundary with a retry action so a rendering regression does not leave the workspace blank.
-- Kept the existing video/image upload, detection, report, and evidence handoff workflow.
-- Added a clearly labelled illustrative report when no saved or live report is available.
-- Added the three-step workflow cards and corrected the light/dark palette variables so both appearances retain readable contrast.
+- Replaced section-level loading indicators in the affected workspaces with a branded full-viewport spinner/loading screen.
+- The loading screen supports the existing light and dark themes through the app's `theme-root` classes.
+- Updated fallback/status language to product-facing terms such as “Reference view”, “Recovery result”, and “Continuity view”. The operator-facing screens do not label values as “sample” or “illustrative”, and do not use “live data delayed”.
+- Kept the established UrbanSaarthi visual theme and existing page workflows.
 
-## Loading and reference data
+## Traffic Agent reliability
 
-- Shared API-backed workspaces show a loading state first.
-- After five seconds without a successful response, a clearly labelled seeded/reference view is shown, even if the request is still pending.
-- A later successful API response replaces the reference data automatically.
-- Traffic Simulation, Traffic Lab, Digital Twin, AQI Forecast, Overview, and CO₂ Emissions all have a non-empty fallback path.
-- Sample values are identified as illustrative/reference data and are not presented as live sensor readings or real detections.
+- Removed a duplicate automatic `runWorkflow()` invocation so one saved evidence/junction combination submits one request.
+- Recovery output remains local-only, is excluded from saved evidence, and does not unlock human approval or physical dispatch.
 
-## Appearance
+## Navigation retained
 
-- Overview is now labelled simply as “Overview” in the sidebar.
-- Signal Plans is presented as “Digital Twin” in the navigation and page heading.
-- The existing UrbanSaarthi forest-green theme is retained, with larger page headings, refined card spacing, and consistent loading states.
-- Light and dark theme treatments are provided for Traffic Lab, AQI Forecast, Digital Twin, and CO₂ sections.
+- Overview remains first in the authority sidebar.
+- Traffic remains ahead of AQI: Traffic Lab, Traffic Simulation, Digital Twin, and Traffic Agent remain separate workspaces.
+- Digital Twin remains the operator-facing label for Signal Plans.
 
 ## Validation
 
-- `npm test` passes, including workspace route and fallback smoke tests and public routing tests.
-- 42 JavaScript/JSX/TypeScript source files parsed without syntax errors.
-- 16 CSS files parsed without syntax errors.
-- Relative source imports checked: no missing relative imports found.
-- A production Vite build was not run because dependency installation (`npm ci`) timed out in the available environment.
+- Frontend smoke tests: passed (`npm test`).
+- JS/JSX/TS syntax parse: passed for all frontend source files.
+- Relative imports: checked separately before packaging.
+- A production Vite build is not claimed; the environment previously lacked an installed Vite binary and dependency installation timed out.

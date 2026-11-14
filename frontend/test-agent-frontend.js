@@ -37,20 +37,21 @@ assert(!layout.includes("to: '/authority/signals'") && !layout.includes("to: '/a
 assert(!layout.includes('API configuration'), 'Technical API configuration label must not be shown in the main navigation');
 console.log('✓ Traffic-first sidebar order and user-facing labels verified');
 const trafficLabPage = read('src/pages/citizen/TrafficVisionPage.jsx');
-assert(trafficLabPage.includes('WorkspaceDataState') && trafficLabPage.includes('Analyze footage'), 'Traffic Lab must render its data state and upload workflow');
+assert(trafficLabPage.includes('PremiumLoadingScreen') && trafficLabPage.includes('analyzeScene'), 'Traffic Lab must render a full-screen loader and upload workflow');
+assert(trafficLabPage.includes('isVerifiedTrafficReport') && trafficLabPage.includes('if (requestSent) setPreviewReport(makeTrafficRecoveryReport(mode, confidence))'), 'Traffic Lab must ignore old saved local recovery values and show recovery output only after an actual analysis request fails');
 assert(!/<(Activity|Bot)\b/.test(trafficLabPage), 'Traffic Lab must not reference the missing Activity/Bot icons that previously crashed its render');
 const firstNavGroup = layout.indexOf("label: 'OVERVIEW'");
 const trafficNavGroup = layout.indexOf("label: 'TRAFFIC'");
 const airNavGroup = layout.indexOf("label: 'AIR QUALITY'");
 assert(firstNavGroup >= 0 && firstNavGroup < trafficNavGroup && trafficNavGroup < airNavGroup, 'Sidebar order must be Overview → Traffic → Air Quality');
 const resourceHook = read('src/hooks/useApiResource.js');
-assert(resourceHook.includes('PREVIEW_DELAY_MS = 5_000') && resourceHook.includes('setFallbackReady(true)'), 'Shared API data must release a seeded preview after five seconds even while a request is pending');
+assert(!resourceHook.includes('PREVIEW_DELAY_MS') && !resourceHook.includes('setTimeout') && resourceHook.includes('setFallbackReady(true)'), 'Shared API fallback must activate only after a real request failure, never on a timer');
 const errorBoundary = read('src/components/shared/WorkspaceErrorBoundary.jsx');
 assert(layout.includes('WorkspaceErrorBoundary') && errorBoundary.includes('componentDidCatch') && errorBoundary.includes('Try again'), 'A route render error must show a recoverable workspace screen instead of a blank page');
 const trafficSimulationPage = read('src/pages/citizen/TrafficInfoPage.jsx');
-assert(trafficSimulationPage.includes('WorkspaceDataState') && trafficSimulationPage.includes('setTimeout(() => setFallbackReady(true), 5000)'), 'Traffic Simulation must show a premium loading state and release its seeded scenario after five seconds');
+assert(trafficSimulationPage.includes('PremiumLoadingScreen') && trafficSimulationPage.includes('useState(null)') && !trafficSimulationPage.includes('setTimeout(() => setFallbackReady(true)'), 'Traffic Simulation must wait for its live API response and use a reference scenario only after an actual request failure');
 const carbonEntryPage = read('src/pages/authority/CarbonImpactPage.jsx');
-assert(carbonEntryPage.includes('void estimate({ silent: true })') && carbonEntryPage.includes('setFallbackReady(true)') && !carbonEntryPage.includes('setResult(null)'), 'CO2 must check for a live estimate on entry and keep a calculated local preview visible');
+assert(carbonEntryPage.includes('void estimate({ silent: true })') && carbonEntryPage.includes('offline_fallback: true') && carbonEntryPage.includes('useState(null)') && !carbonEntryPage.includes('SAMPLE_VEHICLE_COUNTS'), 'CO2 must use saved video evidence when present and otherwise start without invented inputs or results');
 const polishCss = read('src/styles/workspace-polish.css');
 assert(polishCss.includes('.authority-app.dark .ul-lab') && polishCss.includes('.authority-app:not(.dark) .ul-lab') && polishCss.includes('.authority-app.dark .aqi-forecast-panel') && polishCss.includes('.authority-app.dark .digital-twin-page'), 'Traffic Lab, AQI Forecast and Digital Twin must have explicit dark-mode treatments');
 
@@ -71,7 +72,7 @@ assert(app.includes('path="aqi-forecast" element={<AirQualityOverviewPage foreca
 const airService = read('src/services/airQuality.js');
 assert(airService.includes('hasUsAqiForecast') && airService.includes('forecast_provider') && airService.includes('fetchOpenMeteoAirQuality') && airService.includes("forecast_hours: '24'"), 'AQI service must supplement a non-US-AQI forecast with a comparable 24-hour US AQI timeline when available');
 assert(aqi.includes('US AQI · 0–500') && aqi.includes('OpenWeather AQI · 1–5') && aqi.includes('matchingCurrentValue'), 'AQI forecast must keep provider index scales separate');
-assert(aqi.includes('makeSeedAirReport') && aqi.includes('makeSeedStations') && aqi.includes('makeSeedHotspots') && aqi.includes('Sample data is active'), 'AQI forecast must keep clearly labelled AQI, station and hotspot samples available during outages');
+assert(aqi.includes('makeReferenceAirReport') && aqi.includes('makeReferenceStations') && aqi.includes('makeReferenceHotspots') && aqi.includes("status: 'reference_fallback'") && aqi.includes('if (loading) return <PremiumLoadingScreen'), 'AQI forecast must show live provider results and use clearly distinguished recovery profiles only after actual failures');
 console.log('✓ AQI-centred overview and visualisations verified');
 
 const carbon = read('src/pages/authority/CarbonImpactPage.jsx');
@@ -90,11 +91,11 @@ console.log('✓ IoT observation ingestion and device registry verified');
 
 const trafficInfo = read('src/pages/citizen/TrafficInfoPage.jsx');
 assert(trafficInfo.includes('buildReferenceScenario') && trafficInfo.includes('trafficSimulationSeed') && trafficInfo.includes('setScenarioData(buildReferenceScenario(trafficSimulationSeed, overrideScenario))'), 'Traffic Simulation must render the bundled SUMO reference scenario when its API and saved response are unavailable');
-assert(trafficInfo.includes('Keep the last usable scenario visible while the live request is pending.') && trafficInfo.includes('traffic-reference-note'), 'Traffic Simulation must preserve the last scenario while refreshing and identify sample playback clearly');
+assert(trafficInfo.includes('Keep a previously loaded scenario visible while refreshing.') && trafficInfo.includes('traffic-reference-note') && trafficInfo.includes('if (loading) return <PremiumLoadingScreen'), 'Traffic Simulation must retain the last valid run during refresh and use a full-screen loader on initial load');
 assert(trafficInfo.includes('moderate_roads: null') && trafficInfo.includes('free_roads: null'), 'Traffic fallback must not invent unprovided road-category counts');
 const carbonPage = read('src/pages/authority/CarbonImpactPage.jsx');
-assert(!carbonPage.includes('readLocalRecord(\'carbon-last-estimate\')') && carbonPage.includes('SAMPLE_VEHICLE_COUNTS') && carbonPage.includes('Illustrative sample calculation') && carbonPage.includes('seeded_preview'), 'CO2 workspace must open with a clearly marked sample calculation and avoid stale saved estimates');
-assert(carbonPage.includes('offline_fallback: true') && carbonPage.includes('Local fallback calculation'), 'CO2 workspace must calculate locally when the platform estimator is unavailable');
+assert(!carbonPage.includes('SAMPLE_VEHICLE_COUNTS') && !carbonPage.includes('seeded_preview') && carbonPage.includes('setResult(null)'), 'CO2 workspace must not start with invented data or stale calculated results');
+assert(carbonPage.includes('offline_fallback: true') && carbonPage.includes('Local recovery calculation'), 'CO2 workspace must calculate locally when the platform estimator is unavailable');
 const traffic = read('src/pages/citizen/TrafficVisionPage.jsx');
 assert(traffic.includes('/traffic-detection/analyze-video'), 'Traffic Lab must call the video-analysis API');
 assert(traffic.includes('/authority/traffic-agent') && !traffic.includes('/traffic-detection/ops-workflow'), 'Traffic Lab must hand the workflow to a separate Traffic Agent page');
@@ -131,7 +132,7 @@ assert(apiClient.includes('cacheResponse') && apiClient.includes('readApiSnapsho
 assert(apiClient.includes('DEFAULT_REQUEST_TIMEOUT_MS = 70_000') && apiClient.includes('FALLBACK_GRACE_MS = 40_000') && apiClient.includes('ATTEMPT_TIMEOUT_MS = 9_000') && apiClient.includes('fallbackDeadline') && apiClient.includes('waitForFallbackGrace(requestStartedAt, fallbackGraceMs)') && apiClient.includes("type: 'pending'"), 'Live backend is retried throughout the 40-second window before any saved snapshot is restored');
 const dataBanner = read('src/components/shared/DataStatusBanner.jsx');
 assert(dataBanner.includes('Showing the latest saved information'), 'Cached response state must be visible and timestamped');
-assert(dataBanner.includes('Live data is temporarily delayed') && dataBanner.includes("location.pathname === '/authority/aqi-forecast'"), 'Connection copy must be neutral and the AQI workspace must use its own source status');
+assert(dataBanner.includes('Connection needs attention') && dataBanner.includes("location.pathname === '/authority/aqi-forecast'"), 'Connection copy must stay neutral and the AQI workspace must use its own source status');
 assert(dataBanner.includes("detail.type === 'pending'") && dataBanner.includes('latestRequestByPath') && dataBanner.includes('setStatuses') && !dataBanner.includes('readDataStatusEvents'), 'Outage banner must track each endpoint separately and ignore out-of-order responses');
 assert(!fs.existsSync(path.join(root, 'src/pages/shared/AqiForecastPage.jsx')), 'The duplicate standalone AQI forecast page must be removed');
 const airQualitySource = read('src/pages/citizen/AirQualityPage.jsx');
@@ -142,14 +143,15 @@ const trafficAgent = read('src/pages/authority/TrafficAgentPage.jsx');
 assert(app.includes('path="traffic-agent"') && app.includes('<TrafficAgentPage'), 'Traffic Agent must be a separate authority route');
 assert(trafficAgent.includes('/traffic-detection/ops-workflow') && trafficAgent.includes('runWorkflow'), 'Separate Traffic Agent page must execute the real operations workflow endpoint');
 assert(trafficAgent.includes('autoStarted.current') && trafficAgent.includes('api.post') && trafficAgent.includes('!report.preview_only'), 'Traffic Agent must auto-start only from genuine saved YOLO evidence and never submit local preview values');
-assert(trafficAgent.includes('5000') && trafficAgent.includes('initialLoading') && trafficAgent.includes('makeLocalPreview') && trafficAgent.includes('preview_only: true') && trafficAgent.includes('if (!workflowRef.current)'), 'Traffic Agent must show a premium entry loader and reveal a local preview after five seconds while a slow request remains pending');
+assert((trafficAgent.match(/runWorkflow\(\{ automatic: true \}\)/g) || []).length === 1, 'Traffic Agent must submit only one automatic workflow for each saved evidence/junction selection');
+assert(trafficAgent.includes('initialLoading') && trafficAgent.includes('PremiumLoadingScreen') && trafficAgent.includes('makeRecoveryPreview') && trafficAgent.includes('preview_only: true') && trafficAgent.includes('setWorkflow(makeRecoveryPreview(source, scenario, cycleSeconds, distanceKm))'), 'Traffic Agent must use a full-screen loader and show its local recovery analysis only after the workflow request fails');
 assert(trafficAgent.includes('activeToolIndex') && trafficAgent.includes('tools list') && trafficAgent.includes('IN PROGRESS'), 'Traffic Agent must show an active workflow progress indicator without claiming individual steps completed before response');
 assert(!trafficAgent.includes('LangGraph + Groq') && !trafficAgent.includes('DETERMINISTIC TOOL RUN'), 'Traffic Agent must avoid exposing implementation stack labels in its operator-facing UI');
 assert(trafficAgent.includes('Approve draft') && trafficAgent.includes('physical_dispatch_enabled'), 'Agent must retain operator approval and no physical dispatch safeguards');
 assert(trafficAgent.includes('Completed steps are confirmed when the analysis returns'), 'Agent must confirm completed steps from returned analysis rather than the loading animation');
-assert(traffic.includes('makeIllustrativeTrafficReport') && traffic.includes('preview_only: true') && traffic.includes('not sent to the Traffic Agent'), 'Traffic Lab must show a seeded illustrative scene without treating it as YOLO evidence');
-assert(traffic.includes("previewReport ? 'Illustrative traffic scenario'"), 'Traffic Lab must identify the local example as an illustrative scenario, not a completed YOLO inference');
-assert(traffic.includes('setPreviewReport((current) => current || makeIllustrativeTrafficReport(mode, confidence))'), 'Traffic Lab must keep a usable preview visible if the detector request fails');
+assert(traffic.includes('makeTrafficRecoveryReport') && traffic.includes('preview_only: true') && traffic.includes('not sent to Traffic Agent'), 'Traffic Lab must show a local recovery profile only after an analysis request fails, without treating it as YOLO evidence');
+assert(traffic.includes("previewReport ? 'Recovery result'"), 'Traffic Lab must identify the recovery profile separately from a completed YOLO inference');
+assert(traffic.includes('if (requestSent) setPreviewReport(makeTrafficRecoveryReport(mode, confidence))'), 'Traffic Lab must create a recovery profile only after an actual analysis request fails');
 const trafficAgentCss = read('src/pages/authority/traffic-agent.css');
 assert(trafficAgentCss.includes('.ta-hero') && trafficAgentCss.includes('#2f6a49') && trafficAgentCss.includes('@media(max-width:560px)') && trafficAgentCss.includes('.ta-workstream-note') && trafficAgentCss.includes('.dark .traffic-agent-page') && trafficAgentCss.includes('.ta-entry-loading'), 'Traffic Agent must have premium responsive light/dark styling and a polished entry loader');
 console.log('✓ PNG favicon, multi-route map, Google Maps, carbon cards and outage recovery verified');
@@ -172,7 +174,7 @@ const signalApi = fs.readFileSync(path.join(root, '../backend/app/api/signals.py
 const signalService = fs.readFileSync(path.join(root, '../backend/app/services/signal_planning.py'), 'utf8');
 assert(signalUi.includes('AVAILABLE SCENARIOS') && signalUi.includes('simulateSelected') && signalApi.includes('/signals/plans') && signalService.includes('generate_recommendation'), 'Digital Twin signal-plan UI, API routes and planning service must remain in the release');
 console.log('✓ Signal planning source files retained');
-console.log('✓ Live-first loading, five-second seeded fallback, route sorting, AQI provenance and workflow navigation verified');
+console.log('✓ Live-first loading, error-only recovery views, route sorting, AQI provenance and workflow navigation verified');
 
 
 // Runtime check: the live server response must win even when a local snapshot exists.

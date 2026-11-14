@@ -575,7 +575,7 @@ export default function FloatingAgentWidget({ mode = 'citizen' }) {
           {/* Drawer Footer (Only in Chat Tab) */}
           {activeTab === 'chat' && (
             <div style={{ borderTop: '1px solid var(--border)', padding: '8px 14px', background: 'var(--surface)' }}>
-              {/* Quick sample chips */}
+              {/* Quick suggested actions */}
               <div className="drawer-quick-chips">
                 {!isAuthority ? (
                   <>

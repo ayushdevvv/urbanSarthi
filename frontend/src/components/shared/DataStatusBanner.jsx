@@ -49,12 +49,12 @@ export default function DataStatusBanner() {
   return <div className={`data-status-banner ${hasSnapshot ? 'is-snapshot' : hasProvider ? 'is-provider' : 'is-offline'}`} role="status" aria-live="polite">
     {hasSnapshot || hasProvider ? <Clock3 size={17} /> : <WifiOff size={17} />}
     <span>
-      <b>{hasSnapshot ? 'Showing the latest saved information' : hasProvider ? 'Air-quality outlook available' : 'Live data is temporarily delayed'}</b>
+      <b>{hasSnapshot ? 'Showing the latest saved information' : hasProvider ? 'Air-quality outlook available' : 'Connection needs attention'}</b>
       <small>{hasSnapshot
         ? `Saved ${timestamp || 'earlier'}. Live updates will resume when the service reconnects.`
         : hasProvider
           ? 'The outlook is sourced directly from the configured air-quality provider. Model values are not ground-station measurements.'
-          : 'The latest feed could not be refreshed. Previously loaded information remains visible where available.'}</small>
+          : 'The latest request could not be completed. Previously loaded information remains available where possible.'}</small>
     </span>
     <button type="button" onClick={() => setDismissed(true)} aria-label="Dismiss connection message"><X size={16} /></button>
   </div>;

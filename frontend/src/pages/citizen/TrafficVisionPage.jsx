@@ -8,19 +8,26 @@ import { useApp } from '../../context/AppContext.jsx';
 import { Link } from 'react-router-dom';
 import { saveLatestVisionEvidence } from '../../services/visionEvidence.js';
 import { saveLocalRecord, readLocalRecord } from '../../services/apiSnapshot.js';
-import WorkspaceDataState from '../../components/shared/WorkspaceDataState.jsx';
+import PremiumLoadingScreen from '../../components/shared/PremiumLoadingScreen.jsx';
 import './traffic-lab-premium.css';
 
 const ACCEPTED_VIDEO = '.mp4,.mov,.avi,.mkv,.webm,.m4v';
 const ACCEPTED_IMAGE = 'image/jpeg,image/png,image/webp';
 const CLASS_LABELS = { car: 'Cars', bus: 'Buses', motorbike: 'Motorcycles', bicycle: 'Bicycles', truck: 'Trucks' };
 
-function makeIllustrativeTrafficReport(mode = 'video', confidence = 0.3) {
+function isVerifiedTrafficReport(report) {
+  if (!report || report.preview_only) return false;
+  const blockedModels = ['local_traffic_preview', 'local_traffic_recovery', 'Illustrative traffic scene', 'Illustrative traffic scenario'];
+  const sourceName = String(report.source_filename || '');
+  return !blockedModels.includes(report.model) && !/illustrative traffic|local recovery profile/i.test(sourceName);
+}
+
+function makeTrafficRecoveryReport(mode = 'video', confidence = 0.3) {
   return {
     mode,
-    model: 'Illustrative traffic scenario',
+    model: 'local_traffic_recovery',
     preview_only: true,
-    source_filename: 'Example junction scenario',
+    source_filename: 'Local recovery profile',
     video: mode === 'video' ? { sampled_frames: 12, duration_seconds: 45, sampling_interval_seconds: 4 } : { sampled_frames: 1, duration_seconds: 0, sampling_interval_seconds: 1 },
     counts: { car: 26, bus: 3, motorbike: 18, bicycle: 2, truck: 4 },
     total_vehicles: 53,
@@ -30,7 +37,7 @@ function makeIllustrativeTrafficReport(mode = 'video', confidence = 0.3) {
     congestion_score_heuristic: 58,
     tracking_ids_available: false,
     confidence_threshold: confidence,
-    congestion_note: 'Illustrative scenario only. These sample values are not live detections and are not sent to the Traffic Agent.',
+    congestion_note: 'The analysis service returned an error. This local reference profile is not generated from the uploaded footage. Retry to generate verified vehicle detections.',
   };
 }
 
@@ -66,17 +73,17 @@ function formatDuration(seconds) {
 export default function TrafficVisionPage() {
   const { notify } = useApp();
   const [initialReportSnapshot] = useState(() => readLocalRecord('traffic-lab-last-report'));
-  const [mode, setMode] = useState(() => initialReportSnapshot?.value?.mode || 'video');
+  const initialVerifiedReport = isVerifiedTrafficReport(initialReportSnapshot?.value) ? initialReportSnapshot.value : null;
+  const [mode, setMode] = useState(() => initialVerifiedReport?.mode || 'video');
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
-  const [report, setReport] = useState(() => initialReportSnapshot?.value || null);
-  const [reportRestored, setReportRestored] = useState(Boolean(initialReportSnapshot?.value));
-  const [reportSavedAt, setReportSavedAt] = useState(initialReportSnapshot?.savedAt || null);
+  const [report, setReport] = useState(() => initialVerifiedReport);
+  const [reportRestored, setReportRestored] = useState(Boolean(initialVerifiedReport));
+  const [reportSavedAt, setReportSavedAt] = useState(initialVerifiedReport ? initialReportSnapshot?.savedAt || null : null);
   const [systemStatus, setSystemStatus] = useState(null);
   const [systemStatusLoading, setSystemStatusLoading] = useState(true);
-  const [sampleReady, setSampleReady] = useState(false);
   const [confidence, setConfidence] = useState(0.3);
-  const [previewReport, setPreviewReport] = useState(() => initialReportSnapshot?.value ? null : makeIllustrativeTrafficReport(mode, 0.3));
+  const [previewReport, setPreviewReport] = useState(null);
   const [sampleEvery, setSampleEvery] = useState('1');
   const [segmentDistanceKm, setSegmentDistanceKm] = useState('0.5');
   const [approachRoisJson, setApproachRoisJson] = useState('');
@@ -86,26 +93,19 @@ export default function TrafficVisionPage() {
 
   useEffect(() => {
     let alive = true;
-    const fallbackTimer = window.setTimeout(() => { if (alive) setSampleReady(true); }, 5000);
-    api.get('/traffic-detection/video-status', { timeoutMs: 40000 }).then((result) => {
-      if (alive) {
-        setSystemStatus(result);
-        setSystemStatusLoading(false);
-        if (!result?.ready) setSampleReady(true);
-      }
+    api.get('/traffic-detection/video-status', { timeoutMs: 5000 }).then((result) => {
+      if (alive) setSystemStatus(result);
     }).catch(() => {
-      if (alive) {
-        setSystemStatus({ ready: false, opencv_available: false, video_analysis_ready: false, note: 'Traffic analysis is temporarily unavailable.' });
-        setSystemStatusLoading(false);
-        setSampleReady(true);
-      }
+      if (alive) setSystemStatus({ ready: false, opencv_available: false, video_analysis_ready: false, note: 'The analysis service could not be reached.' });
+    }).finally(() => {
+      if (alive) setSystemStatusLoading(false);
     });
-    return () => { alive = false; window.clearTimeout(fallbackTimer); };
+    return () => { alive = false; };
   }, []);
 
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
-  const visibleReport = report || previewReport;
+  const visibleReport = previewReport || report;
   const vehicleTotal = visibleReport?.tracking_ids_available ? (visibleReport?.total_vehicles ?? 0) : (visibleReport?.peak_vehicles_in_frame ?? visibleReport?.total_vehicles ?? 0);
   const countEntries = Object.entries(CLASS_LABELS).filter(([key]) => visibleReport?.counts && key in visibleReport.counts);
   const modelReadiness = Boolean(systemStatus?.ready);
@@ -120,7 +120,7 @@ export default function TrafficVisionPage() {
     if (nextFile.size > maxSize) { setError(`This file exceeds the ${mode === 'video' ? '150 MB' : '8 MB'} upload limit.`); return; }
     setFile(nextFile);
     setPreviewUrl(URL.createObjectURL(nextFile));
-    setPreviewReport(makeIllustrativeTrafficReport(mode, confidence));
+    setPreviewReport(null);
     if (report) setReportRestored(true);
     setError('');
   }
@@ -128,7 +128,7 @@ export default function TrafficVisionPage() {
   function switchMode(nextMode) {
     setMode(nextMode);
     setFile(null);
-    setPreviewReport(makeIllustrativeTrafficReport(nextMode, confidence));
+    setPreviewReport(null);
     if (report) setReportRestored(true);
     setError('');
     setPreviewUrl((old) => { if (old) URL.revokeObjectURL(old); return ''; });
@@ -137,7 +137,8 @@ export default function TrafficVisionPage() {
   async function analyzeScene() {
     if (!file) { setError(`Upload a ${mode === 'video' ? 'traffic video' : 'road image'} first.`); return; }
     setBusy(true); setError('');
-    if (!report) setPreviewReport(makeIllustrativeTrafficReport(mode, confidence));
+    setPreviewReport(null);
+    let requestSent = false;
     try {
       const body = new FormData();
       body.append('file', file);
@@ -152,7 +153,9 @@ export default function TrafficVisionPage() {
       const endpoint = mode === 'video'
         ? `/traffic-detection/analyze-video?confidence=${confidence}&sample_every_seconds=${sampleEvery}${roiQuery}`
         : `/traffic-detection/analyze?confidence=${confidence}`;
+      requestSent = true;
       const data = await api.postForm(endpoint, body, { timeoutMs: 40000 });
+      if (!data || data.success === false || data.error) throw new Error(data?.detail || data?.error || 'The analysis service did not return a completed report.');
       const analyzedReport = { ...data, mode, source_filename: file.name, segment_distance_km: Number(segmentDistanceKm) || 0.5, saved_at: new Date().toISOString() };
       setReport(analyzedReport);
       setPreviewReport(null);
@@ -173,11 +176,10 @@ export default function TrafficVisionPage() {
       notify(mode === 'video' ? 'Traffic video analyzed.' : 'Road image analyzed.');
     } catch (e) {
       if (report) setReportRestored(true);
-      const availabilityFailure = e?.status === 0 || e?.status >= 500 || /timed out|could not be reached|refresh/i.test(e?.message || '');
-      // Keep the clearly labelled local example visible when no real detection
-      // report exists. It is never persisted or passed to the Traffic Agent.
-      if (!report) setPreviewReport((current) => current || makeIllustrativeTrafficReport(mode, confidence));
-      setError(e.message || (availabilityFailure ? 'The vision service is taking longer than expected.' : 'The traffic analysis could not be completed. Please try again.'));
+      // Only an actual API failure after the request is sent unlocks a local
+      // recovery result. It is not saved and is never passed to Traffic Agent.
+      if (requestSent) setPreviewReport(makeTrafficRecoveryReport(mode, confidence));
+      setError(e.message || 'The traffic analysis could not be completed. Please try again.');
     } finally { setBusy(false); }
   }
 
@@ -188,6 +190,9 @@ export default function TrafficVisionPage() {
     const link = document.createElement('a'); link.href = href; link.download = `urbansarthi-traffic-report-${Date.now()}.json`; link.click(); URL.revokeObjectURL(href);
   }
 
+  if (systemStatusLoading) return <PremiumLoadingScreen title="Preparing Traffic Lab" detail="Getting your road-analysis workspace ready."/>;
+  if (busy) return <PremiumLoadingScreen title="Analysing road footage" detail="Detecting vehicles and preparing your traffic report."/>;
+
   return <main className="ul-lab">
     <header className="ul-page-head">
       <div>
@@ -195,10 +200,9 @@ export default function TrafficVisionPage() {
         <h1>See what is happening <em>on the road.</em></h1>
         <p>Review vehicles and road activity from a junction video or image. Use the results to support traffic decisions.</p>
       </div>
-      <div className="ul-head-status"><span className={`ul-status-dot ${videoReadiness ? 'ready' : ''}`}/><div><b>{systemStatusLoading ? 'Getting Traffic Lab ready' : modelReadiness ? 'Ready for your footage' : 'Example report available'}</b><small>{systemStatus?.readiness_note || (modelReadiness ? 'Ready for a road clip or image' : 'The example report stays available while the connection is restored')}</small></div></div>
+      <div className="ul-head-status"><span className={`ul-status-dot ${videoReadiness ? 'ready' : ''}`}/><div><b>{systemStatusLoading ? 'Preparing Traffic Lab' : modelReadiness ? 'Ready for your footage' : 'Connection needs attention'}</b><small>{systemStatus?.readiness_note || (modelReadiness ? 'Ready for a road clip or image' : 'Upload your footage and retry when the analysis service is available')}</small></div></div>
     </header>
 
-    <WorkspaceDataState loading={systemStatusLoading && !sampleReady} fallback={Boolean(previewReport) && sampleReady} title="Preparing Traffic Lab" detail="Checking the latest connection. You can keep using the example report while this connects." fallbackTitle="Traffic Lab sample is ready" fallbackDetail="The example scene is available now. Upload your own road footage to create a new analysis; a returning service will update its status automatically."/>
 
     <div className="ul-process-strip">
       <div><span>01</span><section><b>Add road footage</b><small>Choose a video clip or one road image.</small></section></div>
@@ -221,7 +225,7 @@ export default function TrafficVisionPage() {
         </div>
         <div className="ul-controls-grid">
           <label className="ul-control"><span>Detection sensitivity <b>{Math.round(confidence * 100)}%</b></span><input type="range" min="0.1" max="0.8" step="0.05" value={confidence} onChange={(event) => setConfidence(Number(event.target.value))}/><small>Raise to reduce low-confidence boxes.</small></label>
-          {mode === 'video' ? <label className="ul-control"><span>Frames to sample</span><select value={sampleEvery} onChange={(event) => setSampleEvery(event.target.value)}><option value="1">Every 1 second</option><option value="2">Every 2 seconds</option><option value="3">Every 3 seconds</option><option value="5">Every 5 seconds</option></select><small>Automatically capped at 180 frames.</small></label> : <div className="ul-control ul-image-note"><span><ShieldCheck size={15}/> Private processing</span><small>Only the selected image is used to prepare this report.</small></div>}
+          {mode === 'video' ? <label className="ul-control"><span>Frame interval</span><select value={sampleEvery} onChange={(event) => setSampleEvery(event.target.value)}><option value="1">Every 1 second</option><option value="2">Every 2 seconds</option><option value="3">Every 3 seconds</option><option value="5">Every 5 seconds</option></select><small>Analysis is capped at 180 frames.</small></label> : <div className="ul-control ul-image-note"><span><ShieldCheck size={15}/> Private processing</span><small>Only the selected image is used to prepare this report.</small></div>}
         </div>
         {mode === 'video' && <details className="ul-calibration-details">
           <summary><SlidersHorizontal size={14}/> Advanced road-zone settings <span>OPTIONAL ADVANCED SETTINGS</span></summary>
@@ -233,19 +237,19 @@ export default function TrafficVisionPage() {
         <button className="ul-primary-button ul-analyze-button" onClick={analyzeScene} disabled={!file || busy}>
           {busy ? <><LoaderCircle size={16} className="ul-spin"/> Analyzing footage…</> : <><ScanLine size={16}/> Analyze footage <ArrowUpRight size={16}/></>}
         </button>
-        {systemStatus && !videoReadiness && <div className="ul-setup-hint"><CircleHelp size={15}/><span>{systemStatus.readiness_note || systemStatus.note || 'Traffic analysis is not ready yet.'} The example report remains available. Try again after the service reconnects.</span></div>}
+        {systemStatus && !videoReadiness && <div className="ul-setup-hint"><CircleHelp size={15}/><span>{systemStatus.readiness_note || systemStatus.note || 'Traffic analysis is not ready yet.'} You can retry this analysis when the service is available.</span></div>}
         
       </section>
 
       <section className="ul-panel ul-evidence-panel">
         <div className="ul-panel-head"><div><span className="ul-panel-kicker">SCENE OUTPUT</span><h3>Scene report</h3></div>{report && <button className="ul-text-button" onClick={downloadReport}><ArrowDownToLine size={14}/> Download report</button>}</div>
         {!visibleReport ? <div className="ul-empty-evidence"><div className="ul-scan-illustration"><span/><span/><span/><i/></div><b>Waiting for source evidence</b><p>Upload a clip or image and analyze it to create a report tied to your road footage.</p><div className="ul-empty-track"><span>01 Capture</span><i/><span>02 Detect</span><i/><span>03 Verify</span></div></div> : <>
-          <div className="ul-report-status"><span><CheckCircle2 size={16}/></span><div><b>{previewReport ? 'Illustrative traffic scenario' : reportRestored ? 'Last successful analysis' : 'Analysis complete'}</b><small>{visibleReport.preview_only ? 'Illustrative example' : 'Traffic analysis'} · {visibleReport.source_filename || file?.name}</small></div><em>{previewReport ? 'SAMPLE VIEW' : reportRestored ? 'SAVED RESULT' : 'LATEST RESULT'}</em></div>
-          {previewReport ? <div className="ul-saved-report-note ul-preview-report-note">Illustrative preview · these values are not live detections and are not sent to the Traffic Agent. Upload footage to create a new report.</div> : reportRestored && <div className="ul-saved-report-note">Restored from this browser · {reportSavedAt ? new Date(reportSavedAt).toLocaleString() : 'Saved earlier'}. This is a saved analysis, not a new upload.</div>}
+          <div className="ul-report-status"><span><CheckCircle2 size={16}/></span><div><b>{previewReport ? 'Recovery result' : reportRestored ? 'Last successful analysis' : 'Analysis complete'}</b><small>{visibleReport.preview_only ? 'Local reference profile' : 'Traffic analysis'} · {visibleReport.source_filename || file?.name}</small></div><em>{previewReport ? 'RECOVERY' : reportRestored ? 'SAVED RESULT' : 'LATEST RESULT'}</em></div>
+          {previewReport ? <div className="ul-saved-report-note ul-preview-report-note">The analysis service returned an error. These reference values are not detections from the uploaded footage and are not sent to Traffic Agent. Retry to generate a verified report.</div> : reportRestored && <div className="ul-saved-report-note">Restored from this browser · {reportSavedAt ? new Date(reportSavedAt).toLocaleString() : 'Saved earlier'}. This is a saved analysis, not a new upload.</div>}
           <div className="ul-metric-grid">
-            <div className="ul-metric-card"><span>{visibleReport.tracking_ids_available ? 'Tracked vehicles' : visibleReport.mode === 'video' ? 'Peak vehicles' : 'Vehicles detected'}</span><strong>{vehicleTotal}</strong><small>{visibleReport.tracking_ids_available ? 'Unique IDs across sampled frames' : visibleReport.mode === 'video' ? 'IDs not returned by tracker' : 'From this frame only'}</small></div>
+            <div className="ul-metric-card"><span>{visibleReport.tracking_ids_available ? 'Tracked vehicles' : visibleReport.mode === 'video' ? 'Peak vehicles' : 'Vehicles detected'}</span><strong>{vehicleTotal}</strong><small>{visibleReport.tracking_ids_available ? 'Unique IDs across analysed frames' : visibleReport.mode === 'video' ? 'IDs not returned by tracker' : 'From this frame only'}</small></div>
             <div className="ul-metric-card"><span>Peak in frame</span><strong>{visibleReport.peak_vehicles_in_frame ?? visibleReport.total_vehicles ?? 0}</strong><small>Highest concurrent count</small></div>
-            <div className="ul-metric-card"><span>Mean per frame</span><strong>{visibleReport.mean_vehicles_per_sampled_frame ?? visibleReport.total_vehicles ?? 0}</strong><small>{visibleReport.video?.sampled_frames ?? 1} sampled frames</small></div>
+            <div className="ul-metric-card"><span>Mean per frame</span><strong>{visibleReport.mean_vehicles_per_sampled_frame ?? visibleReport.total_vehicles ?? 0}</strong><small>{visibleReport.video?.sampled_frames ?? 1} frames analysed</small></div>
             <div className="ul-metric-card"><span>Scene density</span><strong className={`ul-density-${String(visibleReport.congestion_estimate || 'unknown').toLowerCase()}`}>{visibleReport.congestion_estimate || '—'}</strong><small>Count-based heuristic only</small></div>
           </div>
           <div className="ul-class-counts">{countEntries.map(([key, label]) => {

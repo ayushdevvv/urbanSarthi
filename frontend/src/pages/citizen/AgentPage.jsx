@@ -88,7 +88,7 @@ export default function AgentPage({ adminMode = false }) {
   const handleAnalyze = useCallback(async (customQuery, customDestLat, customDestLon) => {
     const q = (customQuery !== undefined ? customQuery : query).trim();
     if (!q) {
-      setError('Please enter a query or choose a sample prompt.');
+      setError('Please enter a query or choose a suggested prompt.');
       return;
     }
 
@@ -240,7 +240,7 @@ export default function AgentPage({ adminMode = false }) {
 
         {/* Chips */}
         <div className="agent-chips-row">
-          <span className="chips-label">Sample Prompts:</span>
+          <span className="chips-label">Suggested prompts:</span>
           {SAMPLE_PROMPTS.map((prompt) => (
             <button
               key={prompt}

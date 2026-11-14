@@ -1,22 +1,17 @@
-import { LoaderCircle, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
+import PremiumLoadingScreen from './PremiumLoadingScreen.jsx';
 
 export default function WorkspaceDataState({
   loading = false,
   fallback = false,
   title = 'Loading the latest information',
-  detail = 'Connecting to the latest city data. Your workspace will update automatically.',
-  fallbackTitle = 'Sample view is active',
-  fallbackDetail = 'Example values are shown for now. The latest available data will replace them automatically when it arrives.',
+  detail = 'Connecting to the latest city data.',
+  fallbackTitle = 'Continuity view active',
+  fallbackDetail = 'A local reference view is available while this service is unavailable.',
 }) {
-  if (loading && !fallback) {
-    return <div className="workspace-data-state is-loading" role="status" aria-live="polite">
-      <span className="workspace-data-state-icon"><LoaderCircle size={20}/></span>
-      <span className="workspace-data-state-copy"><b>{title}</b><small>{detail}</small></span>
-      <span className="workspace-data-state-pulse" aria-hidden="true"><i/><i/><i/></span>
-    </div>;
-  }
+  if (loading) return <PremiumLoadingScreen title={title} detail={detail}/>;
   if (fallback) {
-    return <div className="workspace-data-state is-sample" role="status" aria-live="polite">
+    return <div className="workspace-data-state is-reference" role="status" aria-live="polite">
       <span className="workspace-data-state-icon"><Sparkles size={19}/></span>
       <span className="workspace-data-state-copy"><b>{fallbackTitle}</b><small>{fallbackDetail}</small></span>
       <span className="workspace-data-state-tag">REFERENCE</span>
