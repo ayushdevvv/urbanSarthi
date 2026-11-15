@@ -56,7 +56,7 @@ export default function AuthorityLayout() {
         </NavLink>)}
       </section>)}</nav>
       <div className="sidebar-monitor-note"><span className="sidebar-monitor-icon"><Wind size={16}/></span><div><b>City monitoring</b><small>Traffic · air quality · field network</small></div></div>
-      <div className="profile"><div className="avatar">US</div><div><b>UrbanSaarthi</b><small>Air quality & traffic operations</small></div><ChevronRight size={17}/></div>
+      <div className="profile"><div className="avatar"><img src="/urbansaarthi-logo.png" alt="" aria-hidden="true" /></div><div><b>UrbanSaarthi</b><small>Air quality & traffic operations</small></div><ChevronRight size={17}/></div>
       <button className="switch" onClick={() => navigate('/')}>← Switch portal</button>
     </aside>
     <main className="main"><header className="topbar">

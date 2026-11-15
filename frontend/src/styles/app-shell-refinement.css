@@ -251,3 +251,9 @@ body { min-height: 100vh; overflow-x: hidden; }
   .citizen-app .citizen-content .intro-actions { width: 100%; }
   .citizen-app .citizen-content .intro-actions > * { flex: 1 1 auto; }
 }
+
+/* Use the supplied UrbanSaarthi logo without cropping in every shell/avatar. */
+.authority-app .brand-icon-image, .citizen-app .brand-icon-image, .portal-landing .brand-icon-image { object-fit: contain; background: #fff; padding: 2px; }
+.authority-app .profile .avatar { overflow: hidden; padding: 2px; background: #fff; }
+.authority-app .profile .avatar img, .citizen-app .citizen-avatar img { width: 100%; height: 100%; display: block; object-fit: contain; border-radius: inherit; }
+.citizen-app .citizen-avatar { display: grid; place-items: center; overflow: hidden; padding: 2px; background: #fff; border: 1px solid var(--border); }

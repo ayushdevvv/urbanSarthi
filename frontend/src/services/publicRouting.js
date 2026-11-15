@@ -278,7 +278,10 @@ async function requestValhalla(origin, destination, mode, options = {}) {
       }),
     }));
     if (!response.ok) throw new Error(`Valhalla returned ${response.status}`);
-    return normalizeValhalla(await response.json(), mode, 'Valhalla / OpenStreetMap');
+    const routes = normalizeValhalla(await response.json(), mode, 'Valhalla / OpenStreetMap');
+    return options.preferenceMatch
+      ? routes.map((route, index) => index === 0 ? { ...route, preference_match: options.preferenceMatch } : route)
+      : routes;
   });
   const results = await Promise.allSettled(requests);
   return results.flatMap((item) => item.status === 'fulfilled' ? item.value : []);
@@ -288,13 +291,25 @@ async function requestValhalla(origin, destination, mode, options = {}) {
  * Find up to three distinct road-following alternatives from public OSM networks.
  * Providers may return fewer alternatives; no straight-line geometry is fabricated.
  */
-export async function findPublicRoadRoutes({ origin, destination, mode = 'driving' }) {
+export async function findPublicRoadRoutes({ origin, destination, mode = 'driving', preference = 'balanced' }) {
   if (!origin || !destination || !Number.isFinite(Number(origin.latitude)) || !Number.isFinite(Number(destination.latitude)) || !Number.isFinite(Number(origin.longitude)) || !Number.isFinite(Number(destination.longitude))) {
     throw new Error('Valid origin and destination coordinates are required.');
   }
   if (!OSRM_BASES[mode]) return [];
   const coords = `${Number(origin.longitude)},${Number(origin.latitude)};${Number(destination.longitude)},${Number(destination.latitude)}`;
+  const preferenceProfiles = {
+    fastest: { use_distance: 0.10 },
+    shortest: { use_distance: 1.00 },
+    cleanest: { use_distance: 0.82 },
+    balanced: { use_distance: 0.55 },
+  };
+  // Submit a preference-weighted path to the routing engine itself. This is
+  // intentionally separate from sorting alternatives after they are returned.
+  const preferenceOptions = mode === 'driving'
+    ? { costingOptions: preferenceProfiles[preference] || preferenceProfiles.balanced }
+    : {};
   const primaryRequests = [
+    ...(mode === 'driving' ? [requestValhalla(origin, destination, mode, { ...preferenceOptions, preferenceMatch: preference })] : []),
     ...OSRM_BASES[mode].map((base) => requestOsrm(base, coords, mode)),
     requestValhalla(origin, destination, mode),
   ];

@@ -23,7 +23,7 @@ export default function CitizenLayout() {
         <button className="utility" aria-label={dark ? 'Switch to light appearance' : 'Switch to dark appearance'} title={dark ? 'Switch to light appearance' : 'Switch to dark appearance'} onClick={() => setDark(!dark)}>{dark ? <Sun size={15}/> : <Moon size={15}/>} {dark ? 'Light' : 'Dark'}</button>
         <button className="utility" aria-label={language === 'EN' ? 'Switch language to Hindi' : 'Switch language to English'} onClick={toggleLanguage}><span className="hindi">हि</span>{language === 'EN' ? 'हिंदी' : 'English'}</button>
         <button className="utility" aria-label="Switch to main portal" onClick={() => navigate('/')}><House size={15}/> Main portal</button>
-        <button className="citizen-avatar" aria-label="UrbanSaarthi portal home" title="UrbanSaarthi portal" onClick={() => navigate('/citizen')}>US</button>
+        <button className="citizen-avatar" aria-label="UrbanSaarthi portal home" title="UrbanSaarthi portal" onClick={() => navigate('/citizen')}><img src="/urbansaarthi-logo.png" alt="" aria-hidden="true" /></button>
       </div>
     </header>
     <main className="citizen-content"><Outlet /></main>

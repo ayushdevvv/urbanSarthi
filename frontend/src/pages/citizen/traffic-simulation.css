@@ -80,3 +80,59 @@
 .traffic-scenario-page .traffic-playback { border-top: 1px solid var(--border,#e1e7db); padding-top: 15px; }
 .traffic-scenario-page .traffic-scenario-kpis>div { border: 1px solid var(--border,#e1e7db); border-radius: 12px; background: rgba(255,255,255,.5); }
 @media(max-width:580px){.traffic-scenario-page .traffic-scenario-kpis>div{background:var(--surface,#fff)}}
+
+/* Citizen nearby-road intelligence cards */
+.traffic-nearby-road-list { padding: 20px; }
+.traffic-nearby-road-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; margin-top: 15px; }
+.traffic-nearby-road-card { min-width: 0; padding: 15px; border: 1px solid var(--border, #e1e7db); border-radius: 14px; background: var(--surface, #fff); color: var(--text, #173a33); }
+.traffic-nearby-road-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 9px; }
+.traffic-nearby-road-top > b { min-width: 0; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.traffic-road-status { flex: none; display: inline-flex; align-items: center; border-radius: 999px; padding: 5px 8px; font-size: 10px; font-weight: 800; background: #edf2e8; color: #65745e; }
+.traffic-road-status.heavy, .traffic-road-status.closed { background: #fff0ed; color: #b44f43; }
+.traffic-road-status.slow { background: #fff5df; color: #936a22; }
+.traffic-road-status.moving { background: #e8f4e9; color: #42744d; }
+.traffic-nearby-road-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 15px 0 10px; }
+.traffic-nearby-road-metrics > div { min-width: 0; display: grid; gap: 4px; }
+.traffic-nearby-road-metrics small { color: var(--muted, #7e8b85); font-size: 9px; line-height: 1.35; }
+.traffic-nearby-road-metrics strong { font-size: 13px; font-weight: 800; overflow-wrap: anywhere; }
+.traffic-road-congestion { height: 5px; overflow: hidden; background: var(--surface2, #edf1e9); border-radius: 8px; margin-bottom: 9px; }
+.traffic-road-congestion > span { display: block; height: 100%; border-radius: inherit; background: #c68b38; }
+.traffic-nearby-road-foot { display: block; color: var(--muted, #7e8b85); font-size: 9px; line-height: 1.45; overflow-wrap: anywhere; }
+.traffic-nearby-empty { min-height: 205px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; text-align: center; color: var(--muted, #7e8b85); }
+.traffic-nearby-empty > svg { color: #6e934a; }
+.traffic-nearby-empty > b { color: var(--text, #173a33); font-size: 14px; }
+.traffic-nearby-empty p { max-width: 430px; margin: 0 0 5px; font-size: 12px; line-height: 1.6; }
+.traffic-nearby-loading { min-height: 105px; display: grid; place-items: center; }
+.dark-theme .traffic-nearby-road-card { background: var(--surface, #102d26); color: var(--text, #e6efe7); border-color: var(--border, #24483e); }
+.dark-theme .traffic-road-status { background: #283a31; color: #b9c9be; }
+.dark-theme .traffic-road-status.heavy, .dark-theme .traffic-road-status.closed { background: #4b2b28; color: #ffb2a8; }
+.dark-theme .traffic-road-status.slow { background: #493b26; color: #f0ce88; }
+.dark-theme .traffic-road-status.moving { background: #244334; color: #a8dab4; }
+.dark-theme .traffic-road-congestion { background: #263d34; }
+.dark-theme .traffic-nearby-empty > b { color: var(--text, #e6efe7); }
+.dark-theme .citizen-app .route-pref-options button.selected { background: #284431; border-color: #466443; color: #d7edb0; }
+.brand-icon-image { object-fit: contain !important; background: #fff; padding: 2px; }
+@media (max-width: 760px) {
+  .traffic-nearby-road-grid { grid-template-columns: minmax(0, 1fr); }
+  .traffic-nearby-road-list { padding: 15px; }
+  .traffic-citizen-map-panel { padding: 14px; }
+  .traffic-citizen-map-panel .panel-head { align-items: flex-start; flex-wrap: wrap; }
+  .traffic-citizen-map-panel .traffic-user-map { min-height: 280px; }
+  .traffic-nearby-road-top > b { font-size: 12px; }
+}
+@media (max-width: 420px) {
+  .traffic-nearby-road-metrics { gap: 5px; }
+  .traffic-nearby-road-metrics small { font-size: 8px; }
+  .traffic-nearby-road-metrics strong { font-size: 12px; }
+  .traffic-citizen-map-panel .traffic-map-toggles { flex-wrap: wrap; }
+}
+
+/* The citizen and authority shells use .dark rather than .dark-theme. */
+.citizen-app.dark .traffic-nearby-road-card, .authority-app.dark .traffic-nearby-road-card { background: #102d26; border-color: #24483e; color: #e6efe7; }
+.citizen-app.dark .traffic-nearby-road-foot, .authority-app.dark .traffic-nearby-road-foot { color: #9db2a8; }
+.citizen-app.dark .traffic-road-status, .authority-app.dark .traffic-road-status { background: #283a31; color: #b9c9be; }
+.citizen-app.dark .traffic-road-status.heavy, .citizen-app.dark .traffic-road-status.closed, .authority-app.dark .traffic-road-status.heavy, .authority-app.dark .traffic-road-status.closed { background: #4b2b28; color: #ffb2a8; }
+.citizen-app.dark .traffic-road-status.slow, .authority-app.dark .traffic-road-status.slow { background: #493b26; color: #f0ce88; }
+.citizen-app.dark .traffic-road-status.moving, .authority-app.dark .traffic-road-status.moving { background: #244334; color: #a8dab4; }
+.citizen-app.dark .traffic-road-congestion, .authority-app.dark .traffic-road-congestion { background: #263d34; }
+.citizen-app.dark .traffic-nearby-empty > b, .authority-app.dark .traffic-nearby-empty > b { color: #e6efe7; }

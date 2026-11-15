@@ -391,7 +391,7 @@ def _detour_waypoints(origin: tuple[float, float], dest: tuple[float, float]) ->
     return points
 
 
-def _network_routes(mode: str, origin: tuple[float, float], dest: tuple[float, float]) -> list[dict]:
+def _network_routes(mode: str, origin: tuple[float, float], dest: tuple[float, float], preference: str = "balanced") -> list[dict]:
     """Build up to three distinct paths from independent OSM network searches.
 
     Native alternatives are best-effort. If the initial engines return at least one
@@ -409,6 +409,31 @@ def _network_routes(mode: str, origin: tuple[float, float], dest: tuple[float, f
                 candidates.append(route)
                 if len(candidates) >= 3:
                     return
+
+    # Ask Valhalla for a preference-weighted road path as well as the generic
+    # alternatives. This changes the route search itself, not only its label/order.
+    # Valhalla's use_distance controls the distance-vs-time trade-off for auto;
+    # cleanest uses a distance-conscious path because this project estimates
+    # tailpipe CO2 from route length when speed-resolved emissions are unavailable.
+    preference_profiles = {
+        "fastest": (0.10, "Fastest path"),
+        "shortest": (1.00, "Shortest-distance path"),
+        "cleanest": (0.82, "Lower-emission path"),
+        "balanced": (0.55, "Balanced path"),
+    }
+    distance_weight, strategy_label = preference_profiles.get(preference, preference_profiles["balanced"])
+    if mode == "driving":
+        preferred_paths = _valhalla_routes(
+            mode, origin, dest, alternates=1,
+            costing_options={"use_distance": distance_weight},
+            strategy_label=strategy_label,
+        )
+        # Preserve the path chosen by this preference's actual costing profile.
+        # Later metric sorting keeps this candidate first rather than silently
+        # reverting Cleanest to the shortest generic alternative, for example.
+        if preferred_paths:
+            preferred_paths[0]["preference_match"] = preference
+        add_batch(preferred_paths)
 
     # Independent OSRM + Valhalla requests run concurrently.
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -469,27 +494,39 @@ def _sort_route_options(routes: list[dict], preference: str) -> list[dict]:
         except (TypeError, ValueError):
             return missing
 
+    preferred = [route for route in routes if route.get("preference_match") == preference]
+    remaining = [route for route in routes if route.get("preference_match") != preference]
+
     if preference == "fastest":
-        return sorted(routes, key=lambda route: (
+        return sorted(preferred, key=lambda route: (
+            number(route, "duration_seconds"), number(route, "distance_meters"),
+            number(route, "estimated_co2_grams"),
+        )) + sorted(remaining, key=lambda route: (
             number(route, "duration_seconds"),
             number(route, "distance_meters"),
             number(route, "estimated_co2_grams"),
         ))
+    if preference == "shortest":
+        sort_key = lambda route: (
+            number(route, "distance_meters"), number(route, "duration_seconds"),
+            number(route, "estimated_co2_grams"),
+        )
+        return sorted(preferred, key=sort_key) + sorted(remaining, key=sort_key)
 
     pollution_values = [number(route, "pollution_score") for route in routes]
     has_pollution = any(math.isfinite(value) for value in pollution_values)
     if preference == "cleanest":
         if has_pollution:
-            return sorted(routes, key=lambda route: (
-                number(route, "pollution_score"),
-                number(route, "estimated_co2_grams"),
+            sort_key = lambda route: (
+                number(route, "pollution_score"), number(route, "estimated_co2_grams"),
                 number(route, "duration_seconds"),
-            ))
-        return sorted(routes, key=lambda route: (
-            number(route, "estimated_co2_grams"),
-            number(route, "duration_seconds"),
-            number(route, "distance_meters"),
-        ))
+            )
+        else:
+            sort_key = lambda route: (
+                number(route, "estimated_co2_grams"), number(route, "duration_seconds"),
+                number(route, "distance_meters"),
+            )
+        return sorted(preferred, key=sort_key) + sorted(remaining, key=sort_key)
 
     durations = [number(route, "duration_seconds") for route in routes]
     emissions = [number(route, "estimated_co2_grams") for route in routes]
@@ -513,7 +550,7 @@ def _sort_route_options(routes: list[dict], preference: str) -> list[dict]:
             total = 0.70 * time_score + 0.30 * co2_score
         return (total, number(route, "duration_seconds"), co2_value, number(route, "distance_meters"))
 
-    return sorted(routes, key=balanced_key)
+    return sorted(preferred, key=balanced_key) + sorted(remaining, key=balanced_key)
 
 
 def build_routes(db: Session, request, user_id: int | None = None) -> dict:
@@ -527,7 +564,7 @@ def build_routes(db: Session, request, user_id: int | None = None) -> dict:
     for mode in ("driving", "walking", "cycling"):
         if mode not in request.modes:
             continue
-        external = _network_routes(mode, origin, dest)
+        external = _network_routes(mode, origin, dest, request.preference)
         if external:
             routes.extend(external)
             if len(external) < 3:
@@ -578,6 +615,8 @@ def build_routes(db: Session, request, user_id: int | None = None) -> dict:
         elif index == 0:
             if request.preference == "fastest":
                 route["label"] = "Fastest route"
+            elif request.preference == "shortest":
+                route["label"] = "Shortest route"
             elif request.preference == "cleanest":
                 route["label"] = "Lowest-impact route" if route.get("pollution_score") is not None else "Lowest CO₂ route"
             else:

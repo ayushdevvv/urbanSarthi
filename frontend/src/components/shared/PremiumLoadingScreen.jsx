@@ -12,7 +12,7 @@ export default function PremiumLoadingScreen({
         <span className="premium-loading-orbit orbit-two" />
         <span className="premium-loading-core"><LoaderCircle size={30} strokeWidth={1.8}/></span>
       </div>
-      <div className="premium-loading-brand">URBANSAARTHI</div>
+      <div className="premium-loading-brand"><img src="/urbansaarthi-logo.png" alt="" aria-hidden="true"/>URBANSAARTHI</div>
       <h2>{title}</h2>
       <p>{detail}</p>
       <div className="premium-loading-track" aria-hidden="true"><i /></div>

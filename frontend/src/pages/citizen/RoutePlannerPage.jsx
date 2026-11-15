@@ -55,9 +55,16 @@ function sortRouteOptions(routes = [], preference = 'balanced') {
   };
   source.sort((a, b) => {
     const ar = a.route, br = b.route;
+    const aMatchesPreference = ar.preference_match === preference;
+    const bMatchesPreference = br.preference_match === preference;
+    if (aMatchesPreference !== bMatchesPreference) return aMatchesPreference ? -1 : 1;
     if (preference === 'fastest') {
       return finiteMetric(ar, 'duration_seconds') - finiteMetric(br, 'duration_seconds')
         || finiteMetric(ar, 'distance_meters') - finiteMetric(br, 'distance_meters') || a.index - b.index;
+    }
+    if (preference === 'shortest') {
+      return finiteMetric(ar, 'distance_meters') - finiteMetric(br, 'distance_meters')
+        || finiteMetric(ar, 'duration_seconds') - finiteMetric(br, 'duration_seconds') || a.index - b.index;
     }
     if (preference === 'cleanest') {
       const ap = finiteMetric(ar, 'pollution_score'), bp = finiteMetric(br, 'pollution_score');
@@ -73,13 +80,16 @@ function sortRouteOptions(routes = [], preference = 'balanced') {
     };
     return score(ar) - score(br) || finiteMetric(ar, 'duration_seconds') - finiteMetric(br, 'duration_seconds') || a.index - b.index;
   });
+  const distinctMappedCount = source.filter(({ route }) => route?.data_quality === 'road-network-route' && (route?.geometry?.coordinates || []).length > 1).length;
   return source.map(({ route }, index) => ({
     ...route,
     label: route.data_quality !== 'road-network-route'
       ? (route.label || 'Distance/time estimate')
-      : index === 0
-        ? (preference === 'fastest' ? 'Fastest route' : preference === 'cleanest' ? (route.pollution_score == null ? 'Lowest CO₂ route' : 'Lowest-impact route') : 'Recommended balance')
-        : `Alternative route ${index + 1}`,
+      : distinctMappedCount < 2
+        ? (route.label && route.label !== 'Mapped road alternative' ? route.label : 'Mapped road route')
+        : index === 0
+          ? (preference === 'fastest' ? 'Fastest route' : preference === 'shortest' ? 'Shortest route' : preference === 'cleanest' ? (route.pollution_score == null ? 'Lowest CO₂ route' : 'Lowest-impact route') : 'Recommended balance')
+          : `Alternative route ${index + 1}`,
     preference_rank: `${preference}-#${index + 1}`,
   }));
 }
@@ -174,7 +184,7 @@ export default function RoutePlannerPage({ embedded = false }) {
     try { const response = await api.get(`/routing/nearby-places?latitude=${destination.latitude}&longitude=${destination.longitude}&radius_m=3000&kind=${nearbyKind}`); setNearbyPlaces(response.places || []); }
     catch { setNearbyPlaces([]); } finally { setNearbyBusy(false); }
   }, [destination.latitude, destination.longitude, destination.resolved, nearbyKind]);
-  async function plan() {
+  async function plan(requestedPreference = preference) {
     const runId = ++planRunRef.current;
     const originQuery = origin.label.trim();
     const destinationQuery = destination.label.trim();
@@ -193,7 +203,7 @@ export default function RoutePlannerPage({ embedded = false }) {
       }
       pointLabelsRef.current = { origin: resolvedOrigin.label, destination: resolvedDestination.label };
       setOrigin(resolvedOrigin); setDestination(resolvedDestination);
-      const routeKey = `${resolvedOrigin.latitude},${resolvedOrigin.longitude}|${resolvedDestination.latitude},${resolvedDestination.longitude}|${mode}`;
+      const routeKey = `${resolvedOrigin.latitude},${resolvedOrigin.longitude}|${resolvedDestination.latitude},${resolvedDestination.longitude}|${mode}|${requestedPreference}`;
       lastAutoKey.current = routeKey;
       if (Math.abs(Number(resolvedOrigin.latitude) - Number(resolvedDestination.latitude)) < 1e-7
         && Math.abs(Number(resolvedOrigin.longitude) - Number(resolvedDestination.longitude)) < 1e-7) {
@@ -205,7 +215,7 @@ export default function RoutePlannerPage({ embedded = false }) {
       const requestBody = {
         origin_latitude: Number(resolvedOrigin.latitude), origin_longitude: Number(resolvedOrigin.longitude),
         destination_latitude: Number(resolvedDestination.latitude), destination_longitude: Number(resolvedDestination.longitude),
-        origin_label: resolvedOrigin.label, destination_label: resolvedDestination.label, preference, modes: [mode],
+        origin_label: resolvedOrigin.label, destination_label: resolvedDestination.label, preference: requestedPreference, modes: [mode],
       };
 
       // Query the configured backend and browser-accessible OSM routing in
@@ -213,7 +223,7 @@ export default function RoutePlannerPage({ embedded = false }) {
       // returning a real route geometry as soon as it is available.
       const [backendResult, publicResult] = await Promise.allSettled([
         api.post('/routing/plan', requestBody, { timeoutMs: 12000 }),
-        findPublicRoadRoutes({ origin: resolvedOrigin, destination: resolvedDestination, mode }),
+        findPublicRoadRoutes({ origin: resolvedOrigin, destination: resolvedDestination, mode, preference: requestedPreference }),
       ]);
       if (runId !== planRunRef.current) return;
       if (pointLabelsRef.current.origin !== resolvedOrigin.label || pointLabelsRef.current.destination !== resolvedDestination.label) return;
@@ -270,14 +280,16 @@ export default function RoutePlannerPage({ embedded = false }) {
         ...route,
         id: route.id || `route-${mode}-${index}-${Math.round(Number(route.distance_meters) || 0)}-${Math.round(Number(route.duration_seconds) || 0)}`,
       }));
-      const orderedRoutes = sortRouteOptions(identifiedRoutes, preference);
+      const orderedRoutes = sortRouteOptions(identifiedRoutes, requestedPreference);
       const orderedPayload = {
         ...(payload || {}),
         routes: orderedRoutes,
         warnings: [...(payload?.warnings || []), ...(estimateOnly
           ? ['No mapped road path is available right now. The shown distance, time and CO₂ are estimates only.']
           : orderedRoutes.length < 3 ? [`${orderedRoutes.length} distinct mapped route(s) were available for this journey.`] : []),
-        ...(!payload && !estimateOnly ? ['Road geometry was returned directly by OpenStreetMap routing; live AQI and traffic enrichment could not be retrieved for this route.'] : [])],
+        ...(!payload && !estimateOnly ? ['Road geometry was returned directly by OpenStreetMap routing; live AQI and traffic enrichment could not be retrieved for this route.'] : []),
+        ...(identifiedRoutes.filter((route) => route.data_quality === 'road-network-route').length < 2 && requestedPreference !== 'balanced'
+          ? ['Only one distinct mapped road path was returned for this journey. A different road path is shown only when the routing network provides one.'] : [])],
         route_source: estimateOnly ? (payload ? 'UrbanSaarthi estimate' : 'Local distance/time estimate') : backendRoadRoutes.length ? 'UrbanSaarthi + OpenStreetMap routing' : 'OpenStreetMap routing',
       };
       setResult(orderedPayload);
@@ -290,14 +302,14 @@ export default function RoutePlannerPage({ embedded = false }) {
   }
   useEffect(() => {
     if (!origin.resolved || !destination.resolved) return;
-    const key = `${origin.latitude},${origin.longitude}|${destination.latitude},${destination.longitude}|${mode}`;
+    const key = `${origin.latitude},${origin.longitude}|${destination.latitude},${destination.longitude}|${mode}|${preference}`;
     if (lastAutoKey.current === key) return;
     window.clearTimeout(autoPlanTimer.current);
     autoPlanTimer.current = window.setTimeout(() => { lastAutoKey.current = key; plan(); }, 450);
     return () => window.clearTimeout(autoPlanTimer.current);
     // plan uses the current values; the key scopes automatic updates to actual coordinate/mode changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [origin.latitude, origin.longitude, origin.resolved, destination.latitude, destination.longitude, destination.resolved, mode]);
+  }, [origin.latitude, origin.longitude, origin.resolved, destination.latitude, destination.longitude, destination.resolved, mode, preference]);
   useEffect(() => { loadNearbyPlaces(); }, [loadNearbyPlaces]);
   function selectRoute(route) { setSelectedRouteId(route.id ?? `${route.mode}-${route.label}`); notify(`Selected ${route.label || route.mode} route. The map and Google Maps handoff now use this option.`); }
   const displayRoutes = useMemo(() => sortRouteOptions(result?.routes || [], preference), [result, preference]);
@@ -318,14 +330,14 @@ export default function RoutePlannerPage({ embedded = false }) {
   const carbonSpread = lowestEmission == null || highestEmission == null ? null : Math.max(0, highestEmission - lowestEmission);
   const googleMapsUrl = buildGoogleMapsUrl(selectedRoute, origin, destination, mode);
   return <>
-    <PageIntro eyebrow={embedded ? 'CITY TRAVEL' : 'LIVE JOURNEY PLANNER'} title={embedded ? 'Where are you headed today?' : 'Plan a trip'} description="Compare mapped road alternatives by travel time, distance and estimated tailpipe CO₂, then open your chosen route in Google Maps." />
-    <ErrorNotice message={error} onRetry={plan}/>
+    <PageIntro eyebrow={embedded ? 'CITY TRAVEL' : 'LIVE JOURNEY PLANNER'} title={embedded ? 'Where are you headed today?' : 'Plan a trip'} description="Recalculate mapped road alternatives for your preferred balance of distance, travel time and estimated tailpipe CO₂, then open your chosen route in Google Maps." />
+    <ErrorNotice message={error} onRetry={() => plan()}/>
     <div className="planner-layout"><section className="panel planner-form"><div className="panel-head"><div><div className="eyebrow">YOUR JOURNEY</div><h3>Where to?</h3></div><button className="icon-btn" title="Swap origin and destination" onClick={swap}><ArrowLeftRight size={16}/></button></div>
       <label className="location-input"><span className="route-origin-dot"/><span><small>Starting from</small><input value={origin.label} onChange={(e) => updatePoint('origin', 'label', e.target.value)} onBlur={() => resolveLocation('origin')} aria-label="Starting location" placeholder="Search a place or address" autoComplete="off"/></span></label>
       <label className="location-input"><span className="route-destination-dot"/><span><small>Going to</small><input value={destination.label} onChange={(e) => updatePoint('destination', 'label', e.target.value)} onBlur={() => resolveLocation('destination')} aria-label="Destination" placeholder="Search a place or address" autoComplete="off"/></span></label>
       <div className="route-location-actions"><button className="text-action coordinate-toggle" onClick={() => setShowCoords(!showCoords)}>{showCoords ? 'Hide' : 'Edit'} map coordinates</button><button className="text-action" type="button" onClick={useCurrentLocation} disabled={currentLocationBusy}><LocateFixed size={14}/>{currentLocationBusy ? 'Finding location…' : 'Use my location'}</button></div>{isResolving && <small className="route-resolving"><Search size={12}/> Finding mapped place…</small>}
       {showCoords && <div className="coordinates-grid">{[['origin','latitude','Origin latitude'],['origin','longitude','Origin longitude'],['destination','latitude','Destination latitude'],['destination','longitude','Destination longitude']].map(([key,field,label])=><label key={label}>{label}<input type="number" step="any" value={key==='origin'?origin[field]:destination[field]} onChange={(e)=>updatePoint(key,field,e.target.value)} required/></label>)}</div>}
-      <div className="field-label">ROUTE PREFERENCE</div><div className="route-pref-options">{[['fastest','Fastest',Clock],['balanced','Balanced',Route],['cleanest','Cleanest',Leaf]].map(([value,label,Icon])=><button key={value} className={preference===value?'selected':''} onClick={()=>setPreference(value)}><Icon size={14}/>{label}</button>)}</div>
+      <div className="field-label">ROUTE PREFERENCE</div><div className="route-pref-options">{[['shortest','Shortest',Navigation],['balanced','Balanced',Route],['cleanest','Cleanest',Leaf]].map(([value,label,Icon])=><button type="button" key={value} className={preference===value?'selected':''} disabled={busy} onClick={()=>setPreference(value)}><Icon size={14}/>{label}</button>)}</div>
       <label className="mode-select">Travel mode<select value={mode} onChange={(e)=>setMode(e.target.value)}><option value="driving">Driving</option><option value="walking">Walking</option><option value="cycling">Cycling</option></select></label>
       <button className="primary full plan-submit" onClick={plan} disabled={busy || isResolving}><Navigation size={16}/>{busy ? 'Updating route…' : 'Show route options'}</button><small className="route-auto-note">Compare driving, walking and cycling paths. For buses and trains, use Public transport.</small>
     </section><section className="panel planner-map-panel"><div className="panel-head"><div><div className="eyebrow">ROUTE MAP</div><h3>{origin.label} → {destination.label}</h3></div><span className={`status-pill ${mappedRoutes.length >= 3 ? 'status-success' : ''}`}>{busy ? 'Checking live routes…' : mappedRoutes.length >= 3 ? '3 road routes mapped' : mappedRoutes.length ? `${mappedRoutes.length} mapped route${mappedRoutes.length === 1 ? '' : 's'}` : result ? 'Distance estimate only' : 'Awaiting route'}</span></div><CityMap markers={markers} route={selectedRoute?.geometry?.coordinates?.map?.(([lon,lat]) => ({lat,lng:lon})) || []} routeOptions={routeOptions} zoom={12}/><div className="route-map-legend">{routeOptions.filter((item) => item.coordinates.length > 1).slice(0, 3).map((item) => <span key={item.id} className={item.selected ? 'active' : ''}><i style={{ background: item.color }} />{item.label}{item.selected && <small>Selected</small>}</span>)}</div><div className="map-foot"><span><MapPin size={13}/> {mappedRoutes.length ? 'Routes follow mapped roads' : 'No road path is available for this estimate'}</span><small>Map data © OpenStreetMap</small></div>{googleMapsUrl && <div className="route-map-actions"><span>{selectedRoute ? `Selected: ${selectedRoute.label || selectedRoute.mode}` : 'Choose a mapped route'}</span><a className="primary" href={googleMapsUrl} target="_blank" rel="noreferrer"><ExternalLink size={14}/> {selectedRoute?.data_quality === 'estimated' ? 'Calculate directions in Google Maps' : 'Open selected route in Google Maps'}</a></div>}</section></div>

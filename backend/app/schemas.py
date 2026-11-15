@@ -33,7 +33,7 @@ class RoutePlanIn(BaseModel):
     destination_longitude: float = Field(ge=-180, le=180)
     origin_label: str | None = Field(default=None, max_length=180)
     destination_label: str | None = Field(default=None, max_length=180)
-    preference: Literal["fastest", "cleanest", "balanced"] = "balanced"
+    preference: Literal["fastest", "shortest", "cleanest", "balanced"] = "balanced"
     modes: list[Literal["driving", "walking", "transit", "cycling"]] = Field(default_factory=lambda: ["driving", "transit", "walking"], max_length=4)
     departure_at: datetime | None = None
 

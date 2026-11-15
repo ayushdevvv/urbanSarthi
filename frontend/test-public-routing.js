@@ -24,19 +24,37 @@ function routePayload(offset, distance = 4200, duration = 780) {
 }
 
 try {
+  const receivedWeights = [];
   globalThis.fetch = async (input, options = {}) => {
     const url = String(input);
     if (url.includes('routed-car')) return new Response(JSON.stringify(routePayload(0.002)), { status: 200 });
     if (url.includes('router.project-osrm.org')) return new Response(JSON.stringify(routePayload(-0.002, 4400, 840)), { status: 200 });
-    if (url.includes('valhalla1.openstreetmap.de')) return new Response(JSON.stringify(routePayload(0.006, 4600, 900)), { status: 200 });
+    if (url.includes('valhalla1.openstreetmap.de')) {
+      const request = options.body ? JSON.parse(options.body) : {};
+      const weight = request.costing_options?.auto?.use_distance;
+      if (Number.isFinite(weight)) receivedWeights.push(weight);
+      const offset = weight === 1 ? 0.010 : weight === 0.82 ? 0.008 : weight === 0.55 ? 0.004 : weight === 0.10 ? 0.001 : 0.006;
+      return new Response(JSON.stringify(routePayload(offset, 4000 + (weight || 0) * 500, 780)), { status: 200 });
+    }
     throw new Error(`Unexpected routing request: ${url} ${options.method || 'GET'}`);
   };
 
-  const alternatives = await findPublicRoadRoutes({ origin, destination, mode: 'driving' });
+  const alternatives = await findPublicRoadRoutes({ origin, destination, mode: 'driving', preference: 'balanced' });
   assert.equal(alternatives.length, 3, 'Three distinct mapped routes should be combined when providers return divergent geometry.');
   assert(alternatives.every((route) => route.data_quality === 'road-network-route'), 'Every alternative must carry provider-generated road geometry.');
   assert(alternatives.every((route) => route.geometry.coordinates.length > 2), 'Every alternative must include a drawable road path.');
   assert(alternatives.every((route) => Number.isFinite(route.estimated_co2_grams)), 'Driving alternatives should have a distance-based CO2 estimate.');
+  assert(receivedWeights.includes(0.55), 'Balanced selection must send its own distance/time weighting to Valhalla.');
+  assert.equal(alternatives[0]?.preference_match, 'balanced', 'Balanced route result must retain the path selected by its requested costing profile.');
+  const shortest = await findPublicRoadRoutes({ origin, destination, mode: 'driving', preference: 'shortest' });
+  const cleanest = await findPublicRoadRoutes({ origin, destination, mode: 'driving', preference: 'cleanest' });
+  assert(receivedWeights.includes(1), 'Shortest selection must request a distance-first path from the routing engine.');
+  assert.equal(shortest[0]?.preference_match, 'shortest', 'Shortest route must retain its profile-selected path.');
+  assert(receivedWeights.includes(0.82), 'Cleanest selection must request a distance-conscious path from the routing engine.');
+  assert.equal(cleanest[0]?.preference_match, 'cleanest', 'Cleanest route must retain its profile-selected path.');
+  assert.notDeepEqual(shortest[0]?.geometry?.coordinates, alternatives[0]?.geometry?.coordinates, 'Shortest should use its returned path geometry rather than only renaming the balanced route.');
+  assert.notDeepEqual(cleanest[0]?.geometry?.coordinates, alternatives[0]?.geometry?.coordinates, 'Cleanest should use its returned path geometry rather than only renaming the balanced route.');
+  assert.notDeepEqual(shortest[0]?.geometry?.coordinates, cleanest[0]?.geometry?.coordinates, 'Shortest and cleanest should draw different returned paths when the routing engine provides them.');
 
   let transitRequests = 0;
   globalThis.fetch = async () => { transitRequests += 1; throw new Error('Transit should not call car/bike/foot router fallback.'); };
@@ -61,7 +79,7 @@ try {
   assert.deepEqual(estimate.geometry.coordinates, [], 'Last-resort estimate must not draw a fabricated straight-line path.');
   assert(estimate.distance_meters > 0 && estimate.duration_seconds > 0, 'Last-resort estimate must still provide usable distance and time.');
 
-  console.log('✓ Public routing combines distinct OSM road geometries, refuses fake transit paths, and returns a clearly labelled estimate when no router responds.');
+  console.log('✓ Preference-weighted routes change road geometry; OSM alternatives, transit safeguards and estimate fallback verified.');
 } finally {
   globalThis.fetch = originalFetch;
 }
